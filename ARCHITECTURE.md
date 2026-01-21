@@ -15,14 +15,16 @@
 
 ## System Overview
 
-DoctorNow is a cloud-native teleconsultation platform enabling remote healthcare consultations while maintaining strict compliance with UAE healthcare regulations.
+DoctorNow is a cloud-native teleconsultation platform enabling remote healthcare consultations while maintaining strict compliance with UAE healthcare regulations. The platform includes a dedicated Audit & Compliance Service that ensures all actions are traceable and regulatory requirements are met.
 
 ### Key Characteristics
 
 - **Microservices Architecture**: 11 core services, each with its own database
+- **Multi-Tenant Support**: Platform supports multiple hospitals/organizations with data isolation
 - **Event-Driven**: Asynchronous communication via Kafka/RabbitMQ
 - **API Gateway Pattern**: Single entry point for all client requests
 - **Database per Service**: Data isolation and autonomy
+- **Stateless Services**: All services are stateless for horizontal scalability
 - **UAE Data Residency**: All PHI stored within UAE borders
 
 ## Architecture Patterns
@@ -42,7 +44,7 @@ All client requests route through the API Gateway which handles:
 - Rate limiting
 - Request routing
 - API versioning
-- Request/Response transformation
+- Request/Response logging and monitoring
 
 ### 3. Event-Driven Architecture
 
@@ -61,6 +63,12 @@ Each service has its own database:
 - Service autonomy
 
 ## Service Design
+
+### Service Characteristics
+
+- **Stateless**: All services are stateless, enabling horizontal scaling and load balancing
+- **Multi-Tenant**: Services support multiple hospitals/organizations with tenant isolation
+- **Independent**: Each service can be developed, deployed, and scaled independently
 
 ### Standard Service Structure
 
@@ -83,6 +91,7 @@ service-name/
 
 1. **Synchronous**: REST APIs via API Gateway (for request/response)
 2. **Asynchronous**: Events via Kafka/RabbitMQ (for decoupled operations)
+3. **Circuit Breakers**: Implemented for external service calls to prevent cascading failures
 
 ## Data Architecture
 
@@ -90,7 +99,7 @@ service-name/
 
 - **PostgreSQL**: Relational data (users, appointments, transactions)
 - **MongoDB**: Document storage (notifications, chat messages)
-- **Redis**: Caching and session storage
+- **Redis**: Caching layer (cache frequently accessed data, rate limiting counters, distributed locks - not used for session storage)
 - **S3-compatible**: Object storage (documents, recordings)
 
 ### Data Flow
@@ -122,11 +131,17 @@ Client → API Gateway → Auth Service
          Request forwarded to service
 ```
 
+### Token Management
+
+- **JWT Tokens**: Access tokens (short-lived) and refresh tokens (long-lived)
+- **Token Revocation**: Refresh tokens can be revoked, access tokens validated on each request
+- **Token Blacklist**: Revoked tokens tracked for immediate invalidation
+
 ### Authorization
 
 - **RBAC**: Role-Based Access Control
 - **Permissions**: Fine-grained permissions per role
-- **Audit**: All access logged
+- **Audit**: All access logged via Audit & Compliance Service
 
 ## Integration Architecture
 
@@ -162,6 +177,7 @@ Service → Integration Adapter → External API
 - **Load Balancing**: Application and database load balancers
 - **Auto-scaling**: Horizontal pod autoscaling
 - **Health Checks**: Liveness and readiness probes
+- **Circuit Breakers**: Prevent cascading failures when services are unavailable
 
 ## Compliance & Regulations
 
@@ -178,10 +194,12 @@ Service → Integration Adapter → External API
 
 - **Data Residency**: All PHI in UAE
 - **Encryption**: At rest and in transit
-- **Audit Logging**: All actions logged
+- **Audit Logging**: All actions logged by Audit & Compliance Service
 - **Access Control**: RBAC with least privilege
+- **Consent Management**: Patient consent tracking and management for data processing
 - **Data Retention**: Configurable retention policies
 - **Right to Access/Erasure**: GDPR compliance
+- **Audit & Compliance Service**: Dedicated service for comprehensive audit trails, compliance reporting, and regulatory adherence
 
 ## Scalability
 
