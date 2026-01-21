@@ -1,0 +1,36 @@
+openapi: 3.0.3
+info:
+  title: DoctorNow API Gateway
+  version: 1.0.0
+  description: |
+    Central API Gateway for DoctorNow Platform.
+    All requests must include valid JWT token in Authorization header.
+    
+    Base URL: https://api.doctornow.ae
+
+servers:
+  - url: https://api.doctornow.ae/api/v1
+    description: Production
+  - url: http://localhost:8080/api/v1
+    description: Development
+
+security:
+  - bearerAuth: []
+
+paths:
+  /health:
+    get:
+      summary: Health check
+      tags:
+        - Health
+      responses:
+        '200':
+          description: Gateway is healthy
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
