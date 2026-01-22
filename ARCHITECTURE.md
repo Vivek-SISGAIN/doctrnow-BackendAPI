@@ -64,6 +64,22 @@ Each service has its own database:
 
 ## Service Design
 
+### Core Microservices (11 Services)
+
+The platform consists of 11 core microservices, each with its own database and specific responsibilities:
+
+1. **Authentication & Identity Service** - User registration, authentication, JWT token management, OTP verification, session management, token revocation
+2. **User & Profile Service** - Patient profiles, doctor profiles, family member management, Emirates ID verification
+3. **Appointment & Scheduling Service** - Slot management, appointment booking, availability queries, slot locking to prevent double-booking
+4. **Consultation Service** - Consultation session management, start/end tracking, no-show detection and recording, consultation history
+5. **Video & Chat Service** - WebRTC video calls, real-time chat messaging, screen sharing, call recording (with consent)
+6. **Payment & Insurance Service** - Payment processing, insurance claim submission, copay calculation, refund processing, transaction history
+7. **Prescription & Medical Records Service** - Prescription generation, medical document storage, FHIR integration for NABDH/Riayati
+8. **Notification Service** - SMS, Email, and Push notifications, notification queuing and retry, delivery status tracking
+9. **Hospital Admin Service** - Hospital profile management, doctor assignment and approval, department management, hospital analytics
+10. **Platform Super Admin Service** - Platform-wide administration, user management, system monitoring, feature flags, compliance reporting
+11. **Audit & Compliance Service** - Comprehensive audit logging, compliance reporting (HIPAA, GDPR, UAE PDPL), access tracking, data access logs, consent records
+
 ### Service Characteristics
 
 - **Stateless**: All services are stateless, enabling horizontal scaling and load balancing
