@@ -1,0 +1,142 @@
+import { Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import axios, { AxiosInstance, AxiosRequestConfig, AxiosError } from 'axios';
+import { CircuitBreakerService } from '../circuit-breaker/circuit-breaker.service';
+
+export interface ProxyRequest {
+  method: string;
+  url: string;
+  headers?: Record<string, string>;
+  body?: any;
+  query?: Record<string, any>;
+  correlationId: string;
+  userId?: string;
+  role?: string;
+  tenantId?: string;
+}
+
+@Injectable()
+export class HttpProxyService {
+  private readonly logger = new Logger(HttpProxyService.name);
+  private readonly httpClients: Map<string, AxiosInstance> = new Map();
+
+  constructor(
+    private readonly configService: ConfigService,
+    private readonly circuitBreakerService: CircuitBreakerService,
+  ) {}
+
+  /**
+   * Proxy HTTP request to downstream service
+   */
+  async proxyRequest(serviceName: string, request: ProxyRequest): Promise<any> {
+    const serviceUrl = this.configService.get<string>(
+      `${serviceName.toUpperCase()}_SERVICE_URL`,
+    );
+
+    if (!serviceUrl) {
+      throw new Error(`Service URL not configured for ${serviceName}`);
+    }
+
+    // Get or create HTTP client for service
+    const client = this.getHttpClient(serviceName, serviceUrl);
+
+    // Build request config
+    const axiosConfig: AxiosRequestConfig = {
+      method: request.method as any,
+      url: `${serviceUrl}${request.url}`,
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Correlation-ID': request.correlationId,
+        ...(request.userId && { 'X-User-ID': request.userId }),
+        ...(request.role && { 'X-User-Role': request.role }),
+        ...(request.tenantId && { 'X-Tenant-ID': request.tenantId }),
+        ...request.headers,
+      },
+      params: request.query,
+      data: request.body,
+      timeout: this.configService.get<number>('HTTP_TIMEOUT', 5000),
+      maxRedirects: this.configService.get<number>('HTTP_MAX_REDIRECTS', 5),
+      validateStatus: (status) => status < 500, // Don't throw on 4xx
+    };
+
+    // Execute with circuit breaker protection
+    try {
+      const response = await this.circuitBreakerService.execute(
+        serviceName,
+        async () => {
+          return client.request(axiosConfig);
+        },
+      );
+
+      return {
+        status: response.status,
+        data: response.data,
+        headers: response.headers,
+      };
+    } catch (error) {
+      if (axios.isAxiosError(error)) {
+        const axiosError = error as AxiosError;
+        this.logger.error({
+          message: `Proxy request failed for ${serviceName}`,
+          correlationId: request.correlationId,
+          status: axiosError.response?.status,
+          error: axiosError.message,
+        });
+
+        // Re-throw with appropriate status
+        if (axiosError.response) {
+          throw {
+            status: axiosError.response.status,
+            message: axiosError.response.statusText,
+            data: axiosError.response.data,
+          };
+        }
+      }
+
+      throw error;
+    }
+  }
+
+  /**
+   * Get or create HTTP client for service
+   */
+  private getHttpClient(serviceName: string, baseURL: string): AxiosInstance {
+    if (!this.httpClients.has(serviceName)) {
+      const client = axios.create({
+        baseURL,
+        timeout: this.configService.get<number>('HTTP_TIMEOUT', 5000),
+      });
+
+      // Request interceptor
+      client.interceptors.request.use((config) => {
+        this.logger.debug({
+          message: `Proxying request to ${serviceName}`,
+          url: config.url,
+          method: config.method,
+        });
+        return config;
+      });
+
+      // Response interceptor
+      client.interceptors.response.use(
+        (response) => response,
+        (error) => {
+          // Log errors for monitoring
+          if (error.response) {
+            this.logger.warn({
+              message: `Service ${serviceName} returned error`,
+              status: error.response.status,
+              url: error.config?.url,
+            });
+          }
+          return Promise.reject(error);
+        },
+      );
+
+      this.httpClients.set(serviceName, client);
+    }
+
+    return this.httpClients.get(serviceName)!;
+  }
+}
+

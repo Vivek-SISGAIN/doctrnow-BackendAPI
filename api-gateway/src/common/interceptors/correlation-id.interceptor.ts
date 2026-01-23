@@ -1,0 +1,36 @@
+import {
+  Injectable,
+  NestInterceptor,
+  ExecutionContext,
+  CallHandler,
+} from '@nestjs/common';
+import { Observable } from 'rxjs';
+import { v4 as uuidv4 } from 'uuid';
+
+/**
+ * Generates and propagates correlation IDs for request tracing
+ * Adds correlation ID to request headers and response headers
+ */
+@Injectable()
+export class CorrelationIdInterceptor implements NestInterceptor {
+  intercept(context: ExecutionContext, next: CallHandler): Observable<any> {
+    const request = context.switchToHttp().getRequest();
+    const response = context.switchToHttp().getResponse();
+
+    // Use existing correlation ID or generate new one
+    const correlationId =
+      request.headers['x-correlation-id'] ||
+      request.headers['x-request-id'] ||
+      uuidv4();
+
+    // Attach to request
+    request.id = correlationId;
+    request.headers['x-correlation-id'] = correlationId;
+
+    // Attach to response headers
+    response.setHeader('x-correlation-id', correlationId);
+
+    return next.handle();
+  }
+}
+
