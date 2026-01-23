@@ -1,3 +1,5 @@
+/* eslint-disable no-process-exit */
+/* eslint-disable no-console */
 require('dotenv').config();
 const app = require('./app');
 
@@ -6,7 +8,7 @@ const HOST = process.env.HOST || 'localhost';
 
 const server = app.listen(PORT, () => {
   console.log('=================================');
-  console.log(`🚀 Server is running`);
+  console.log('🚀 Server is running');
   console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
   console.log(`📡 URL: http://${HOST}:${PORT}`);
   console.log(`📊 Health Check: http://${HOST}:${PORT}/health`);
