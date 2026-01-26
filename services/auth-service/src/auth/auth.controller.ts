@@ -1,0 +1,106 @@
+import {
+  Controller,
+  Post,
+  Body,
+  HttpCode,
+  HttpStatus,
+  Req,
+  Get,
+  UseGuards,
+} from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
+import { Request } from 'express';
+import { Public } from '../common/decorators/public.decorator';
+import { AuthService } from './auth.service';
+import { RegisterDto, LoginDto } from './dto/auth.dto';
+import { RefreshTokenDto } from './dto/refresh-token.dto';
+import { LogoutDto } from './dto/logout.dto';
+
+@ApiTags('auth')
+@Controller()
+export class AuthController {
+  constructor(private readonly authService: AuthService) {}
+
+  @Public()
+  @Post('register')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Register new user' })
+  @ApiResponse({
+    status: 201,
+    description: 'User registered successfully',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid input or password policy violation',
+  })
+  @ApiResponse({
+    status: 409,
+    description: 'User already exists',
+  })
+  async register(@Body() dto: RegisterDto) {
+    return this.authService.register(dto);
+  }
+
+  @Public()
+  @Post('login')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'User login' })
+  @ApiResponse({
+    status: 200,
+    description: 'Login successful',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Invalid credentials or account locked',
+  })
+  async login(@Body() dto: LoginDto, @Req() req: Request) {
+    return this.authService.login({
+      ...dto,
+      ipAddress: req.ip,
+      userAgent: req.get('user-agent'),
+    });
+  }
+
+  @Public()
+  @Post('refresh')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Refresh access token' })
+  @ApiResponse({
+    status: 200,
+    description: 'Token refreshed successfully',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Invalid or expired refresh token',
+  })
+  async refreshToken(@Body() dto: RefreshTokenDto) {
+    return this.authService.refreshToken(dto.refreshToken);
+  }
+
+  @Post('logout')
+  @HttpCode(HttpStatus.OK)
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: 'Logout (revoke current session)' })
+  @ApiResponse({
+    status: 200,
+    description: 'Logged out successfully',
+  })
+  async logout(@Body() dto: LogoutDto, @Req() req: any) {
+    const userId = req.user?.sub || req.user?.userId;
+    return this.authService.logout(dto.sessionId, userId);
+  }
+
+  @Post('logout-all')
+  @HttpCode(HttpStatus.OK)
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: 'Logout all sessions' })
+  @ApiResponse({
+    status: 200,
+    description: 'All sessions revoked',
+  })
+  async logoutAll(@Req() req: any) {
+    const userId = req.user?.sub || req.user?.userId;
+    return this.authService.logoutAll(userId);
+  }
+}
+

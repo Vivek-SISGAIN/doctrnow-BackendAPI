@@ -1,5 +1,6 @@
 /**
  * User Domain Model
+ * Matches Prisma schema
  */
 export enum UserRole {
   PATIENT = 'PATIENT',
@@ -17,12 +18,14 @@ export enum UserStatus {
 
 export interface User {
   id: string;
+  tenantId: string;
   email: string;
-  mobile: string;
+  mobile?: string;
   passwordHash: string;
   role: UserRole;
   status: UserStatus;
+  failedLoginAttempts: number;
+  lockedUntil?: Date;
   createdAt: Date;
   updatedAt: Date;
 }
-
