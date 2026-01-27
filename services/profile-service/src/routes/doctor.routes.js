@@ -1,0 +1,162 @@
+const express = require('express');
+const router = express.Router();
+const {
+  getDoctorById,
+  updateDoctor,
+  deleteDoctor,
+  searchDoctorsBySpecialization
+} = require('../controllers/doctor.controller');
+const { updateDoctorSchema } = require('../validations/doctor.validation');
+const validate = require('../middleware/validation');
+
+/**
+ * @swagger
+ * /api/doctors/search/specialization:
+ *   get:
+ *     summary: Search doctors by specialization
+ *     tags: [Doctors]
+ *     parameters:
+ *       - in: query
+ *         name: specialization
+ *         schema:
+ *           type: string
+ *         description: Primary specialization to search for
+ *       - in: query
+ *         name: subSpecialization
+ *         schema:
+ *           type: string
+ *         description: Sub specialization to filter by
+ *     responses:
+ *       200:
+ *         description: List of doctors matching the specialization
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/Doctor'
+ */
+router.get('/search/specialization', searchDoctorsBySpecialization);
+
+/**
+ * @swagger
+ * /api/doctors/{id}:
+ *   get:
+ *     summary: Get doctor by ID
+ *     tags: [Doctors]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: Doctor ID
+ *     responses:
+ *       200:
+ *         description: Doctor found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   $ref: '#/components/schemas/Doctor'
+ *       404:
+ *         description: Doctor not found
+ */
+router.get('/:id', getDoctorById);
+
+/**
+ * @swagger
+ * /api/doctors/{id}:
+ *   patch:
+ *     summary: Update doctor by ID
+ *     tags: [Doctors]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: Doctor ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               fullName:
+ *                 type: string
+ *               phoneNumber:
+ *                 type: string
+ *               email:
+ *                 type: string
+ *               professionalBio:
+ *                 type: string
+ *               workingDays:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *               workingHoursFrom:
+ *                 type: string
+ *               workingHoursTo:
+ *                 type: string
+ *               videoConsultationFee:
+ *                 type: number
+ *               phoneConsultationFee:
+ *                 type: number
+ *     responses:
+ *       200:
+ *         description: Doctor updated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                 data:
+ *                   $ref: '#/components/schemas/Doctor'
+ *       404:
+ *         description: Doctor not found
+ */
+router.patch('/:id', validate(updateDoctorSchema), updateDoctor);
+
+/**
+ * @swagger
+ * /api/doctors/{id}:
+ *   delete:
+ *     summary: Delete doctor by ID
+ *     tags: [Doctors]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: Doctor ID
+ *     responses:
+ *       200:
+ *         description: Doctor deleted successfully
+ *       404:
+ *         description: Doctor not found
+ */
+router.delete('/:id', deleteDoctor);
+
+module.exports = router;
