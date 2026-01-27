@@ -1,0 +1,68 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum ServiceStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum ServiceType {
+  LAB_TEST
+  IMAGING
+  CONSULTATION
+}
+
+model HealthService {
+  id            String        @id @default(uuid())
+  name          String
+  type          ServiceType
+  originalPrice Decimal       @db.Decimal(10, 2)
+  finalPrice    Decimal       @db.Decimal(10, 2)
+  status        ServiceStatus @default(ACTIVE)
+
+  packages      PackageService[]
+
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  @@index([type, status])
+}
+
+
+model HealthPackage {
+  id            String   @id @default(uuid())
+  name          String
+  description   String
+
+  originalPrice Decimal  @db.Decimal(10, 2)
+  finalPrice    Decimal  @db.Decimal(10, 2)
+  discountPct   Int
+
+  validityDays  Int
+
+  services      PackageService[]
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model PackageService {
+  packageId String
+  serviceId String
+
+  package   HealthPackage @relation(fields: [packageId], references: [id], onDelete: Cascade)
+  service   HealthService @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+
+  @@id([packageId, serviceId])
+}
