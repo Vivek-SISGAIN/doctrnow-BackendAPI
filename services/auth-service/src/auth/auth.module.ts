@@ -17,7 +17,7 @@ import { EventsModule } from '../events/events.module';
     PasswordService,
     AccountLockoutService,
   ],
-  exports: [AuthService],
+  exports: [AuthService, PasswordService], // Export PasswordService for use in PasswordModule
 })
 export class AuthModule {}
 

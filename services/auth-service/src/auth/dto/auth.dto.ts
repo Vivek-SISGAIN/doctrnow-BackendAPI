@@ -5,7 +5,7 @@ import { UserRole } from '@prisma/client';
 export class RegisterDto {
   @ApiProperty({ example: 'user@example.com' })
   @IsEmail()
-  email: string;
+  email!: string;
 
   @ApiProperty({ example: '+971501234567', required: false })
   @IsOptional()
@@ -15,29 +15,29 @@ export class RegisterDto {
   @ApiProperty({ example: 'SecurePassword123!', minLength: 8 })
   @IsString()
   @MinLength(8)
-  password: string;
+  password!: string;
 
   @ApiProperty({ enum: UserRole, example: UserRole.PATIENT })
   @IsEnum(UserRole)
-  role: UserRole;
+  role!: UserRole;
 
   @ApiProperty({ example: 'tenant-uuid' })
   @IsString()
-  tenantId: string;
+  tenantId!: string;
 }
 
 export class LoginDto {
   @ApiProperty({ example: 'user@example.com' })
   @IsEmail()
-  email: string;
+  email!: string;
 
   @ApiProperty({ example: 'SecurePassword123!' })
   @IsString()
-  password: string;
+  password!: string;
 
   @ApiProperty({ example: 'tenant-uuid' })
   @IsString()
-  tenantId: string;
+  tenantId!: string;
 
   @ApiProperty({ required: false })
   @IsOptional()

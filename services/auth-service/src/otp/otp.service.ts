@@ -165,7 +165,7 @@ export class OtpService {
 
     // Publish event
     await this.eventsService.publishOtpVerified({
-      userId: otpRequest.userId,
+      userId: otpRequest.userId || undefined,
       email: dto.email,
       mobile: dto.mobile,
       purpose: dto.purpose,
