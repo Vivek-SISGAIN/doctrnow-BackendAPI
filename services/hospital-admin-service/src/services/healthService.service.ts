@@ -1,6 +1,5 @@
-import { ServiceType, ServiceStatus } from '../generated/prisma/enums';
+import { ServiceType, ServiceStatus } from '@prisma/client';
 import prisma from '../prisma/prisma';
-
 
 export class HealthServiceService {
   async createService(data: {
@@ -21,10 +20,7 @@ export class HealthServiceService {
     });
   }
 
-  async getAllServices(filters?: {
-    type?: ServiceType;
-    status?: ServiceStatus;
-  }) {
+  async getAllServices(filters?: { type?: ServiceType; status?: ServiceStatus }) {
     return await prisma.healthService.findMany({
       where: {
         ...(filters?.type && { type: filters.type }),
@@ -56,13 +52,16 @@ export class HealthServiceService {
     });
   }
 
-  async updateService(id: string, data: {
-    name?: string;
-    type?: ServiceType;
-    originalPrice?: number;
-    finalPrice?: number;
-    status?: ServiceStatus;
-  }) {
+  async updateService(
+    id: string,
+    data: {
+      name?: string;
+      type?: ServiceType;
+      originalPrice?: number;
+      finalPrice?: number;
+      status?: ServiceStatus;
+    }
+  ) {
     return await prisma.healthService.update({
       where: { id },
       data

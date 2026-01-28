@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import healthServiceService from '../services/healthService.service';
-import { ServiceType, ServiceStatus } from '../generated/prisma/enums';
+import { ServiceType, ServiceStatus } from '@prisma/client';
 
 export class HealthServiceController {
   /**
