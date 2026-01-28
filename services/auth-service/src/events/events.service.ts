@@ -87,8 +87,37 @@ export class EventsService {
 
   private async initializeKafka(): Promise<void> {
     try {
-      const brokers = this.configService.get<string[]>('KAFKA_BROKERS', ['localhost:9092']);
+      const brokersConfig = this.configService.get<string>('KAFKA_BROKERS', 'localhost:9092');
       const clientId = this.configService.get<string>('KAFKA_CLIENT_ID', 'auth-service');
+
+      // Parse brokers - handle both comma-separated string and array
+      let brokers: string[];
+      if (typeof brokersConfig === 'string') {
+        brokers = brokersConfig.split(',').map((b) => b.trim()).filter((b) => b.length > 0);
+      } else if (Array.isArray(brokersConfig)) {
+        brokers = brokersConfig;
+      } else {
+        brokers = ['localhost:9092'];
+      }
+
+      // Validate broker format (host:port)
+      brokers = brokers.filter((broker) => {
+        const parts = broker.split(':');
+        if (parts.length !== 2) {
+          this.logger.warn(`Invalid broker format: ${broker}. Expected format: host:port`);
+          return false;
+        }
+        const port = parseInt(parts[1], 10);
+        if (isNaN(port) || port < 0 || port > 65535) {
+          this.logger.warn(`Invalid broker port: ${broker}`);
+          return false;
+        }
+        return true;
+      });
+
+      if (brokers.length === 0) {
+        throw new Error('No valid Kafka brokers configured');
+      }
 
       this.kafka = new Kafka({
         clientId,
@@ -98,9 +127,10 @@ export class EventsService {
       this.producer = this.kafka.producer();
       await this.producer.connect();
 
-      this.logger.log('Kafka producer connected');
+      this.logger.log(`Kafka producer connected to brokers: ${brokers.join(', ')}`);
     } catch (error) {
       this.logger.error('Failed to initialize Kafka:', error);
+      this.logger.warn('Continuing without Kafka - events will be logged but not published');
       // Continue without Kafka (events will be logged but not published)
     }
   }

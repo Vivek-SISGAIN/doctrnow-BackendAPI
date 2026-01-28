@@ -54,6 +54,11 @@ export class AuthService {
     role: string;
     status: string;
   }> {
+    // Validate password is a string
+    if (!dto.password || typeof dto.password !== 'string') {
+      throw new BadRequestException('Password must be a non-empty string');
+    }
+
     // Validate password policy
     const passwordValidation = this.passwordService.validatePasswordPolicy(dto.password);
     if (!passwordValidation.valid) {
@@ -75,7 +80,9 @@ export class AuthService {
     }
 
     // Hash password
+    this.logger.debug(`Hashing password for user: ${dto.email}`);
     const passwordHash = await this.passwordService.hashPassword(dto.password);
+    this.logger.debug('Password hashed successfully');
 
     // Create user
     const user = await this.prisma.user.create({

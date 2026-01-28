@@ -13,7 +13,7 @@ export default () => ({
   JWT_REFRESH_TOKEN_TTL: parseInt(process.env.JWT_REFRESH_TOKEN_TTL || '604800', 10), // 7 days
 
   // Password Security
-  PASSWORD_HASH_ROUNDS: parseInt(process.env.PASSWORD_HASH_ROUNDS || '12', 10),
+  PASSWORD_HASH_ROUNDS: process.env.PASSWORD_HASH_ROUNDS || '12', // Keep as string, parse in service
   PASSWORD_MIN_LENGTH: parseInt(process.env.PASSWORD_MIN_LENGTH || '8', 10),
   PASSWORD_REQUIRE_UPPERCASE: process.env.PASSWORD_REQUIRE_UPPERCASE === 'true' || true,
   PASSWORD_REQUIRE_LOWERCASE: process.env.PASSWORD_REQUIRE_LOWERCASE === 'true' || true,
@@ -40,7 +40,8 @@ export default () => ({
   CORS_CREDENTIALS: process.env.CORS_CREDENTIALS === 'true' || true,
 
   // Event Bus (Kafka)
-  KAFKA_BROKERS: process.env.KAFKA_BROKERS?.split(',') || ['localhost:9092'],
+  // Keep as string - will be parsed in EventsService
+  KAFKA_BROKERS: process.env.KAFKA_BROKERS || 'localhost:9092',
   KAFKA_CLIENT_ID: process.env.KAFKA_CLIENT_ID || 'auth-service',
   KAFKA_GROUP_ID: process.env.KAFKA_GROUP_ID || 'auth-service-group',
 
