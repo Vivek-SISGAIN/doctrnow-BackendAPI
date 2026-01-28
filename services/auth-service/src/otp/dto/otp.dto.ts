@@ -15,11 +15,11 @@ export class SendOtpDto {
 
   @ApiProperty({ enum: OtpPurpose, example: OtpPurpose.LOGIN })
   @IsEnum(OtpPurpose)
-  purpose: OtpPurpose;
+  purpose!: OtpPurpose;
 
   @ApiProperty({ example: 'tenant-uuid' })
   @IsString()
-  tenantId: string;
+  tenantId!: string;
 }
 
 export class VerifyOtpDto {
@@ -35,14 +35,14 @@ export class VerifyOtpDto {
 
   @ApiProperty({ example: '123456' })
   @IsString()
-  otp: string;
+  otp!: string;
 
   @ApiProperty({ enum: OtpPurpose, example: OtpPurpose.LOGIN })
   @IsEnum(OtpPurpose)
-  purpose: OtpPurpose;
+  purpose!: OtpPurpose;
 
   @ApiProperty({ example: 'tenant-uuid' })
   @IsString()
-  tenantId: string;
+  tenantId!: string;
 }
 
