@@ -4,9 +4,10 @@ const {
   getDoctorById,
   updateDoctor,
   deleteDoctor,
-  searchDoctorsBySpecialization
+  searchDoctorsBySpecialization,
+  createDoctor
 } = require('../controllers/doctor.controller');
-const { updateDoctorSchema } = require('../validations/doctor.validation');
+const { updateDoctorSchema, createDoctorSchema } = require('../validations/doctor.validation');
 const validate = require('../middleware/validation');
 
 /**
@@ -158,5 +159,7 @@ router.patch('/:id', validate(updateDoctorSchema), updateDoctor);
  *         description: Doctor not found
  */
 router.delete('/:id', deleteDoctor);
+
+router.post('/', validate(createDoctorSchema), createDoctor);
 
 module.exports = router;

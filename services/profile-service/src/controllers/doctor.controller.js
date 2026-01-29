@@ -20,7 +20,7 @@ const getDoctorById = asyncHandler(async (req, res) => {
 
 const updateDoctor = asyncHandler(async (req, res) => {
   const { id } = req.params;
-  const { email, phoneNumber, emiratesId, licenseNumber } = req.body;
+  const { email, mobile, emiratesId, licenseNumber } = req.body;
 
   const doctor = await doctorService.findById(id);
 
@@ -31,7 +31,7 @@ const updateDoctor = asyncHandler(async (req, res) => {
   // Check for conflicts if updating unique fields
   const conflicts = await doctorService.findConflictingDoctor(id, {
     email,
-    phoneNumber,
+    mobile,
     emiratesId,
     licenseNumber
   });
@@ -40,7 +40,7 @@ const updateDoctor = asyncHandler(async (req, res) => {
     if (conflicts.email === email) {
       throw ApiError.conflict('Email already in use');
     }
-    if (conflicts.phoneNumber === phoneNumber) {
+    if (conflicts.mobile === mobile) {
       throw ApiError.conflict('Phone number already in use');
     }
     if (conflicts.emiratesId === emiratesId) {
@@ -92,9 +92,103 @@ const searchDoctorsBySpecialization = asyncHandler(async (req, res) => {
   });
 });
 
+const createDoctor = asyncHandler(async (req, res) => {
+  const {
+    userId,
+
+    fullName,
+    email,
+    mobile,
+    gender,
+    nationality,
+    emiratesId,
+
+    primarySpecialization,
+    subSpecialization,
+
+    licenseNumber,
+    licenseType,
+    licenseExpiry,
+
+    yearsOfExperience,
+    medicalDegree,
+    university,
+    profileImage,
+
+    languagesSpoken,
+    servicesOffered,
+    certifications,
+    professionalMemberships,
+
+    professionalBio,
+
+    workingDays,
+    workingHoursFrom,
+    workingHoursTo,
+    consultationDuration,
+
+    videoConsultationFee,
+    phoneConsultationFee,
+    followUpFee,
+
+    hospitalSharePercent,
+    platformSharePercent
+  } = req.body;
+
+  const doctor = await doctorService.createDoctor({
+    userId,
+
+    fullName,
+    email,
+    mobile,
+    gender,
+    nationality,
+    emiratesId,
+
+    primarySpecialization,
+    subSpecialization,
+
+    licenseNumber,
+    licenseType,
+    licenseExpiry,
+
+    yearsOfExperience,
+    medicalDegree,
+    university,
+    profileImage,
+
+    languagesSpoken,
+    servicesOffered,
+    certifications,
+    professionalMemberships,
+
+    professionalBio,
+
+    workingDays,
+    workingHoursFrom,
+    workingHoursTo,
+    consultationDuration,
+
+    videoConsultationFee,
+    phoneConsultationFee,
+    followUpFee,
+
+    hospitalSharePercent,
+    platformSharePercent
+  });
+
+  res.status(201).json({
+    success: true,
+    message: 'Doctor created successfully',
+    data: doctor
+  });
+});
+
+
 module.exports = {
   getDoctorById,
   updateDoctor,
+  createDoctor,
   deleteDoctor,
   searchDoctorsBySpecialization
 };

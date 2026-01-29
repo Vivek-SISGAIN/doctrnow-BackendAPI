@@ -105,7 +105,7 @@ model Doctor {
 
   fullName    String
   email       String @unique
-  phoneNumber String @unique
+  mobile String @unique
   gender      Gender
   nationality String
   emiratesId  String @unique
@@ -146,10 +146,8 @@ model Doctor {
 }
 
 enum LicenseType {
-  FULL_LICENSE
-  TEMPORARY_LICENSE
-  SPECIALIST_LICENSE
-  CONSULTANT_LICENSE
+  DHA
+  HAAD
 }
 
 enum WorkingDay {
