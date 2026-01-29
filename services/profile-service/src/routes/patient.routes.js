@@ -1,12 +1,102 @@
 const express = require('express');
 const router = express.Router();
 const {
+  getAllPatients,
   getPatientById,
   updatePatient,
   deletePatient
 } = require('../controllers/patient.controller');
 const { updatePatientSchema } = require('../validations/patient.validation');
 const validate = require('../middleware/validation');
+
+/**
+ * @swagger
+ * /api/patients:
+ *   get:
+ *     summary: Get all patients with filtering and pagination
+ *     tags: [Patients]
+ *     parameters:
+ *       - in: query
+ *         name: search
+ *         schema:
+ *           type: string
+ *         description: Search by name, email, phone, or MRN
+ *       - in: query
+ *         name: gender
+ *         schema:
+ *           type: string
+ *           enum: [MALE, FEMALE, OTHER]
+ *         description: Filter by gender
+ *       - in: query
+ *         name: bloodGroup
+ *         schema:
+ *           type: string
+ *         description: Filter by blood group
+ *       - in: query
+ *         name: riskCategory
+ *         schema:
+ *           type: string
+ *           enum: [HIGH, MEDIUM, LOW]
+ *         description: Filter by risk category
+ *       - in: query
+ *         name: patientType
+ *         schema:
+ *           type: string
+ *           enum: [CHRONIC, ACUTE]
+ *         description: Filter by patient type
+ *       - in: query
+ *         name: followUpStatus
+ *         schema:
+ *           type: string
+ *           enum: [SCHEDULED, OVERDUE, NO_FOLLOWUP]
+ *         description: Filter by follow-up status
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *         description: Page number
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 20
+ *         description: Number of items per page
+ *       - in: query
+ *         name: sortBy
+ *         schema:
+ *           type: string
+ *           enum: [recent, name, visits, risk-high, risk-low]
+ *           default: recent
+ *         description: Sort order
+ *     responses:
+ *       200:
+ *         description: List of patients
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/Patient'
+ *                 pagination:
+ *                   type: object
+ *                   properties:
+ *                     page:
+ *                       type: integer
+ *                     limit:
+ *                       type: integer
+ *                     total:
+ *                       type: integer
+ *                     totalPages:
+ *                       type: integer
+ */
+router.get('/', getAllPatients);
 
 /**
  * @swagger
