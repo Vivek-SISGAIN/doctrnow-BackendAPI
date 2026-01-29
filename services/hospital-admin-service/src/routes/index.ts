@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import healthServiceRoutes from './healthService.routes';
 import healthPackageRoutes from './healthPackage.routes';
+import doctorRoutes from './doctor.routes';
 
 const router = Router();
 
@@ -75,6 +76,7 @@ router.get('/', (_req: Request, res: Response) => {
       healthServices: '/api/health-services',
       healthPackages: '/api/health-packages',
       health: '/api/health',
+      doctors: '/api/doctors',
       documentation: '/api-docs'
     }
   });
@@ -82,6 +84,7 @@ router.get('/', (_req: Request, res: Response) => {
 
 // Register route modules
 router.use('/health-services', healthServiceRoutes);
+router.use('/doctors', doctorRoutes);
 router.use('/health-packages', healthPackageRoutes);
 
 export default router;

@@ -1,6 +1,8 @@
 const Joi = require('joi');
 
 const createDoctorSchema = Joi.object({
+  userId: Joi.string().uuid().required(),
+  profileImage: Joi.string().uri().required(),
   fullName: Joi.string().min(3).max(100).required()
     .messages({
       'any.required': 'Full name is required'
@@ -10,7 +12,7 @@ const createDoctorSchema = Joi.object({
       'string.email': 'Please provide a valid email address',
       'any.required': 'Email is required'
     }),
-  phoneNumber: Joi.string().pattern(/^[0-9]{10,15}$/).required()
+  mobile: Joi.string().pattern(/^[0-9]{10,15}$/).required()
     .messages({
       'string.pattern.base': 'Phone number must be 10-15 digits',
       'any.required': 'Phone number is required'
@@ -38,7 +40,7 @@ const createDoctorSchema = Joi.object({
     .messages({
       'any.required': 'License number is required'
     }),
-  licenseType: Joi.string().valid('FULL_LICENSE', 'TEMPORARY_LICENSE', 'SPECIALIST_LICENSE', 'CONSULTANT_LICENSE').required()
+  licenseType: Joi.string().valid('DHA',  'HAAD').required()
     .messages({
       'any.only': 'Invalid license type',
       'any.required': 'License type is required'
@@ -139,9 +141,10 @@ const createDoctorSchema = Joi.object({
 });
 
 const updateDoctorSchema = Joi.object({
+  userId: Joi.string().uuid().optional(),
   fullName: Joi.string().min(3).max(100).optional(),
   email: Joi.string().email().optional(),
-  phoneNumber: Joi.string().pattern(/^[0-9]{10,15}$/).optional(),
+  mobile: Joi.string().pattern(/^[0-9]{10,15}$/).optional(),
   gender: Joi.string().valid('MALE', 'FEMALE', 'OTHER').optional(),
   nationality: Joi.string().min(2).max(50).optional(),
   emiratesId: Joi.string().pattern(/^784-[0-9]{4}-[0-9]{7}-[0-9]$/).optional(),

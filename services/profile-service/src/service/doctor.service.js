@@ -4,12 +4,12 @@ class DoctorService {
   /**
    * Find doctor by unique fields
    */
-  findByUniqueFields({ email, phoneNumber, emiratesId, licenseNumber }) {
+  findByUniqueFields({ email, mobile, emiratesId, licenseNumber }) {
     return prisma.doctor.findFirst({
       where: {
         OR: [
           email && { email },
-          phoneNumber && { phoneNumber },
+          mobile && { mobile },
           emiratesId && { emiratesId },
           licenseNumber && { licenseNumber }
         ].filter(Boolean)
@@ -17,6 +17,64 @@ class DoctorService {
     });
   }
 
+  async createDoctor(data) {
+    // 1️⃣ Check for uniqueness conflicts
+    const existingDoctor = await this.findByUniqueFields({
+      email: data.email,
+      mobile: data.mobile,
+      emiratesId: data.emiratesId,
+      licenseNumber: data.licenseNumber
+    });
+
+    if (existingDoctor) {
+      throw new Error('Doctor already exists with given email / mobile / emiratesId / licenseNumber');
+    }
+
+    // 2️⃣ Create doctor
+    return prisma.doctor.create({
+      data: {
+        userId: data.userId,
+
+        fullName: data.fullName,
+        email: data.email,
+        mobile: data.mobile,
+        gender: data.gender,
+        nationality: data.nationality,
+        emiratesId: data.emiratesId,
+
+        primarySpecialization: data.primarySpecialization,
+        subSpecialization: data.subSpecialization || null,
+
+        licenseNumber: data.licenseNumber,
+        licenseType: data.licenseType,
+        licenseExpiry: data.licenseExpiry,
+
+        yearsOfExperience: data.yearsOfExperience,
+        medicalDegree: data.medicalDegree,
+        university: data.university,
+        profileImage: data.profileImage,
+
+        languagesSpoken: data.languagesSpoken || [],
+        servicesOffered: data.servicesOffered || [],
+        certifications: data.certifications || [],
+        professionalMemberships: data.professionalMemberships || [],
+
+        professionalBio: data.professionalBio,
+
+        workingDays: data.workingDays || [],
+        workingHoursFrom: data.workingHoursFrom,
+        workingHoursTo: data.workingHoursTo,
+        consultationDuration: data.consultationDuration,
+
+        videoConsultationFee: data.videoConsultationFee,
+        phoneConsultationFee: data.phoneConsultationFee,
+        followUpFee: data.followUpFee,
+
+        hospitalSharePercent: data.hospitalSharePercent,
+        platformSharePercent: data.platformSharePercent
+      }
+    });
+  }
   /**
    * Build where clause for filtering
    */
@@ -89,8 +147,8 @@ class DoctorService {
   /**
    * Check for conflicts when updating unique fields
    */
-  findConflictingDoctor(id, { email, phoneNumber, emiratesId, licenseNumber }) {
-    if (!email && !phoneNumber && !emiratesId && !licenseNumber) {
+  findConflictingDoctor(id, { email, mobile, emiratesId, licenseNumber }) {
+    if (!email && !mobile && !emiratesId && !licenseNumber) {
       return null;
     }
 
@@ -101,7 +159,7 @@ class DoctorService {
           {
             OR: [
               email && { email },
-              phoneNumber && { phoneNumber },
+              mobile && { mobile },
               emiratesId && { emiratesId },
               licenseNumber && { licenseNumber }
             ].filter(Boolean)

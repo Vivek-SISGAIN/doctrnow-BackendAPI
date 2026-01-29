@@ -3,10 +3,7 @@ import healthPackageService from '../services/healthPackage.service';
 import healthServiceService from '../services/healthService.service';
 
 export class HealthPackageController {
-  /**
-   * Create a new health package
-   * POST /api/health-packages
-   */
+  
   async createPackage(req: Request, res: Response) {
     const { name, description, originalPrice, finalPrice, discountPct, validityDays, serviceIds } = req.body;
 
