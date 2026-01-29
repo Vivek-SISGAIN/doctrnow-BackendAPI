@@ -4,18 +4,21 @@ import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 import { ConfigService } from '@nestjs/config';
 import { Logger, LoggerErrorInterceptor } from 'nestjs-pino';
+import { NestExpressApplication } from '@nestjs/platform-express';
 import helmet from 'helmet';
 
 async function bootstrap(): Promise<void> {
-  const app = await NestFactory.create(AppModule, {
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     bufferLogs: true,
   });
 
   const configService = app.get(ConfigService);
   const logger = app.get(Logger);
 
-  // Trust proxy (for rate limiting behind reverse proxy/load balancer)
-  app.set('trust proxy', configService.get<boolean>('TRUST_PROXY', true));
+  // Trust proxy (Express expects number, string, or array, not boolean)
+  // Use 1 to trust first proxy, or 'loopback' for local development
+  const trustProxy = configService.get<boolean>('TRUST_PROXY', true);
+  app.set('trust proxy', trustProxy ? 1 : false);
 
   // Security: Helmet
   app.use(

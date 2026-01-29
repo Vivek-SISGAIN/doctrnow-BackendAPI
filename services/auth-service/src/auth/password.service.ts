@@ -21,6 +21,10 @@ export class PasswordService {
    * Hash password
    */
   async hashPassword(password: string): Promise<string> {
+    if (!password || typeof password !== 'string') {
+      throw new Error('Password must be a non-empty string');
+    }
+
     if (this.useArgon2) {
       return argon2.hash(password, {
         type: argon2.argon2id,
@@ -30,8 +34,24 @@ export class PasswordService {
       });
     }
 
-    const rounds = this.configService.get<number>('PASSWORD_HASH_ROUNDS', 12);
-    return bcrypt.hash(password, rounds);
+    const roundsConfig = this.configService.get<string | number>('PASSWORD_HASH_ROUNDS', '12');
+    const rounds = typeof roundsConfig === 'string' ? parseInt(roundsConfig, 10) : roundsConfig;
+    
+    if (isNaN(rounds) || rounds < 4 || rounds > 31) {
+      this.logger.error(`Invalid bcrypt rounds: ${roundsConfig}. Using default: 12`);
+      const defaultRounds = 12;
+      return await bcrypt.hash(password, defaultRounds);
+    }
+
+    try {
+      this.logger.debug(`Hashing password with ${rounds} rounds`);
+      const hash = await bcrypt.hash(password, rounds);
+      return hash;
+    } catch (error: any) {
+      this.logger.error('Bcrypt hash error:', error);
+      this.logger.error(`Password type: ${typeof password}, Rounds type: ${typeof rounds}, Rounds value: ${rounds}`);
+      throw new Error(`Failed to hash password: ${error.message}`);
+    }
   }
 
   /**

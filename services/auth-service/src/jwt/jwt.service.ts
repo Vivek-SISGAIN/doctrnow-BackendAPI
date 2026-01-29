@@ -136,7 +136,19 @@ export class JwtService {
         audience,
       });
 
-      return payload as JwtPayload;
+      // Map jose payload to our JwtPayload interface
+      const jwtPayload: JwtPayload = {
+        sub: payload.sub as string,
+        tenantId: (payload as any).tenantId || '',
+        role: (payload as any).role || '',
+        sessionId: (payload as any).sessionId || '',
+        iss: payload.iss || issuer,
+        aud: Array.isArray(payload.aud) ? payload.aud[0] : (payload.aud as string) || audience,
+        iat: payload.iat,
+        exp: payload.exp,
+      };
+
+      return jwtPayload;
     } catch (error) {
       this.logger.warn(`Token verification failed: ${error}`);
       return null;

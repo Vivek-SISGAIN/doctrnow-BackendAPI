@@ -160,11 +160,55 @@ enum RelationshipType {
   OTHER
 }
 
+model Doctor {
+  id     String @id @default(uuid())
+  userId String @unique
+
+  fullName    String
+  email       String @unique
+  mobile String @unique
+  gender      Gender
+  nationality String
+  emiratesId  String @unique
+
+  primarySpecialization String
+  subSpecialization     String?
+  licenseNumber         String      @unique
+  licenseType           LicenseType
+  licenseExpiry         DateTime
+  yearsOfExperience     Int
+  medicalDegree         String
+  university            String
+  profileImage          String
+
+  languagesSpoken         String[]
+  servicesOffered         String[]
+  certifications          String[]
+  professionalMemberships String[]
+
+  professionalBio String
+
+  workingDays          WorkingDay[]
+  workingHoursFrom     String
+  workingHoursTo       String
+  consultationDuration Int
+
+  videoConsultationFee Decimal @db.Decimal(10, 2)
+  phoneConsultationFee Decimal @db.Decimal(10, 2)
+  followUpFee          Decimal @db.Decimal(10, 2)
+
+  hospitalSharePercent Int
+  platformSharePercent Int
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("doctor")
+}
+
 enum LicenseType {
-  FULL_LICENSE
-  TEMPORARY_LICENSE
-  SPECIALIST_LICENSE
-  CONSULTANT_LICENSE
+  DHA
+  HAAD
 }
 
 enum WorkingDay {
@@ -175,4 +219,46 @@ enum WorkingDay {
   FRIDAY
   SATURDAY
   SUNDAY
+}
+
+model HospitalAdmin {
+  id     String @id @default(uuid())
+  userId String @unique
+
+  fullName    String
+  email       String @unique
+
+  phoneNumber String @unique
+  gender      Gender
+  nationality String
+  emiratesId  String @unique
+
+  hospitalName String
+  profileImage String
+  hospitalId   String
+  position     String
+  department   String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("hospital_admin")
+}
+
+model SuperAdmin {
+  id     String @id @default(uuid())
+  userId String @unique
+
+  fullName    String
+  email       String   @unique
+  phoneNumber String   @unique
+  gender      Gender
+  nationality String
+  emiratesId  String   @unique
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  profileImage String
+
+  @@map("super_admin")
 }
