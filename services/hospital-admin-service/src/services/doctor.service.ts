@@ -46,7 +46,6 @@ class DoctorService {
             ...profilePayload
         } = data;
 
-        // 🔐 AUTH SERVICE
         const authResponse = await axios.post(
             'http://localhost:3001/auth/v1/register',
             {
@@ -56,9 +55,6 @@ class DoctorService {
                 tenantId
             }
         );
-
-        // 👤 PROFILE SERVICE
-
         const doctor = await axios.post(
             'http://localhost:5000/api/doctors/',
             {
@@ -73,7 +69,7 @@ class DoctorService {
                 }
             }
         );
-
+        //Add atomicity
         return doctor.data;
     }
 }

@@ -20,16 +20,29 @@ async function bootstrap(): Promise<void> {
   app.set('trust proxy', trustProxy ? 1 : false);
 
   // CORS
+
+  const corsOrigins = configService
+    .get<string>('CORS_ORIGINS', '')
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+
   app.enableCors({
-    origin: configService.get<string[]>('CORS_ORIGINS', []),
+    origin: (origin, callback) => {
+      // allow server-to-server / Postman
+      if (!origin) {
+        return callback(null, true);
+      }
+
+      if (corsOrigins.includes(origin)) {
+        callback(null, origin); // ✅ SINGLE origin
+      } else {
+        callback(new Error('Not allowed by CORS'), false);
+      }
+    },
     credentials: configService.get<boolean>('CORS_CREDENTIALS', true),
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-    allowedHeaders: [
-      'Content-Type',
-      'Authorization',
-      'X-Correlation-ID',
-      'X-Tenant-ID',
-    ],
+    allowedHeaders: '*',
   });
 
   // API Versioning
@@ -94,4 +107,3 @@ bootstrap().catch((error) => {
   console.error('Failed to start Authentication Service:', error);
   process.exit(1);
 });
-

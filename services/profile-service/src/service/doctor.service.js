@@ -121,9 +121,10 @@ class DoctorService {
     });
   }
 
-  /**
-   * Search doctors by specialization
-   */
+  findAll() {
+    return prisma.doctor.findMany();
+  }
+
   searchBySpecialization(query) {
     return prisma.doctor.findMany({
       where: {
@@ -144,9 +145,6 @@ class DoctorService {
     });
   }
 
-  /**
-   * Check for conflicts when updating unique fields
-   */
   findConflictingDoctor(id, { email, mobile, emiratesId, licenseNumber }) {
     if (!email && !mobile && !emiratesId && !licenseNumber) {
       return null;
@@ -169,9 +167,6 @@ class DoctorService {
     });
   }
 
-  /**
-   * Update doctor by ID
-   */
   update(id, data) {
     return prisma.doctor.update({
       where: { id },

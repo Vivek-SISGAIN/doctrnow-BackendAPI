@@ -99,16 +99,25 @@ enum RelationshipType {
   OTHER
 }
 
+enum DoctorStatus {
+  ACTIVE
+  ON_LEAVE
+  PENDING
+  INACTIVE
+}
+
 model Doctor {
   id     String @id @default(uuid())
   userId String @unique
 
+  status DoctorStatus @default(PENDING)
+
   fullName    String
   email       String @unique
-  mobile String @unique
+  mobile      String
   gender      Gender
   nationality String
-  emiratesId  String @unique
+  emiratesId  String
 
   primarySpecialization String
   subSpecialization     String?
@@ -200,4 +209,61 @@ model SuperAdmin {
   profileImage String
 
   @@map("super_admin")
+}
+
+model InsuranceProvider {
+  id String @id @default(uuid())
+
+  providerName String
+
+  providerType ProviderType
+
+  contactEmail String
+  contactPhone String
+  website      String?
+
+  networkType NetworkType
+
+  claimSubmissionMethod ClaimSubmissionMethod
+
+  avgProcessingDays Int?
+
+  address String
+
+  supportedServices SupportedService[]
+
+  note String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("insurance_provider")
+}
+
+enum ProviderType {
+  INSURANCE_COMPANY
+  TPA
+}
+
+enum NetworkType {
+  IN_NETWORK
+  OUT_NETWORK
+  BOTH
+}
+
+enum ClaimSubmissionMethod {
+  ONLINE_PORTAL
+  EMAIL
+  MANUAL
+  API
+}
+
+enum SupportedService {
+  CONSULTATION
+  LAB_TESTS
+  PACKAGES
+  DIAGNOSTICS
+  HOME_CARE
+  SURGERY
+  EMERGENCY
 }
