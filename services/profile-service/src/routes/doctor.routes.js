@@ -5,7 +5,8 @@ const {
   updateDoctor,
   deleteDoctor,
   searchDoctorsBySpecialization,
-  createDoctor
+  createDoctor,
+  getAllDoctors
 } = require('../controllers/doctor.controller');
 const { updateDoctorSchema, createDoctorSchema } = require('../validations/doctor.validation');
 const validate = require('../middleware/validation');
@@ -159,6 +160,34 @@ router.patch('/:id', validate(updateDoctorSchema), updateDoctor);
  *         description: Doctor not found
  */
 router.delete('/:id', deleteDoctor);
+
+/**
+ * @swagger
+ * /api/doctors:
+ *   get:
+ *     summary: Get all doctors
+ *     tags: [Doctors]
+ *     responses:
+ *       200:
+ *         description: List of all doctors
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/Doctor'
+ *       404:
+ *         description: Doctor not found
+ *       500:
+ *         description: Internal server error
+ */
+router.get('/', getAllDoctors);
 
 router.post('/', validate(createDoctorSchema), createDoctor);
 

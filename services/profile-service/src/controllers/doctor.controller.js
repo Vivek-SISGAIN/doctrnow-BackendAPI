@@ -2,6 +2,18 @@ const doctorService = require('../service/doctor.service');
 const ApiError = require('../utils/ApiError');
 const asyncHandler = require('../utils/asyncHandler');
 
+const getAllDoctors = asyncHandler(async (req, res) => {
+  const doctors = await doctorService.findAll();
+
+  if (!doctors) {
+    throw ApiError.notFound('Doctor not found');
+  }
+
+  res.status(200).json({
+    success: true,
+    data: doctors
+  });
+});
 
 const getDoctorById = asyncHandler(async (req, res) => {
   const { id } = req.params;
@@ -184,11 +196,11 @@ const createDoctor = asyncHandler(async (req, res) => {
   });
 });
 
-
 module.exports = {
   getDoctorById,
   updateDoctor,
   createDoctor,
   deleteDoctor,
+  getAllDoctors,
   searchDoctorsBySpecialization
 };

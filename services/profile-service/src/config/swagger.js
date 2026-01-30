@@ -6,7 +6,8 @@ const options = {
     info: {
       title: 'DoctorNow Profile Service API',
       version: '1.0.0',
-      description: 'API documentation for DoctorNow Profile Service - manage patients, doctors, hospital admins, super admins, and family members',
+      description:
+        'API documentation for DoctorNow Profile Service - manage patients, doctors, hospital admins, super admins, and family members',
       contact: {
         name: 'DoctorNow API Support',
         email: 'support@doctornow.com'
@@ -50,6 +51,10 @@ const options = {
       {
         name: 'Health',
         description: 'Health check endpoints'
+      },
+      {
+        name: 'Insurance Providers',
+        description: 'Insurance & TPA provider management'
       }
     ],
     components: {
@@ -87,7 +92,17 @@ const options = {
         },
         Patient: {
           type: 'object',
-          required: ['userId', 'mobileNumber', 'email', 'firstName', 'lastName', 'dateOfBirth', 'gender', 'emiratesId', 'nationality'],
+          required: [
+            'userId',
+            'mobileNumber',
+            'email',
+            'firstName',
+            'lastName',
+            'dateOfBirth',
+            'gender',
+            'emiratesId',
+            'nationality'
+          ],
           properties: {
             id: {
               type: 'string',
@@ -152,7 +167,15 @@ const options = {
         },
         FamilyMember: {
           type: 'object',
-          required: ['patientId', 'relationshipType', 'firstName', 'lastName', 'dateOfBirth', 'gender', 'nationality'],
+          required: [
+            'patientId',
+            'relationshipType',
+            'firstName',
+            'lastName',
+            'dateOfBirth',
+            'gender',
+            'nationality'
+          ],
           properties: {
             id: {
               type: 'string',
@@ -164,7 +187,20 @@ const options = {
             },
             relationshipType: {
               type: 'string',
-              enum: ['SPOUSE', 'FATHER', 'MOTHER', 'SON', 'DAUGHTER', 'BROTHER', 'SISTER', 'GRANDFATHER', 'GRANDMOTHER', 'GRANDSON', 'GRANDDAUGHTER', 'OTHER']
+              enum: [
+                'SPOUSE',
+                'FATHER',
+                'MOTHER',
+                'SON',
+                'DAUGHTER',
+                'BROTHER',
+                'SISTER',
+                'GRANDFATHER',
+                'GRANDMOTHER',
+                'GRANDSON',
+                'GRANDDAUGHTER',
+                'OTHER'
+              ]
             },
             firstName: {
               type: 'string',
@@ -219,7 +255,22 @@ const options = {
         },
         Doctor: {
           type: 'object',
-          required: ['userId', 'fullName', 'email', 'phoneNumber', 'gender', 'nationality', 'emiratesId', 'primarySpecialization', 'licenseNumber', 'licenseType', 'licenseExpiry', 'yearsOfExperience', 'medicalDegree', 'university'],
+          required: [
+            'userId',
+            'fullName',
+            'email',
+            'phoneNumber',
+            'gender',
+            'nationality',
+            'emiratesId',
+            'primarySpecialization',
+            'licenseNumber',
+            'licenseType',
+            'licenseExpiry',
+            'yearsOfExperience',
+            'medicalDegree',
+            'university'
+          ],
           properties: {
             id: {
               type: 'string',
@@ -262,7 +313,12 @@ const options = {
             },
             licenseType: {
               type: 'string',
-              enum: ['FULL_LICENSE', 'TEMPORARY_LICENSE', 'SPECIALIST_LICENSE', 'CONSULTANT_LICENSE']
+              enum: [
+                'FULL_LICENSE',
+                'TEMPORARY_LICENSE',
+                'SPECIALIST_LICENSE',
+                'CONSULTANT_LICENSE'
+              ]
             },
             licenseExpiry: {
               type: 'string',
@@ -353,7 +409,18 @@ const options = {
         },
         HospitalAdmin: {
           type: 'object',
-          required: ['userId', 'fullName', 'email', 'phoneNumber', 'gender', 'nationality', 'emiratesId', 'hospitalName', 'hospitalId', 'position'],
+          required: [
+            'userId',
+            'fullName',
+            'email',
+            'phoneNumber',
+            'gender',
+            'nationality',
+            'emiratesId',
+            'hospitalName',
+            'hospitalId',
+            'position'
+          ],
           properties: {
             id: {
               type: 'string',
@@ -407,7 +474,15 @@ const options = {
         },
         SuperAdmin: {
           type: 'object',
-          required: ['userId', 'fullName', 'email', 'phoneNumber', 'gender', 'nationality', 'emiratesId'],
+          required: [
+            'userId',
+            'fullName',
+            'email',
+            'phoneNumber',
+            'gender',
+            'nationality',
+            'emiratesId'
+          ],
           properties: {
             id: {
               type: 'string',
@@ -443,6 +518,207 @@ const options = {
             updatedAt: {
               type: 'string',
               format: 'date-time'
+            }
+          }
+        },
+        InsuranceProvider: {
+          type: 'object',
+          required: [
+            'providerName',
+            'providerType',
+            'contactEmail',
+            'contactPhone',
+            'networkType',
+            'claimSubmissionMethod',
+            'address',
+            'supportedServices'
+          ],
+          properties: {
+            id: {
+              type: 'string',
+              format: 'uuid',
+              example: 'd4a5f6b2-8c1d-4e6b-a12c-5f1b9b8c2345'
+            },
+            providerName: {
+              type: 'string',
+              example: 'AXA Gulf Insurance'
+            },
+            providerType: {
+              type: 'string',
+              enum: ['INSURANCE_COMPANY', 'TPA'],
+              example: 'INSURANCE_COMPANY'
+            },
+            contactEmail: {
+              type: 'string',
+              format: 'email',
+              example: 'support@axa-gulf.com'
+            },
+            contactPhone: {
+              type: 'string',
+              example: '+97144556677'
+            },
+            website: {
+              type: 'string',
+              example: 'https://www.axa-gulf.com',
+              nullable: true
+            },
+            networkType: {
+              type: 'string',
+              enum: ['IN_NETWORK', 'OUT_NETWORK', 'BOTH'],
+              example: 'BOTH'
+            },
+            claimSubmissionMethod: {
+              type: 'string',
+              enum: ['ONLINE_PORTAL', 'EMAIL', 'MANUAL', 'API'],
+              example: 'ONLINE_PORTAL'
+            },
+            avgProcessingDays: {
+              type: 'integer',
+              example: 7,
+              nullable: true
+            },
+            address: {
+              type: 'string',
+              example: 'Level 12, Dubai International Financial Centre, Dubai, UAE'
+            },
+            supportedServices: {
+              type: 'array',
+              items: {
+                type: 'string',
+                enum: [
+                  'CONSULTATION',
+                  'LAB_TESTS',
+                  'PACKAGES',
+                  'DIAGNOSTICS',
+                  'HOME_CARE',
+                  'SURGERY',
+                  'EMERGENCY'
+                ]
+              },
+              example: ['CONSULTATION', 'LAB_TESTS', 'DIAGNOSTICS']
+            },
+            note: {
+              type: 'string',
+              example: 'Fast claim processing for in-network hospitals',
+              nullable: true
+            },
+            createdAt: {
+              type: 'string',
+              format: 'date-time',
+              example: '2025-01-01T10:30:00Z'
+            },
+            updatedAt: {
+              type: 'string',
+              format: 'date-time',
+              example: '2025-01-10T15:45:00Z'
+            }
+          }
+        },
+
+        CreateInsuranceProvider: {
+          type: 'object',
+          required: [
+            'providerName',
+            'providerType',
+            'contactEmail',
+            'contactPhone',
+            'networkType',
+            'claimSubmissionMethod',
+            'address',
+            'supportedServices'
+          ],
+          properties: {
+            providerName: {
+              type: 'string',
+              example: 'MedNet TPA'
+            },
+            providerType: {
+              type: 'string',
+              enum: ['INSURANCE_COMPANY', 'TPA'],
+              example: 'TPA'
+            },
+            contactEmail: {
+              type: 'string',
+              format: 'email',
+              example: 'claims@mednet.com'
+            },
+            contactPhone: {
+              type: 'string',
+              example: '+97143210000'
+            },
+            website: {
+              type: 'string',
+              example: 'https://www.mednet.com'
+            },
+            networkType: {
+              type: 'string',
+              enum: ['IN_NETWORK', 'OUT_NETWORK', 'BOTH'],
+              example: 'IN_NETWORK'
+            },
+            claimSubmissionMethod: {
+              type: 'string',
+              enum: ['ONLINE_PORTAL', 'EMAIL', 'MANUAL', 'API'],
+              example: 'API'
+            },
+            avgProcessingDays: {
+              type: 'integer',
+              example: 5
+            },
+            address: {
+              type: 'string',
+              example: 'Abu Dhabi Global Market, Abu Dhabi, UAE'
+            },
+            supportedServices: {
+              type: 'array',
+              items: {
+                type: 'string'
+              },
+              example: ['CONSULTATION', 'SURGERY', 'EMERGENCY']
+            },
+            note: {
+              type: 'string',
+              example: 'Emergency services require pre-approval'
+            }
+          }
+        },
+
+        UpdateInsuranceProvider: {
+          type: 'object',
+          properties: {
+            providerName: {
+              type: 'string',
+              example: 'AXA Gulf Insurance – UAE'
+            },
+            contactEmail: {
+              type: 'string',
+              format: 'email',
+              example: 'helpdesk@axa-gulf.com'
+            },
+            contactPhone: {
+              type: 'string',
+              example: '+97140000000'
+            },
+            networkType: {
+              type: 'string',
+              enum: ['IN_NETWORK', 'OUT_NETWORK', 'BOTH']
+            },
+            claimSubmissionMethod: {
+              type: 'string',
+              enum: ['ONLINE_PORTAL', 'EMAIL', 'MANUAL', 'API']
+            },
+            avgProcessingDays: {
+              type: 'integer',
+              example: 6
+            },
+            supportedServices: {
+              type: 'array',
+              items: {
+                type: 'string'
+              }
+            },
+            note: {
+              type: 'string',
+              example: 'Updated SLA as of 2025'
             }
           }
         }

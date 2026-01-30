@@ -1,5 +1,3 @@
-
-
 const express = require('express');
 const cors = require('cors');
 const morgan = require('morgan');
@@ -26,13 +24,7 @@ app.use('/api', limiter);
 const corsOptions = {
   origin: 'http://localhost:8080',
   credentials: true,
-  allowedHeaders: [
-    'Content-Type',
-    'Authorization',
-    'X-Request-Id',
-    'X-Client',
-    'Accept'
-  ]
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-Id', 'X-Client', 'Accept']
 };
 app.use(cors(corsOptions));
 
@@ -108,13 +100,17 @@ app.get('/', (req, res) => {
 });
 
 // Swagger documentation
-app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
-  customSiteTitle: 'DoctorNow API Documentation',
-  customCss: '.swagger-ui .topbar { display: none }',
-  swaggerOptions: {
-    persistAuthorization: true
-  }
-}));
+app.use(
+  '/api-docs',
+  swaggerUi.serve,
+  swaggerUi.setup(swaggerSpec, {
+    customSiteTitle: 'DoctorNow API Documentation',
+    customCss: '.swagger-ui .topbar { display: none }',
+    swaggerOptions: {
+      persistAuthorization: true
+    }
+  })
+);
 
 // Import routes
 const patientRoutes = require('./routes/patient.routes');
@@ -122,6 +118,7 @@ const familyMemberRoutes = require('./routes/familyMember.routes');
 const doctorRoutes = require('./routes/doctor.routes');
 const hospitalAdminRoutes = require('./routes/hospitalAdmin.routes');
 const superAdminRoutes = require('./routes/superAdmin.routes');
+const insuranceProviderRoutes = require('./routes/insuranceProvider.routes');
 
 // Register routes
 app.use('/api/patients', patientRoutes);
@@ -129,6 +126,7 @@ app.use('/api/family-members', familyMemberRoutes);
 app.use('/api/doctors', doctorRoutes);
 app.use('/api/hospital-admins', hospitalAdminRoutes);
 app.use('/api/super-admins', superAdminRoutes);
+app.use('/api/insurance-providers', insuranceProviderRoutes);
 
 // Error handling middleware
 app.use((err, req, res) => {
