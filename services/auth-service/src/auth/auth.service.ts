@@ -264,5 +264,36 @@ export class AuthService {
 
     return { revokedCount };
   }
-}
 
+  /**
+   * Delete user (soft delete)
+   */
+  async hardDeleteUser(userId: string): Promise<{ success: true }> {
+    // 1. Check user exists
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+    });
+
+    if (!user) {
+      throw new BadRequestException('User not found');
+    }
+
+    // 2. Revoke all active sessions
+    await this.sessionService.revokeAllUserSessions(userId);
+
+    // 3. Delete dependent records (if not using CASCADE)
+    // Example (adjust based on your schema):
+    await this.prisma.session.deleteMany({
+      where: { userId },
+    });
+
+    // 4. Hard delete user
+    await this.prisma.user.delete({
+      where: { id: userId },
+    });
+
+    this.logger.warn(`User HARD deleted: ${userId} (${user.email})`);
+
+    return { success: true };
+  }
+}

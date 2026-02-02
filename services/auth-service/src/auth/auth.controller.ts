@@ -1,13 +1,4 @@
-import {
-  Controller,
-  Post,
-  Body,
-  HttpCode,
-  HttpStatus,
-  Req,
-  Get,
-  UseGuards,
-} from '@nestjs/common';
+import { Controller, Post, Body, HttpCode, HttpStatus, Req, Delete, Param } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { Request } from 'express';
 import { Public } from '../common/decorators/public.decorator';
@@ -102,5 +93,20 @@ export class AuthController {
     const userId = req.user?.sub || req.user?.userId;
     return this.authService.logoutAll(userId);
   }
-}
 
+  @Delete('users/:userId')
+  @HttpCode(HttpStatus.OK)
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: 'Hard delete user (permanent)' })
+  @ApiResponse({
+    status: 200,
+    description: 'User permanently deleted',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'User not found',
+  })
+  async hardDeleteUser(@Param('userId') userId: string) {
+    return this.authService.hardDeleteUser(userId);
+  }
+}
