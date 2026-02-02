@@ -4,56 +4,138 @@ Manages doctor availability, slots, and appointment bookings.
 
 ## Responsibilities
 
-- Slot management (create, update, delete)
+- Slot management (create, update, delete, bulk create)
 - Appointment booking
-- Slot locking (prevent double-booking)
-- Appointment status management
+- Slot locking (prevent double-booking during booking process)
+- Appointment status management (pending, confirmed, completed, cancelled, no-show)
+- Appointment rescheduling
 - Availability queries
 
 ## Database Schema
 
-```sql
-slots (
-  id UUID PK,
-  doctor_id UUID,
-  start_time TIMESTAMP,
-  end_time TIMESTAMP,
-  status VARCHAR
-)
+The service uses Prisma with the following models:
 
-appointments (
-  id UUID PK,
-  patient_id UUID,
-  doctor_id UUID,
-  slot_id UUID,
-  status VARCHAR,
-  payment_status VARCHAR
-)
-
-slot_locks (
-  slot_id UUID PK,
-  expires_at TIMESTAMP
-)
-```
+- **Slot**: Doctor availability slots
+- **Appointment**: Patient appointments linked to slots
+- **SlotLock**: Temporary locks to prevent double-booking
 
 ## API Endpoints
 
-- `GET /appointments/slots` - Get available slots
-- `POST /appointments/slots` - Create slot (doctor/admin)
-- `POST /appointments` - Book appointment
-- `GET /appointments/:id` - Get appointment details
-- `PUT /appointments/:id` - Update appointment
-- `POST /appointments/:id/cancel` - Cancel appointment
+### Appointments
+
+- `GET /api/appointments` - Get all appointments with filtering and pagination
+- `GET /api/appointments/:id` - Get appointment by ID
+- `POST /api/appointments` - Create new appointment
+- `PATCH /api/appointments/:id` - Update appointment
+- `POST /api/appointments/:id/cancel` - Cancel appointment
+- `POST /api/appointments/:id/reschedule` - Reschedule appointment
+- `POST /api/appointments/:id/confirm` - Confirm appointment
+- `POST /api/appointments/:id/complete` - Mark appointment as completed
+- `POST /api/appointments/:id/no-show` - Mark appointment as no-show
+
+### Slots
+
+- `GET /api/slots/available` - Get available slots for a doctor
+- `GET /api/slots/doctor/:doctorId` - Get all slots for a doctor
+- `GET /api/slots/:id` - Get slot by ID
+- `POST /api/slots` - Create a new slot
+- `POST /api/slots/bulk` - Create multiple slots at once
+- `PATCH /api/slots/:id` - Update slot
+- `DELETE /api/slots/:id` - Delete slot
+- `POST /api/slots/:id/lock` - Lock a slot (prevent double-booking)
+- `POST /api/slots/:id/unlock` - Unlock a slot
+
+## Query Parameters
+
+### Appointments
+- `patientId` - Filter by patient ID
+- `doctorId` - Filter by doctor ID
+- `status` - Filter by status (PENDING, CONFIRMED, COMPLETED, CANCELLED, NO_SHOW)
+- `paymentStatus` - Filter by payment status (PENDING, PAID, FAILED, REFUNDED)
+- `consultationType` - Filter by type (VIDEO, AUDIO, CHAT)
+- `startDate` - Filter appointments from this date
+- `endDate` - Filter appointments until this date
+- `page` - Page number (default: 1)
+- `limit` - Items per page (default: 20)
+
+### Slots (Available)
+- `doctorId` - Doctor ID (required)
+- `startDate` - Start date for search (required)
+- `endDate` - End date for search (required)
 
 ## Events Published
 
 - `SlotCreated`
 - `AppointmentBooked`
 - `AppointmentCancelled`
+- `AppointmentRescheduled`
 - `AppointmentConfirmed`
+- `AppointmentCompleted`
 
 ## Events Consumed
 
 - `PaymentSuccess` (from Payment Service)
 - `PaymentFailed` (from Payment Service)
 
+## Setup
+
+1. Install dependencies:
+```bash
+npm install
+```
+
+2. Set up environment variables (copy `.env.example` to `.env`):
+```bash
+PORT=3003
+DATABASE_URL=postgresql://user:password@localhost:5432/doctornow_appointments
+```
+
+3. Generate Prisma client:
+```bash
+npm run prisma:generate
+```
+
+4. Run migrations:
+```bash
+npm run prisma:migrate
+```
+
+5. Start the service:
+```bash
+npm start
+# or for development
+npm run dev
+```
+
+## Integration with API Gateway
+
+The service is integrated with the API Gateway at `/api/v1/appointments`. The gateway routes:
+- `/api/v1/appointments/*` → `/api/appointments/*`
+- `/api/v1/appointments/slots/*` → `/api/slots/*`
+
+## Frontend Integration
+
+The appointment APIs are integrated in the doctor portal at `src/lib/api.ts`:
+- `appointmentApi` - All appointment operations
+- `slotApi` - All slot operations
+
+Example usage:
+```typescript
+import { appointmentApi, slotApi } from '@/lib/api';
+
+// Get appointments for a doctor
+const appointments = await appointmentApi.getAll({ doctorId: 'doctor-id' });
+
+// Get available slots
+const slots = await slotApi.getAvailable({
+  doctorId: 'doctor-id',
+  startDate: '2024-01-01',
+  endDate: '2024-01-31'
+});// Create appointment
+const appointment = await appointmentApi.create({
+  patientId: 'patient-id',
+  doctorId: 'doctor-id',
+  slotId: 'slot-id',
+  consultationType: 'VIDEO'
+});
+```

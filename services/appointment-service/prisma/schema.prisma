@@ -1,0 +1,90 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Slot {
+  id        String    @id @default(uuid())
+  doctorId  String
+  startTime DateTime
+  endTime   DateTime
+  status    SlotStatus @default(AVAILABLE)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  appointments Appointment[]
+  slotLock    SlotLock?
+
+  @@map("slots")
+  @@index([doctorId])
+  @@index([startTime])
+  @@index([status])
+}
+
+model Appointment {
+  id               String            @id @default(uuid())
+  patientId        String
+  doctorId         String
+  slotId           String            @unique
+  status           AppointmentStatus @default(PENDING)
+  paymentStatus    PaymentStatus     @default(PENDING)
+  consultationType ConsultationType @default(VIDEO)
+  reason           String?
+  notes            String?
+  familyMemberId   String?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  slot Slot @relation(fields: [slotId], references: [id], onDelete: Cascade)
+
+  @@map("appointments")
+  @@index([patientId])
+  @@index([doctorId])
+  @@index([slotId])
+  @@index([status])
+  @@index([paymentStatus])
+}
+
+model SlotLock {
+  slotId    String   @id
+  lockedBy  String?
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  slot Slot @relation(fields: [slotId], references: [id], onDelete: Cascade)
+
+  @@map("slot_locks")
+  @@index([expiresAt])
+}
+
+enum SlotStatus {
+  AVAILABLE
+  BOOKED
+  CANCELLED
+  BLOCKED
+}
+
+enum AppointmentStatus {
+  PENDING
+  CONFIRMED
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
+}
+
+enum ConsultationType {
+  VIDEO
+  AUDIO
+  CHAT
+}
