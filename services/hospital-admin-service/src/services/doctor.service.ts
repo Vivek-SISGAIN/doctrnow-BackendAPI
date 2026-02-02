@@ -36,8 +36,6 @@ class DoctorService {
         tenantId: string;
         password: string;
     }) {
-
-        // 👇 clean separation
         const {
             password,
             role,
@@ -46,32 +44,59 @@ class DoctorService {
             ...profilePayload
         } = data;
 
-        const authResponse = await axios.post(
-            'http://localhost:3001/auth/v1/register',
-            {
-                email: profilePayload.email,
-                password,
-                role,
-                tenantId
-            }
-        );
-        const doctor = await axios.post(
-            'http://localhost:5000/api/doctors/',
-            {
-                ...profilePayload,
-                workingDays,
-                userId: authResponse.data.userId
-            },
-            {
-                headers: {
-                    'X-Tenant-Id': tenantId,
-                    'X-Service-Name': 'profile-service'
+        let createdUserId: string | null = null;
+
+        try {
+            const authResponse = await axios.post(
+                'http://localhost:3001/auth/v1/register',
+                {
+                    email: profilePayload.email,
+                    password,
+                    role,
+                    tenantId,
+                }
+            );
+
+            createdUserId = authResponse.data.userId;
+
+            const doctorResponse = await axios.post(
+                'http://localhost:5000/api/doctors',
+                {
+                    ...profilePayload,
+                    workingDays,
+                    userId: createdUserId,
+                },
+                {
+                    headers: {
+                        'X-Tenant-Id': tenantId,
+                        'X-Service-Name': 'profile-service',
+                    },
+                }
+            );
+
+            return doctorResponse.data;
+
+        } catch (error) {
+            // 3️⃣ Compensation logic (rollback)
+            if (createdUserId) {
+                try {
+                    await axios.delete(
+                        `http://localhost:3001/auth/v1/users/${createdUserId}`
+                    );
+                } catch (cleanupError) {
+                    // IMPORTANT: log this for ops visibility
+                    console.error(
+                        'Failed to rollback user creation',
+                        (cleanupError as Error).message
+                    );
                 }
             }
-        );
-        //Add atomicity
-        return doctor.data;
+
+            // Re-throw original error
+            throw error;
+        }
     }
+
 }
 
 

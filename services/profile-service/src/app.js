@@ -24,7 +24,7 @@ app.use('/api', limiter);
 const corsOptions = {
   origin: 'http://localhost:8080',
   credentials: true,
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-Id', 'X-Client', 'Accept']
+  allowedHeaders: '*'
 };
 app.use(cors(corsOptions));
 
