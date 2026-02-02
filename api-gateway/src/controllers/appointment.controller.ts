@@ -27,7 +27,14 @@ export class AppointmentController {
   @All('*')
   async proxyRequest(@Req() req: Request, @Res() res: Response): Promise<void> {
     const correlationId = req.headers['x-correlation-id'] as string;
-    const path = req.url.replace('/api/v1/appointments', '');
+    // Replace /api/v1/appointments with /api/appointments for service routes
+    // Handle slots routes: /api/v1/appointments/slots -> /api/slots
+    let path = req.url.replace('/api/v1/appointments', '');
+    if (path.startsWith('/slots')) {
+      path = path.replace('/slots', '/api/slots');
+    } else {
+      path = `/api/appointments${path || ''}`;
+    }
     const user = (req as any).user;
 
     try {
