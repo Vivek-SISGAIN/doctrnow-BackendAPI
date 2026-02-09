@@ -1,0 +1,18 @@
+#!/usr/bin/env sh
+
+echo "🧪 Running tests…"
+npm test
+if [ $? -ne 0 ]; then
+  echo "❌ Tests failed — push blocked"
+  exit 1
+fi
+
+echo "🔍 Running ESLint…"
+npm run lint
+if [ $? -ne 0 ]; then
+  echo "❌ ESLint errors — push blocked"
+  exit 1
+fi
+
+echo "✅ All checks passed — pushing!"
+exit 0
