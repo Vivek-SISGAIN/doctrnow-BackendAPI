@@ -1,60 +1,72 @@
-# Prescription & Medical Records Service
+# Medical Records Service
 
-Manages prescriptions, medical documents, and patient records.
+Manages prescriptions, medical documents, and patient records for DoctorNow.
 
-## Responsibilities
+## Features
 
-- Prescription generation
-- Prescription history
-- Medical document storage
-- Document access control
-- FHIR compliance for interoperability
+- **Prescription Management**: Create, update, sign, send, and track prescription lifecycle
+- **Document Management**: Upload, view, and manage medical documents (lab reports, radiology, etc.)
+- **Prescription Lifecycle**: DRAFT → SIGNED → SENT → VIEWED
 
-## Database Schema
+## Setup
 
-```sql
-prescriptions (
-  id UUID PK,
-  consultation_id UUID,
-  doctor_id UUID,
-  created_at TIMESTAMP
-)
+1. Install dependencies:
+```bash
+npm install
+```
 
-prescription_items (
-  id UUID PK,
-  prescription_id UUID,
-  medicine_name VARCHAR,
-  dosage VARCHAR
-)
+2. Create `.env` file:
+```env
+DATABASE_URL=postgresql://username:password@localhost:5432/doctornow_medical_records?schema=public
+PORT=3004
+NODE_ENV=development
+```
 
-documents (
-  id UUID PK,
-  owner_id UUID,
-  file_path TEXT,
-  type VARCHAR
-)
+3. **Create the PostgreSQL database (required once).** Prisma does not create the database—only tables inside it.
+   - **DBeaver:** Connect to PostgreSQL (localhost:5432), then right‑click **Databases** → **Create New Database** → name: `doctornow_medical_records`.
+   - **psql:** `psql -U postgres -c "CREATE DATABASE doctornow_medical_records;"`
+
+4. Setup database (generate client + run migrations):
+```bash
+npm run db:setup
+```
+
+5. (Optional) Seed sample data:
+```bash
+npm run db:seed
+```
+
+6. Start server:
+```bash
+npm run dev
 ```
 
 ## API Endpoints
 
-- `POST /prescriptions` - Create prescription
-- `GET /prescriptions/:id` - Get prescription
-- `GET /prescriptions/patient/:patientId` - Get patient prescriptions
-- `POST /documents` - Upload document
-- `GET /documents/:id` - Get document
-- `GET /documents/patient/:patientId` - List patient documents
+### Prescriptions
 
-## Events Published
+- `POST /api/prescriptions` - Create prescription
+- `GET /api/prescriptions/:id` - Get prescription by ID
+- `GET /api/prescriptions/rx/:rxId` - Get prescription by RX ID
+- `GET /api/prescriptions/patient/:patientId` - Get patient prescriptions
+- `GET /api/prescriptions/doctor/:doctorId` - Get doctor prescriptions
+- `PUT /api/prescriptions/:id` - Update prescription
+- `POST /api/prescriptions/:id/sign` - Sign prescription
+- `POST /api/prescriptions/:id/send` - Send prescription
+- `POST /api/prescriptions/:id/view` - Mark as viewed
+- `DELETE /api/prescriptions/:id` - Delete prescription
 
-- `PrescriptionGenerated`
-- `DocumentUploaded`
+### Documents
 
-## Events Consumed
+- `POST /api/documents` - Upload document
+- `GET /api/documents/:id` - Get document by ID
+- `GET /api/documents/patient/:patientId` - Get patient documents
+- `GET /api/documents/doctor/:doctorId` - Get doctor documents
+- `GET /api/documents/appointment/:appointmentId` - Get appointment documents
+- `GET /api/documents/consultation/:consultationId` - Get consultation documents
+- `PUT /api/documents/:id` - Update document
+- `DELETE /api/documents/:id` - Delete document
 
-- `ConsultationCompleted` (from Consultation Service)
+## Database Schema
 
-## Integrations
-
-- NABDH FHIR adapter
-- Riayati FHIR adapter
-
+See `prisma/schema.prisma` for complete schema definition.

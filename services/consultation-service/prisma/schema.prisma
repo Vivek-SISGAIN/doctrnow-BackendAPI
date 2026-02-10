@@ -1,0 +1,81 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Consultation {
+  id                String            @id @default(uuid())
+  appointmentId     String            @unique
+  patientId         String
+  doctorId         String
+  status            ConsultationStatus @default(PENDING)
+  startedAt         DateTime?
+  endedAt           DateTime?
+  duration          Int?              // Duration in seconds
+  type              ConsultationType  @default(VIDEO)
+  diagnosis         String?
+  followUp          String?
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  notes             ConsultationNote[]
+  vitals            ConsultationVitals?
+
+  @@map("consultations")
+  @@index([patientId])
+  @@index([doctorId])
+  @@index([appointmentId])
+  @@index([status])
+  @@index([startedAt])
+}
+
+model ConsultationNote {
+  id                String       @id @default(uuid())
+  consultationId    String
+  content           String
+  createdBy         String       // Doctor ID
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+
+  consultation      Consultation @relation(fields: [consultationId], references: [id], onDelete: Cascade)
+
+  @@map("consultation_notes")
+  @@index([consultationId])
+  @@index([createdAt])
+}
+
+model ConsultationVitals {
+  id                String       @id @default(uuid())
+  consultationId    String       @unique
+  bloodPressure     String?      // e.g., "120/80"
+  pulse             String?      // e.g., "72 bpm"
+  temperature       String?      // e.g., "98.6°F"
+  spo2              String?      // e.g., "98%"
+  weight            String?      // e.g., "70 kg"
+  height            String?      // e.g., "170 cm"
+  notes             String?
+  recordedAt        DateTime     @default(now())
+
+  consultation      Consultation @relation(fields: [consultationId], references: [id], onDelete: Cascade)
+
+  @@map("consultation_vitals")
+  @@index([consultationId])
+}
+
+enum ConsultationStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+}
+
+enum ConsultationType {
+  VIDEO
+  AUDIO
+  CHAT
+}

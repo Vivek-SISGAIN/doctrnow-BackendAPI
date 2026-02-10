@@ -1,0 +1,119 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Prescription {
+  id                String            @id @default(uuid())
+  appointmentId     String?
+  consultationId    String?
+  patientId         String
+  doctorId         String
+  rxId              String            @unique // Format: RX-YYYY-MMDD-XXX
+  diagnosis         String?
+  lifecycle         PrescriptionLifecycle @default(DRAFT)
+  signedAt          DateTime?
+  sentAt            DateTime?
+  viewedAt          DateTime?
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  medications       PrescriptionMedication[]
+  precautions       PrescriptionPrecaution[]
+  dietRecommendations PrescriptionDiet[]
+
+  @@map("prescriptions")
+  @@index([patientId])
+  @@index([doctorId])
+  @@index([appointmentId])
+  @@index([consultationId])
+  @@index([lifecycle])
+  @@index([rxId])
+}
+
+model PrescriptionMedication {
+  id              String       @id @default(uuid())
+  prescriptionId  String
+  name            String
+  strength        String
+  dosage          String       // e.g., "1", "1.5", "2"
+  frequency       String       // e.g., "Once daily", "Twice daily"
+  duration        String       // e.g., "30 days", "90 days"
+  isControlled    Boolean      @default(false)
+  type            String?      // e.g., "Tablet", "Capsule", "Syrup"
+  instructions    String?
+  createdAt       DateTime     @default(now())
+
+  prescription    Prescription @relation(fields: [prescriptionId], references: [id], onDelete: Cascade)
+
+  @@map("prescription_medications")
+  @@index([prescriptionId])
+}
+
+model PrescriptionPrecaution {
+  id              String       @id @default(uuid())
+  prescriptionId  String
+  text            String
+  createdAt       DateTime     @default(now())
+
+  prescription    Prescription @relation(fields: [prescriptionId], references: [id], onDelete: Cascade)
+
+  @@map("prescription_precautions")
+  @@index([prescriptionId])
+}
+
+model PrescriptionDiet {
+  id              String       @id @default(uuid())
+  prescriptionId  String
+  text            String
+  createdAt       DateTime     @default(now())
+
+  prescription    Prescription @relation(fields: [prescriptionId], references: [id], onDelete: Cascade)
+
+  @@map("prescription_diet")
+  @@index([prescriptionId])
+}
+
+model MedicalDocument {
+  id              String            @id @default(uuid())
+  patientId       String
+  doctorId        String?
+  appointmentId  String?
+  consultationId String?
+  name            String
+  type            DocumentType
+  filePath        String
+  fileSize        Int               // in bytes
+  mimeType        String?
+  uploadedBy      String            // User ID who uploaded
+  description     String?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  @@map("medical_documents")
+  @@index([patientId])
+  @@index([doctorId])
+  @@index([appointmentId])
+  @@index([consultationId])
+  @@index([type])
+}
+
+enum PrescriptionLifecycle {
+  DRAFT
+  SIGNED
+  SENT
+  VIEWED
+}
+
+enum DocumentType {
+  LAB_REPORT
+  RADIOLOGY
+  PRESCRIPTION
+  CONSULTATION_NOTES
+  REFERRAL
+  OTHER
+}
