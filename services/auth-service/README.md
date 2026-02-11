@@ -276,6 +276,37 @@ Store or process PHI
 
 Perform authorization checks outside identity scope
 
+## Database setup and seed
+
+1. **Create PostgreSQL database** (e.g. `auth_db`).
+2. **Set `.env`** with your connection string:
+   ```bash
+   DATABASE_URL=postgresql://USER:PASSWORD@localhost:5432/auth_db
+   ```
+3. **Create tables and seed users** (from `services/auth-service`):
+   ```bash
+   npm run db:setup
+   ```
+   This runs `prisma db push`, `prisma generate`, and `prisma db seed`.
+
+   Or step by step:
+   ```bash
+   npm run db:push    # Create tables from schema
+   npm run generate   # Generate Prisma client
+   npm run db:seed    # Seed users
+   ```
+4. **Seed users** (created by seed):
+   - **Doctor:** `doctor@doctornow.com` / `Password123!` (userId: `11111111-1111-1111-1111-111111111111`)
+   - **Patient:** `patient@doctornow.com` / `Password123!` (userId: `22222222-2222-2222-2222-222222222222`)
+
+   Use these to log in from the doctor or patient portal (via gateway `/api/v1/auth/login`). JWT keys are created automatically when the auth-service starts.
+
+5. **OTP identifier columns (registration by mobile):** If you use migrations, apply the migration that adds `identifier_email` and `identifier_mobile` to `otp_requests`:
+   ```bash
+   npx prisma migrate deploy
+   ```
+   Or use `npx prisma db push` to sync the schema without migrations. For patient portal testing, set `ACCEPT_TEST_OTP=true` in `.env` to accept OTP `111111` for REGISTRATION.
+
 ✅ Status
 ➡️ Next Steps
 

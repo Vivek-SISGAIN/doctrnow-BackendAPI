@@ -46,6 +46,21 @@ npm install
 npm run dev
 ```
 
+### Database setup and seed (auth-service + profile-service)
+
+Use **PostgreSQL** (e.g. two databases: `auth_db` and `profile_db`).
+
+1. **Auth-service** (from `services/auth-service`):
+   - Set `.env`: `DATABASE_URL=postgresql://USER:PASSWORD@localhost:5432/auth_db`
+   - Run: `npm run db:setup` (creates tables and seeds doctor + patient users)
+   - Seed login: `doctor@doctornow.com` / `Password123!` and `patient@doctornow.com` / `Password123!`
+
+2. **Profile-service** (from `services/profile-service`):
+   - Set `.env`: `DATABASE_URL=postgresql://USER:PASSWORD@localhost:5432/profile_db`
+   - Run: `npm run db:setup` (applies migrations and seeds patient + doctor profiles linked to auth user IDs)
+
+See each service’s README for details.
+
 ## 🔐 Security
 
 - JWT-based authentication

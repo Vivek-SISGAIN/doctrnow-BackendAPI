@@ -9,19 +9,19 @@ import {
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { Request, Response } from 'express';
 import { HttpProxyService } from '../http-proxy/http-proxy.service';
-import { Public } from '../common/decorators/public.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
 /**
- * Auth Controller
- * Routes: /api/v1/auth/*
- * Target: auth-service
- * Access: Public (no auth required for auth endpoints)
+ * Prescription Controller
+ * Routes: /api/v1/prescriptions/*
+ * Target: medical-records-service /api/prescriptions
+ * Access: Authenticated users only
  */
-@ApiTags('auth')
-@Controller('auth')
-@Public() // Auth endpoints are public (login, register, etc.)
-export class AuthController {
+@ApiTags('prescriptions')
+@ApiBearerAuth('JWT-auth')
+@Controller('prescriptions')
+@UseGuards(JwtAuthGuard)
+export class PrescriptionController {
   constructor(private readonly httpProxyService: HttpProxyService) {}
 
   @All()
@@ -32,19 +32,23 @@ export class AuthController {
   @All('*')
   async proxyRequest(@Req() req: Request, @Res() res: Response): Promise<void> {
     const correlationId = req.headers['x-correlation-id'] as string;
-    // Auth-service uses global prefix 'auth' and version '1' -> /auth/v1/register, etc.
-    const raw = ((req as any).originalUrl ?? req.url ?? '').split('?')[0];
-    const suffix = raw.includes('/auth') ? (raw.replace(/.*\/auth\/?/, '/') || '/') : '/';
-    const path = `/auth/v1${suffix.startsWith('/') ? suffix : '/' + suffix}`;
+    const rawUrl = (req as any).originalUrl || req.url || '';
+    const incomingPath = rawUrl.split('?')[0];
+    const suffix = incomingPath.replace(/^\/api\/v1\/prescriptions/, '') || '';
+    const path = `/api/prescriptions${suffix}`;
+    const user = (req as any).user;
 
     try {
-      const response = await this.httpProxyService.proxyRequest('AUTH', {
+      const response = await this.httpProxyService.proxyRequest('MEDICAL_RECORDS', {
         method: req.method,
         url: path,
         headers: this.extractHeaders(req),
         body: req.body,
         query: req.query as Record<string, any>,
         correlationId,
+        userId: user?.userId,
+        role: user?.role,
+        tenantId: user?.tenantId,
       });
 
       res.status(response.status).json(response.data);
@@ -74,4 +78,3 @@ export class AuthController {
     return headers;
   }
 }
-

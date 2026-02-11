@@ -92,12 +92,14 @@ const getHistoryByPatient = asyncHandler(async (req, res) => {
 
 const getHistoryByDoctor = asyncHandler(async (req, res) => {
   const { doctorId } = req.params;
-  const { status, page, limit } = req.query;
+  const { status, page, limit, startDate, endDate } = req.query;
 
   const result = await consultationService.getHistoryByDoctorId(doctorId, {
     status,
     page,
-    limit
+    limit,
+    startDate,
+    endDate
   });
 
   res.status(200).json({

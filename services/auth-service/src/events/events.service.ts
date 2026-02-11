@@ -86,6 +86,11 @@ export class EventsService {
   }
 
   private async initializeKafka(): Promise<void> {
+    const enabled = this.configService.get<boolean>('KAFKA_ENABLED', false);
+    if (!enabled) {
+      this.logger.log('Kafka disabled (KAFKA_ENABLED not set). Events will be logged but not published.');
+      return;
+    }
     try {
       const brokersConfig = this.configService.get<string>('KAFKA_BROKERS', 'localhost:9092');
       const clientId = this.configService.get<string>('KAFKA_CLIENT_ID', 'auth-service');

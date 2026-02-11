@@ -7,8 +7,8 @@ const createDocumentSchema = Joi.object({
   consultationId: Joi.string().uuid().optional(),
   name: Joi.string().required(),
   type: Joi.string().valid('LAB_REPORT', 'RADIOLOGY', 'PRESCRIPTION', 'CONSULTATION_NOTES', 'REFERRAL', 'OTHER').required(),
-  filePath: Joi.string().required(),
-  fileSize: Joi.number().integer().positive().required(),
+  filePath: Joi.string().allow('').optional().default(''),
+  fileSize: Joi.number().integer().min(0).optional().default(0),
   mimeType: Joi.string().optional(),
   uploadedBy: Joi.string().required(),
   description: Joi.string().max(1000).optional()

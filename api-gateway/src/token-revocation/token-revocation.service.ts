@@ -15,18 +15,22 @@ export class TokenRevocationService {
   constructor(private readonly redisService: RedisService) {}
 
   /**
-   * Check if token is revoked
+   * Check if token is revoked.
+   * When Redis is unavailable, returns false (token not revoked) so auth still works.
    */
   async isRevoked(token: string): Promise<boolean> {
     if (!token) {
       return true;
     }
 
-    const tokenHash = this.hashToken(token);
-    const key = `${this.BLACKLIST_PREFIX}${tokenHash}`;
-
-    const exists = await this.redisService.exists(key);
-    return exists === 1;
+    try {
+      const tokenHash = this.hashToken(token);
+      const key = `${this.BLACKLIST_PREFIX}${tokenHash}`;
+      const exists = await this.redisService.exists(key);
+      return exists === 1;
+    } catch {
+      return false; // Redis down: allow request (revocation not enforced)
+    }
   }
 
   /**
@@ -34,29 +38,29 @@ export class TokenRevocationService {
    * Called by auth-service when user logs out or token is invalidated
    */
   async revokeToken(token: string, ttlSeconds?: number): Promise<void> {
-    if (!token) {
-      return;
+    if (!token) return;
+    try {
+      const tokenHash = this.hashToken(token);
+      const key = `${this.BLACKLIST_PREFIX}${tokenHash}`;
+      const ttl = ttlSeconds || this.TTL_SECONDS;
+      await this.redisService.setex(key, ttl, '1');
+    } catch {
+      // Redis down: revoke is skipped
     }
-
-    const tokenHash = this.hashToken(token);
-    const key = `${this.BLACKLIST_PREFIX}${tokenHash}`;
-    const ttl = ttlSeconds || this.TTL_SECONDS;
-
-    await this.redisService.setex(key, ttl, '1');
   }
 
   /**
    * Remove token from blacklist (for testing/admin purposes)
    */
   async unrevokeToken(token: string): Promise<void> {
-    if (!token) {
-      return;
+    if (!token) return;
+    try {
+      const tokenHash = this.hashToken(token);
+      const key = `${this.BLACKLIST_PREFIX}${tokenHash}`;
+      await this.redisService.del(key);
+    } catch {
+      // Redis down: no-op
     }
-
-    const tokenHash = this.hashToken(token);
-    const key = `${this.BLACKLIST_PREFIX}${tokenHash}`;
-
-    await this.redisService.del(key);
   }
 
   /**

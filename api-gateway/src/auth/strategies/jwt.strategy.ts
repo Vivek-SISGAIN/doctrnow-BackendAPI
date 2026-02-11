@@ -54,6 +54,9 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
 
     // Extract token from request for revocation check
     const token = ExtractJwt.fromAuthHeaderAsBearerToken()(req);
+    if (!token) {
+      throw new UnauthorizedException('No token provided');
+    }
 
     // Check token revocation (blacklist)
     const isRevoked = await this.jwtService.isTokenRevoked(token);

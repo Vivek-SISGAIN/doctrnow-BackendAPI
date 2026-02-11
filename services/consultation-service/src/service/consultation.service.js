@@ -183,14 +183,27 @@ class ConsultationService {
 
   /**
    * Get consultation history by doctor ID
+   * @param {string} doctorId
+   * @param {Object} filters - { status, page, limit, startDate (ISO), endDate (ISO) }
    */
   async getHistoryByDoctorId(doctorId, filters = {}) {
-    const { status, page = 1, limit = 20 } = filters;
+    const { status, page = 1, limit = 20, startDate, endDate } = filters;
     const skip = (page - 1) * limit;
 
     const where = { doctorId };
     if (status) {
       where.status = status;
+    }
+    if (startDate || endDate) {
+      const start = startDate ? new Date(startDate) : null;
+      const end = endDate ? new Date(endDate) : null;
+      const dateRange = {};
+      if (start) dateRange.gte = start;
+      if (end) dateRange.lte = end;
+      where.OR = [
+        { startedAt: { not: null, ...dateRange } },
+        { startedAt: null, createdAt: dateRange }
+      ];
     }
 
     const [consultations, total] = await Promise.all([

@@ -13,8 +13,8 @@ class DocumentService {
         consultationId: data.consultationId,
         name: data.name,
         type: data.type,
-        filePath: data.filePath,
-        fileSize: data.fileSize,
+        filePath: data.filePath || '',
+        fileSize: data.fileSize ?? 0,
         mimeType: data.mimeType,
         uploadedBy: data.uploadedBy,
         description: data.description

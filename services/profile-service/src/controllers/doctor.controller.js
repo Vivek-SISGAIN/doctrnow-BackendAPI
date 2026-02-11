@@ -18,7 +18,7 @@ const getAllDoctors = asyncHandler(async (req, res) => {
 const getDoctorById = asyncHandler(async (req, res) => {
   const { id } = req.params;
 
-  const doctor = await doctorService.findById(id);
+  const doctor = await doctorService.findByIdOrUserId(id);
 
   if (!doctor) {
     throw ApiError.notFound('Doctor not found');
@@ -101,6 +101,35 @@ const searchDoctorsBySpecialization = asyncHandler(async (req, res) => {
   res.status(200).json({
     success: true,
     data: doctors
+  });
+});
+
+const getAvailability = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const result = await doctorService.getAvailability(id);
+  if (!result) {
+    throw ApiError.notFound('Doctor not found');
+  }
+  res.status(200).json({
+    success: true,
+    data: result
+  });
+});
+
+const setAvailability = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const { status } = req.body;
+  const valid = ['ONLINE', 'OFFLINE', 'BUSY'];
+  if (!status || !valid.includes(status)) {
+    throw ApiError.badRequest('status must be one of: ONLINE, OFFLINE, BUSY');
+  }
+  const doctor = await doctorService.setAvailability(id, status);
+  if (!doctor) {
+    throw ApiError.notFound('Doctor not found');
+  }
+  res.status(200).json({
+    success: true,
+    data: { status: doctor.availabilityStatus }
   });
 });
 
@@ -202,5 +231,7 @@ module.exports = {
   createDoctor,
   deleteDoctor,
   getAllDoctors,
-  searchDoctorsBySpecialization
+  searchDoctorsBySpecialization,
+  getAvailability,
+  setAvailability
 };
