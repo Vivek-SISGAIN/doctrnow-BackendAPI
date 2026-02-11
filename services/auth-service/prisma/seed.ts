@@ -1,0 +1,68 @@
+/**
+ * Auth Service - Database Seed
+ * Creates default tenant, users (doctor + patient), and ensures JWT key exists.
+ * Run: npx prisma db seed
+ */
+import { PrismaClient, UserRole, UserStatus } from '@prisma/client';
+import * as bcrypt from 'bcrypt';
+
+const prisma = new PrismaClient();
+
+const DEFAULT_TENANT_ID = '00000000-0000-0000-0000-000000000001';
+const DOCTOR_USER_ID = '11111111-1111-1111-1111-111111111111';
+const PATIENT_USER_ID = '22222222-2222-2222-2222-222222222222';
+
+const SEED_PASSWORD = 'Password123!'; // Change in production
+
+async function main() {
+  const passwordHash = await bcrypt.hash(SEED_PASSWORD, 10);
+
+  // Upsert tenant (auth schema doesn't have Tenant table; we just use a fixed UUID)
+  // Create/update seed users
+  const doctor = await prisma.user.upsert({
+    where: { id: DOCTOR_USER_ID },
+    update: {},
+    create: {
+      id: DOCTOR_USER_ID,
+      tenantId: DEFAULT_TENANT_ID,
+      email: 'doctor@doctornow.com',
+      mobile: '+971501234567',
+      passwordHash,
+      role: UserRole.DOCTOR,
+      status: UserStatus.ACTIVE,
+      failedLoginAttempts: 0,
+    },
+  });
+
+  const patient = await prisma.user.upsert({
+    where: { id: PATIENT_USER_ID },
+    update: {},
+    create: {
+      id: PATIENT_USER_ID,
+      tenantId: DEFAULT_TENANT_ID,
+      email: 'patient@doctornow.com',
+      mobile: '+971509876543',
+      passwordHash,
+      role: UserRole.PATIENT,
+      status: UserStatus.ACTIVE,
+      failedLoginAttempts: 0,
+    },
+  });
+
+  console.log('Auth seed completed:');
+  console.log('  Doctor:', doctor.email, '(id:', doctor.id, ')');
+  console.log('  Patient:', patient.email, '(id:', patient.id, ')');
+  console.log('  Password for both:', SEED_PASSWORD);
+  console.log('  Tenant ID:', DEFAULT_TENANT_ID);
+
+  // JWT key is created by JwtKeyService.onModuleInit when auth-service starts; no seed needed
+}
+
+main()
+  .catch((e) => {
+    console.error(e);
+    process.exit(1);
+  })
+  .finally(async () => {
+    await prisma.$disconnect();
+  });

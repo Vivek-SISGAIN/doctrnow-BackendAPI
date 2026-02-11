@@ -39,8 +39,8 @@ export default () => ({
   CORS_ORIGINS: process.env.CORS_ORIGINS?.split(',') || ['http://localhost:3000'],
   CORS_CREDENTIALS: process.env.CORS_CREDENTIALS === 'true' || true,
 
-  // Event Bus (Kafka)
-  // Keep as string - will be parsed in EventsService
+  // Event Bus (Kafka) – disabled by default so auth-service starts without Kafka in dev
+  KAFKA_ENABLED: process.env.KAFKA_ENABLED === 'true' || process.env.NODE_ENV === 'production',
   KAFKA_BROKERS: process.env.KAFKA_BROKERS || 'localhost:9092',
   KAFKA_CLIENT_ID: process.env.KAFKA_CLIENT_ID || 'auth-service',
   KAFKA_GROUP_ID: process.env.KAFKA_GROUP_ID || 'auth-service-group',

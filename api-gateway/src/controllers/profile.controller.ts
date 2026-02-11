@@ -19,21 +19,29 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
  */
 @ApiTags('profiles')
 @ApiBearerAuth('JWT-auth')
-@Controller('v1/profiles')
+@Controller('profiles')
 @UseGuards(JwtAuthGuard)
 export class ProfileController {
   constructor(private readonly httpProxyService: HttpProxyService) {}
 
+  @All()
+  async proxyBase(@Req() req: Request, @Res() res: Response): Promise<void> {
+    return this.proxyRequest(req, res);
+  }
+
   @All('*')
   async proxyRequest(@Req() req: Request, @Res() res: Response): Promise<void> {
     const correlationId = req.headers['x-correlation-id'] as string;
-    const path = req.url.replace('/api/v1/profiles', ''); // Remove prefix
+    // Strip gateway prefix and query string so proxy builds URL from path + req.query (no duplicate params)
+    const pathSuffix = req.url.replace('/api/v1/profiles', '').split('?')[0];
+    // Profile service expects paths under /api (e.g. /api/patients)
+    const path = `/api${pathSuffix || ''}`.replace('//', '/') || '/';
     const user = (req as any).user;
 
     try {
       const response = await this.httpProxyService.proxyRequest('PROFILE', {
         method: req.method,
-        url: path || '/',
+        url: path,
         headers: this.extractHeaders(req),
         body: req.body,
         query: req.query as Record<string, any>,
@@ -46,10 +54,12 @@ export class ProfileController {
       res.status(response.status).json(response.data);
     } catch (error: any) {
       const status = error.status || HttpStatus.INTERNAL_SERVER_ERROR;
+      const upstreamMessage =
+        error?.data?.message ?? error?.data?.error?.message ?? error.message;
       res.status(status).json({
         error: {
           code: 'PROXY_ERROR',
-          message: error.message || 'Internal server error',
+          message: upstreamMessage || 'Internal server error',
           correlationId,
         },
       });
@@ -58,11 +68,12 @@ export class ProfileController {
 
   private extractHeaders(req: Request): Record<string, string> {
     const headers: Record<string, string> = {};
-    const allowedHeaders = ['content-type', 'accept', 'x-tenant-id'];
+    const allowedHeaders = ['content-type', 'accept', 'x-tenant-id', 'authorization'];
 
     for (const [key, value] of Object.entries(req.headers)) {
       if (allowedHeaders.includes(key.toLowerCase())) {
-        headers[key] = Array.isArray(value) ? value[0] : value;
+        const val = Array.isArray(value) ? value[0] : value;
+        if (typeof val === 'string') headers[key] = val;
       }
     }
 

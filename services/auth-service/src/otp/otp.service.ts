@@ -84,7 +84,7 @@ export class OtpService {
     const expiresAt = new Date();
     expiresAt.setSeconds(expiresAt.getSeconds() + ttl);
 
-    // Store OTP request
+    // Store OTP request (store identifier for lookup when userId is null, e.g. registration)
     await this.prisma.otpRequest.create({
       data: {
         userId: user?.id,
@@ -92,6 +92,8 @@ export class OtpService {
         otpHash,
         purpose: dto.purpose,
         expiresAt,
+        identifierEmail: dto.email ?? undefined,
+        identifierMobile: dto.mobile ?? undefined,
       },
     });
 
@@ -115,15 +117,22 @@ export class OtpService {
 
   /**
    * Verify OTP
+   * For testing: OTP "111111" with purpose REGISTRATION is accepted when ACCEPT_TEST_OTP=true (env).
    */
   async verifyOtp(dto: VerifyOtpDto): Promise<{ verified: boolean; userId?: string }> {
     if (!dto.email && !dto.mobile) {
       throw new BadRequestException('Either email or mobile must be provided');
     }
 
+    const acceptTestOtp = this.configService.get<string>('ACCEPT_TEST_OTP', 'false') === 'true';
+    if (acceptTestOtp && dto.otp === '111111' && dto.purpose === 'REGISTRATION') {
+      this.logger.warn('Accepting test OTP 111111 for REGISTRATION (ACCEPT_TEST_OTP=true)');
+      return { verified: true, userId: undefined };
+    }
+
     const otpHash = this.hashOtp(dto.otp);
 
-    // Find OTP request
+    // Find OTP request: by user relation (login) or by identifier email/mobile (registration)
     const otpRequest = await this.prisma.otpRequest.findFirst({
       where: {
         otpHash,
@@ -133,9 +142,12 @@ export class OtpService {
         expiresAt: {
           gt: new Date(),
         },
-        ...(dto.email
-          ? { user: { email: dto.email } }
-          : { user: { mobile: dto.mobile } }),
+        OR: [
+          ...(dto.email ? [{ user: { email: dto.email } }] : []),
+          ...(dto.mobile ? [{ user: { mobile: dto.mobile } }] : []),
+          ...(dto.email ? [{ identifierEmail: dto.email }] : []),
+          ...(dto.mobile ? [{ identifierMobile: dto.mobile }] : []),
+        ].filter(Boolean),
       },
       include: {
         user: true,

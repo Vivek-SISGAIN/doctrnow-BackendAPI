@@ -1,7 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
-import { ThrottlerStorageRedisService } from '@nestjs/throttler-storage-redis';
 import { APP_GUARD, APP_INTERCEPTOR, APP_FILTER } from '@nestjs/core';
 import { TerminusModule } from '@nestjs/terminus';
 import { LoggerModule } from 'nestjs-pino';
@@ -18,6 +17,9 @@ import { AuthController } from './controllers/auth.controller';
 import { ProfileController } from './controllers/profile.controller';
 import { AppointmentController } from './controllers/appointment.controller';
 import { ConsultationController } from './controllers/consultation.controller';
+import { PrescriptionController } from './controllers/prescription.controller';
+import { DocumentController } from './controllers/document.controller';
+import { LabReportController } from './controllers/lab-report.controller';
 
 import { CorrelationIdInterceptor } from './common/interceptors/correlation-id.interceptor';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
@@ -80,7 +82,7 @@ import configuration from './config/configuration';
       }),
     }),
 
-    // Rate Limiting (Redis-backed)
+    // Rate limiting (in-memory by default; use Redis storage in production for multi-instance)
     ThrottlerModule.forRootAsync({
       inject: [ConfigService],
       useFactory: (configService: ConfigService) => ({
@@ -90,12 +92,6 @@ import configuration from './config/configuration';
             limit: configService.get<number>('RATE_LIMIT_MAX', 100),
           },
         ],
-        storage: new ThrottlerStorageRedisService({
-          host: configService.get<string>('REDIS_HOST', 'localhost'),
-          port: configService.get<number>('REDIS_PORT', 6379),
-          password: configService.get<string>('REDIS_PASSWORD'),
-          db: configService.get<number>('REDIS_DB', 0),
-        }),
       }),
     }),
 
@@ -119,6 +115,9 @@ import configuration from './config/configuration';
     ProfileController,
     AppointmentController,
     ConsultationController,
+    PrescriptionController,
+    DocumentController,
+    LabReportController,
   ],
   providers: [
     // Global Guards (execution order: Throttler → JWT → Roles)

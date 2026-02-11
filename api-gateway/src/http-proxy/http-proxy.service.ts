@@ -59,21 +59,26 @@ export class HttpProxyService {
       validateStatus: (status) => status < 500, // Don't throw on 4xx
     };
 
-    // Execute with circuit breaker protection
+    const doRequest = async () => client.request(axiosConfig);
+
     try {
-      const response = await this.circuitBreakerService.execute(
-        serviceName,
-        async () => {
-          return client.request(axiosConfig);
-        },
-      );
+      const response = this.configService.get<boolean>('CIRCUIT_BREAKER_ENABLED', false)
+        ? await this.circuitBreakerService.execute(serviceName, doRequest)
+        : await doRequest();
 
       return {
         status: response.status,
         data: response.data,
         headers: response.headers,
       };
-    } catch (error) {
+    } catch (error: any) {
+      // Circuit breaker open -> 503 Service Unavailable (do not treat as 401)
+      if (error?.message?.includes('Breaker is open') || error?.code === 'EOPENBREAKER') {
+        throw {
+          status: 503,
+          message: 'Service temporarily unavailable. Please try again shortly.',
+        };
+      }
       if (axios.isAxiosError(error)) {
         const axiosError = error as AxiosError;
         this.logger.error({
@@ -87,7 +92,7 @@ export class HttpProxyService {
         if (axiosError.response) {
           throw {
             status: axiosError.response.status,
-            message: axiosError.response.statusText,
+            message: axiosError.response.statusText || axiosError.message,
             data: axiosError.response.data,
           };
         }

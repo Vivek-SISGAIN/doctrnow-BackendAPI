@@ -19,21 +19,27 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
  */
 @ApiTags('consultations')
 @ApiBearerAuth('JWT-auth')
-@Controller('v1/consultations')
+@Controller('consultations')
 @UseGuards(JwtAuthGuard)
 export class ConsultationController {
   constructor(private readonly httpProxyService: HttpProxyService) {}
 
+  @All()
+  async proxyBase(@Req() req: Request, @Res() res: Response): Promise<void> {
+    return this.proxyRequest(req, res);
+  }
+
   @All('*')
   async proxyRequest(@Req() req: Request, @Res() res: Response): Promise<void> {
     const correlationId = req.headers['x-correlation-id'] as string;
-    const path = req.url.replace('/api/v1/consultations', '');
+    const pathSuffix = req.url.replace('/api/v1/consultations', '').split('?')[0];
+    const path = `/api/consultations${pathSuffix || ''}`.replace('//', '/') || '/api/consultations';
     const user = (req as any).user;
 
     try {
       const response = await this.httpProxyService.proxyRequest('CONSULTATION', {
         method: req.method,
-        url: path || '/',
+        url: path,
         headers: this.extractHeaders(req),
         body: req.body,
         query: req.query as Record<string, any>,
@@ -58,11 +64,12 @@ export class ConsultationController {
 
   private extractHeaders(req: Request): Record<string, string> {
     const headers: Record<string, string> = {};
-    const allowedHeaders = ['content-type', 'accept', 'x-tenant-id'];
+    const allowedHeaders = ['content-type', 'accept', 'x-tenant-id', 'authorization'];
 
     for (const [key, value] of Object.entries(req.headers)) {
       if (allowedHeaders.includes(key.toLowerCase())) {
-        headers[key] = Array.isArray(value) ? value[0] : value;
+        const val = Array.isArray(value) ? value[0] : value;
+        if (typeof val === 'string') headers[key] = val;
       }
     }
 

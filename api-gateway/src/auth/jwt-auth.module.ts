@@ -5,9 +5,11 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { JwtService as CustomJwtService } from './services/jwt.service';
+import { TokenRevocationModule } from '../token-revocation/token-revocation.module';
 
 @Module({
   imports: [
+    TokenRevocationModule,
     PassportModule.register({ defaultStrategy: 'jwt' }),
     JwtModule.registerAsync({
       imports: [ConfigModule],

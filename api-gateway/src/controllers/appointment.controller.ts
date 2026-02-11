@@ -19,17 +19,27 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
  */
 @ApiTags('appointments')
 @ApiBearerAuth('JWT-auth')
-@Controller('v1/appointments')
+@Controller('appointments')
 @UseGuards(JwtAuthGuard)
 export class AppointmentController {
   constructor(private readonly httpProxyService: HttpProxyService) {}
 
+  /** Base path: GET /api/v1/appointments (list), POST /api/v1/appointments (create), etc. */
+  @All()
+  async proxyBase(@Req() req: Request, @Res() res: Response): Promise<void> {
+    return this.proxyRequest(req, res);
+  }
+
+  /** Subpaths: /api/v1/appointments/:id, /api/v1/appointments/slots/..., etc. */
   @All('*')
   async proxyRequest(@Req() req: Request, @Res() res: Response): Promise<void> {
     const correlationId = req.headers['x-correlation-id'] as string;
+    // Use originalUrl (path only, no query) for correct path
+    const rawUrl = (req as any).originalUrl || req.url || '';
+    const incomingPath = rawUrl.split('?')[0];
     // Replace /api/v1/appointments with /api/appointments for service routes
     // Handle slots routes: /api/v1/appointments/slots -> /api/slots
-    let path = req.url.replace('/api/v1/appointments', '');
+    let path = incomingPath.replace(/^\/api\/v1\/appointments/, '') || '';
     if (path.startsWith('/slots')) {
       path = path.replace('/slots', '/api/slots');
     } else {
@@ -69,7 +79,8 @@ export class AppointmentController {
 
     for (const [key, value] of Object.entries(req.headers)) {
       if (allowedHeaders.includes(key.toLowerCase())) {
-        headers[key] = Array.isArray(value) ? value[0] : value;
+        const val = Array.isArray(value) ? value[0] : value;
+        if (typeof val === 'string') headers[key] = val;
       }
     }
 

@@ -6,6 +6,7 @@ import {
   MemoryHealthIndicator,
   DiskHealthIndicator,
 } from '@nestjs/terminus';
+import { ConfigService } from '@nestjs/config';
 import { Public } from './common/decorators/public.decorator';
 import { RedisHealthIndicator } from './common/health/redis.health';
 
@@ -17,6 +18,7 @@ export class AppController {
     private readonly memory: MemoryHealthIndicator,
     private readonly disk: DiskHealthIndicator,
     private readonly redis: RedisHealthIndicator,
+    private readonly configService: ConfigService,
   ) {}
 
   @Public()
@@ -32,21 +34,20 @@ export class AppController {
     description: 'Gateway is unhealthy',
   })
   check() {
-    return this.health.check([
-      // Memory check
+    const checks: Array<() => Promise<any>> = [
       () => this.memory.checkHeap('memory_heap', 150 * 1024 * 1024), // 150MB
       () => this.memory.checkRSS('memory_rss', 300 * 1024 * 1024), // 300MB
-
-      // Disk check
       () =>
         this.disk.checkStorage('storage', {
           path: '/',
           thresholdPercent: 0.9, // Alert if disk usage > 90%
         }),
-
-      // Redis check
-      () => this.redis.isHealthy('redis'),
-    ]);
+    ];
+    const redisOptional = this.configService.get<boolean>('REDIS_OPTIONAL', false);
+    if (!redisOptional) {
+      checks.push(() => this.redis.isHealthy('redis'));
+    }
+    return this.health.check(checks);
   }
 
   @Public()

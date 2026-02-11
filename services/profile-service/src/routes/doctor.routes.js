@@ -6,7 +6,9 @@ const {
   deleteDoctor,
   searchDoctorsBySpecialization,
   createDoctor,
-  getAllDoctors
+  getAllDoctors,
+  getAvailability,
+  setAvailability
 } = require('../controllers/doctor.controller');
 const { updateDoctorSchema, createDoctorSchema } = require('../validations/doctor.validation');
 const validate = require('../middleware/validation');
@@ -45,6 +47,57 @@ const validate = require('../middleware/validation');
  *                     $ref: '#/components/schemas/Doctor'
  */
 router.get('/search/specialization', searchDoctorsBySpecialization);
+
+/**
+ * @swagger
+ * /api/doctors/{id}/availability:
+ *   get:
+ *     summary: Get doctor availability status
+ *     tags: [Doctors]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Doctor ID or user ID
+ *     responses:
+ *       200:
+ *         description: Availability status (ONLINE, OFFLINE, BUSY)
+ *       404:
+ *         description: Doctor not found
+ */
+router.get('/:id/availability', getAvailability);
+
+/**
+ * @swagger
+ * /api/doctors/{id}/availability:
+ *   patch:
+ *     summary: Set doctor availability status
+ *     tags: [Doctors]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [status]
+ *             properties:
+ *               status:
+ *                 type: string
+ *                 enum: [ONLINE, OFFLINE, BUSY]
+ *     responses:
+ *       200:
+ *         description: Availability updated
+ *       404:
+ *         description: Doctor not found
+ */
+router.patch('/:id/availability', setAvailability);
 
 /**
  * @swagger

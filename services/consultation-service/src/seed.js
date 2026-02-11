@@ -2,8 +2,8 @@
 require('dotenv').config();
 const prisma = require('./prisma/prisma');
 
-// Placeholder IDs - can match appointment-service seed or real IDs from profile service
-const SAMPLE_DOCTOR_ID = process.env.SAMPLE_DOCTOR_ID || '00000000-0000-0000-0000-000000000001';
+// Doctor ID used by doctor portal when logged in (so Consultation History shows seeded data)
+const SAMPLE_DOCTOR_ID = process.env.SAMPLE_DOCTOR_ID || '11111111-1111-1111-1111-111111111111';
 const SAMPLE_PATIENT_IDS = process.env.SAMPLE_PATIENT_IDS
   ? process.env.SAMPLE_PATIENT_IDS.split(',')
   : [
@@ -108,7 +108,17 @@ async function seedConsultations() {
   for (const data of consultationsData) {
     const c = await prisma.consultation.upsert({
       where: { appointmentId: data.appointmentId },
-      update: {},
+      update: {
+        doctorId: data.doctorId,
+        patientId: data.patientId,
+        status: data.status,
+        type: data.type,
+        startedAt: data.startedAt,
+        endedAt: data.endedAt,
+        duration: data.duration,
+        diagnosis: data.diagnosis,
+        followUp: data.followUp,
+      },
       create: data,
     });
     created.push(c);
@@ -130,6 +140,10 @@ async function seedNotes(consultations) {
 
   let count = 0;
   for (let i = 0; i < Math.min(consultations.length, noteContents.length); i++) {
+    const existing = await prisma.consultationNote.count({
+      where: { consultationId: consultations[i].id },
+    });
+    if (existing > 0) continue;
     await prisma.consultationNote.create({
       data: {
         consultationId: consultations[i].id,
@@ -140,12 +154,16 @@ async function seedNotes(consultations) {
     count++;
   }
 
-  // Add a second note for first two consultations
+  // Add a second note for first two consultations (only if they have no notes yet)
   const extraNotes = [
     'Reminded to avoid added salt. Provided leaflet on DASH diet.',
     'Labs ordered: FBC, U&E, LFT. Follow-up in 3 months.',
   ];
   for (let i = 0; i < 2 && i < consultations.length; i++) {
+    const noteCount = await prisma.consultationNote.count({
+      where: { consultationId: consultations[i].id },
+    });
+    if (noteCount >= 2) continue;
     await prisma.consultationNote.create({
       data: {
         consultationId: consultations[i].id,

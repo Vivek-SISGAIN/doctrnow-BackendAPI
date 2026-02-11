@@ -117,3 +117,47 @@ enum DocumentType {
   REFERRAL
   OTHER
 }
+
+// Lab reports - schema matches doctor portal UI (LabReportDetail + TestResult)
+model LabReport {
+  id                String           @id @default(uuid())
+  patientId         String
+  doctorId          String
+  appointmentId     String?
+  consultationId    String?
+  reportId          String           @unique  // e.g. LAB-2024-001234-001
+  consultationDate  DateTime?        // date of order/consultation
+  consultationTime  String?          // e.g. "09:00 AM"
+  orderedTests      String[]         // test names ordered
+  status            LabReportStatus  @default(PENDING)
+  priority          LabReportPriority @default(ROUTINE)
+  resultDate        DateTime?
+  notes             String?
+  results           Json?            // array of { name, value, unit, referenceRange, flag, previousValue?, previousDate? }
+  isReviewed        Boolean          @default(false)
+  reviewedAt        DateTime?
+  reviewComments    String?
+  sentToPatient     Boolean          @default(false)
+  sentAt            DateTime?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+
+  @@map("lab_reports")
+  @@index([patientId])
+  @@index([doctorId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+enum LabReportStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  SENT
+}
+
+enum LabReportPriority {
+  ROUTINE
+  URGENT
+  STAT
+}

@@ -92,7 +92,7 @@ export class AuthService {
         passwordHash,
         role: dto.role,
         tenantId: dto.tenantId,
-        status: UserStatus.PENDING_VERIFICATION,
+        status: UserStatus.ACTIVE,
       },
     });
 

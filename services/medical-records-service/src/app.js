@@ -111,10 +111,12 @@ app.use(
 // Import routes
 const prescriptionRoutes = require('./routes/prescription.routes');
 const documentRoutes = require('./routes/document.routes');
+const labReportRoutes = require('./routes/lab-report.routes');
 
 // Register routes
 app.use('/api/prescriptions', prescriptionRoutes);
 app.use('/api/documents', documentRoutes);
+app.use('/api/lab-reports', labReportRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {
