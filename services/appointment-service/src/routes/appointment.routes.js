@@ -9,6 +9,7 @@ const {
   rescheduleAppointment,
   confirmAppointment,
   completeAppointment,
+  markMissedAsNoShow,
   markNoShow
 } = require('../controllers/appointment.controller');
 const {
@@ -85,6 +86,9 @@ const validate = require('../middleware/validation');
  *         description: List of appointments
  */
 router.get('/', getAllAppointments);
+
+/** POST /api/appointments/mark-missed-no-shows - must be before /:id to avoid matching as id */
+router.post('/mark-missed-no-shows', markMissedAsNoShow);
 
 /**
  * @swagger
@@ -286,6 +290,23 @@ router.post('/:id/confirm', confirmAppointment);
  *         description: Appointment marked as completed
  */
 router.post('/:id/complete', completeAppointment);
+
+/**
+ * @swagger
+ * /api/appointments/mark-missed-no-shows:
+ *   post:
+ *     summary: Mark missed appointments as no-show (slot ended, status still CONFIRMED/PENDING)
+ *     tags: [Appointments]
+ *     parameters:
+ *       - in: query
+ *         name: doctorId
+ *         schema: { type: string, format: uuid }
+ *         description: Optional - only mark appointments for this doctor
+ *     responses:
+ *       200:
+ *         description: Missed appointments marked as no-show
+ */
+router.post('/mark-missed-no-shows', markMissedAsNoShow);
 
 /**
  * @swagger

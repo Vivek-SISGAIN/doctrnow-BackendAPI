@@ -19,6 +19,7 @@ model Slot {
   appointments Appointment[]
   slotLock    SlotLock?
 
+  @@unique([doctorId, startTime])
   @@map("slots")
   @@index([doctorId])
   @@index([startTime])

@@ -7,9 +7,10 @@ import { AccountLockoutService } from './account-lockout.service';
 import { PrismaModule } from '../prisma/prisma.module';
 import { JwtModule } from '../jwt/jwt.module';
 import { EventsModule } from '../events/events.module';
+import { OtpModule } from '../otp/otp.module';
 
 @Module({
-  imports: [PrismaModule, JwtModule, EventsModule],
+  imports: [PrismaModule, JwtModule, EventsModule, OtpModule],
   controllers: [AuthController],
   providers: [
     AuthService,

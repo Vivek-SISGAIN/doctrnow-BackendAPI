@@ -58,6 +58,56 @@ const getPatientById = asyncHandler(async (req, res) => {
   });
 });
 
+/**
+ * Get current patient profile by userId (from X-User-ID set by gateway)
+ */
+const getCurrentPatient = asyncHandler(async (req, res) => {
+  const userId = req.headers['x-user-id'];
+  if (!userId) {
+    throw ApiError.unauthorized('User ID required');
+  }
+
+  const patient = await patientService.findByUserId(userId);
+  if (!patient) {
+    throw ApiError.notFound('Patient profile not found');
+  }
+
+  res.status(200).json({
+    success: true,
+    data: patient
+  });
+});
+
+/**
+ * Create patient profile for current user (POST /api/patients/me).
+ * Used after registration when user completes profile-setup.
+ * Requires X-User-ID from gateway.
+ */
+const createCurrentPatient = asyncHandler(async (req, res) => {
+  const userId = req.headers['x-user-id'];
+  if (!userId) {
+    throw ApiError.unauthorized('User ID required');
+  }
+
+  const conflict = await patientService.findByUniqueFields({
+    email: req.body.email,
+    mobileNumber: req.body.mobileNumber,
+    emiratesId: req.body.emiratesId
+  });
+  if (conflict) {
+    if (conflict.email === req.body.email) throw ApiError.conflict('Email already in use');
+    if (conflict.mobileNumber === req.body.mobileNumber) throw ApiError.conflict('Mobile number already in use');
+    if (conflict.emiratesId === req.body.emiratesId) throw ApiError.conflict('Emirates ID already in use');
+  }
+
+  const patient = await patientService.createForUser(userId, req.body);
+  res.status(201).json({
+    success: true,
+    message: 'Patient profile created successfully',
+    data: patient
+  });
+});
+
 const updatePatient = asyncHandler(async (req, res) => {
   const { id } = req.params;
   const { mobileNumber, email, emiratesId } = req.body;
@@ -116,6 +166,8 @@ const deletePatient = asyncHandler(async (req, res) => {
 module.exports = {
   getAllPatients,
   getPatientById,
+  getCurrentPatient,
+  createCurrentPatient,
   updatePatient,
   deletePatient
 };

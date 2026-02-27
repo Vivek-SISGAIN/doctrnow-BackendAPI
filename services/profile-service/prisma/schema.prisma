@@ -47,6 +47,19 @@ model FamilyMember {
   @@map("family_member")
 }
 
+model Specialty {
+  id           String   @id @default(uuid())
+  name         String   @unique
+  slug         String   @unique
+  imageKey     String?  // e.g. "general-physician" for UI asset mapping
+  bgColor      String?  // e.g. "bg-purple-100" for UI
+  displayOrder Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@map("specialty")
+}
+
 model Doctor {
   id                      String             @id @default(uuid())
   userId                  String             @unique

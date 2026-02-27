@@ -3,8 +3,8 @@ export default () => ({
   PORT: parseInt(process.env.PORT || '8080', 10),
   TRUST_PROXY: process.env.TRUST_PROXY === 'true' || true,
 
-  // JWT Configuration
-  JWT_JWKS_URI: process.env.JWT_JWKS_URI || 'http://localhost:3001/.well-known/jwks.json',
+  // JWT Configuration (auth-service uses global prefix 'auth' + version 'v1', so JWKS is under /auth/v1/)
+  JWT_JWKS_URI: process.env.JWT_JWKS_URI || 'http://localhost:3001/auth/v1/.well-known/jwks.json',
   JWT_ISSUER: process.env.JWT_ISSUER || 'doctornow-platform',
   JWT_AUDIENCE: process.env.JWT_AUDIENCE || 'doctornow-api',
   JWT_ALGORITHM: process.env.JWT_ALGORITHM || 'RS256',
@@ -72,5 +72,9 @@ export default () => ({
 
   // Logging
   LOG_LEVEL: process.env.LOG_LEVEL || 'info',
+
+  // Agora (video call token generation – App Certificate = Primary Certificate from console)
+  AGORA_APP_ID: process.env.AGORA_APP_ID || '',
+  AGORA_APP_CERTIFICATE: process.env.AGORA_APP_CERTIFICATE || '',
 });
 

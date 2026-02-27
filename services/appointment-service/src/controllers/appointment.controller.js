@@ -161,6 +161,16 @@ const completeAppointment = asyncHandler(async (req, res) => {
   });
 });
 
+const markMissedAsNoShow = asyncHandler(async (req, res) => {
+  const { doctorId } = req.query;
+  const result = await appointmentService.markMissedAsNoShow(doctorId);
+  res.status(200).json({
+    success: true,
+    message: `Marked ${result.count} missed appointment(s) as no-show`,
+    data: result
+  });
+});
+
 const markNoShow = asyncHandler(async (req, res) => {
   const { id } = req.params;
 
@@ -188,5 +198,6 @@ module.exports = {
   rescheduleAppointment,
   confirmAppointment,
   completeAppointment,
+  markMissedAsNoShow,
   markNoShow
 };

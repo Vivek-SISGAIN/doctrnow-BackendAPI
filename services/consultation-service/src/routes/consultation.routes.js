@@ -4,15 +4,23 @@ const {
   createConsultation,
   getConsultationById,
   getConsultationByAppointment,
+  joinLobby,
+  requestConsent,
+  acceptConsent,
   startConsultation,
   endConsultation,
+  endByAppointment,
   getHistoryByPatient,
   getHistoryByDoctor,
   updateConsultation,
-  markNoShow
+  markNoShow,
+  saveHealthDetails,
+  getHealthDetails
 } = require('../controllers/consultation.controller');
 const {
   createConsultationSchema,
+  joinLobbySchema,
+  saveHealthDetailsSchema,
   updateConsultationSchema
 } = require('../validations/consultation.validation');
 const validate = require('../middleware/validation');
@@ -98,6 +106,152 @@ router.get('/history/patient/:patientId', getHistoryByPatient);
  *         description: List of consultations for doctor
  */
 router.get('/history/doctor/:doctorId', getHistoryByDoctor);
+
+/**
+ * @swagger
+ * /api/consultations/appointment/{appointmentId}/join-lobby:
+ *   post:
+ *     summary: Patient joins virtual lobby (get-or-create consultation, set patientJoinedAt)
+ *     tags: [Consultations]
+ *     parameters:
+ *       - in: path
+ *         name: appointmentId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [patientId, doctorId]
+ *             properties:
+ *               patientId: { type: string, format: uuid }
+ *               doctorId: { type: string, format: uuid }
+ *     responses:
+ *       200:
+ *         description: Joined lobby; data includes consultation and channelName for Agora
+ */
+router.post('/appointment/:appointmentId/join-lobby', validate(joinLobbySchema), joinLobby);
+
+/**
+ * @swagger
+ * /api/consultations/appointment/{appointmentId}/health-details:
+ *   post:
+ *     summary: Save patient health details for appointment/consultation (post-payment or before call)
+ *     tags: [Consultations]
+ *     parameters:
+ *       - in: path
+ *         name: appointmentId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [patientId, doctorId]
+ *             properties:
+ *               patientId: { type: string, format: uuid }
+ *               doctorId: { type: string, format: uuid }
+ *               weight: { type: string }
+ *               height: { type: string }
+ *               bloodPressure: { type: string }
+ *               sugarLevel: { type: string }
+ *               consultationReason: { type: string }
+ *     responses:
+ *       200:
+ *         description: Health details saved
+ */
+router.post('/appointment/:appointmentId/health-details', validate(saveHealthDetailsSchema), saveHealthDetails);
+
+/**
+ * @swagger
+ * /api/consultations/appointment/{appointmentId}/health-details:
+ *   get:
+ *     summary: Get health details for appointment's consultation
+ *     tags: [Consultations]
+ *     parameters:
+ *       - in: path
+ *         name: appointmentId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     responses:
+ *       200:
+ *         description: Health details (or null if none)
+ */
+router.get('/appointment/:appointmentId/health-details', getHealthDetails);
+
+/**
+ * @swagger
+ * /api/consultations/appointment/{appointmentId}/request-consent:
+ *   post:
+ *     summary: Doctor requests consent from patient
+ *     tags: [Consultations]
+ *     parameters:
+ *       - in: path
+ *         name: appointmentId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     responses:
+ *       200:
+ *         description: Consent requested
+ */
+router.post('/appointment/:appointmentId/request-consent', requestConsent);
+
+/**
+ * @swagger
+ * /api/consultations/appointment/{appointmentId}/accept-consent:
+ *   post:
+ *     summary: Patient accepts consent
+ *     tags: [Consultations]
+ *     parameters:
+ *       - in: path
+ *         name: appointmentId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     responses:
+ *       200:
+ *         description: Consent accepted
+ */
+router.post('/appointment/:appointmentId/accept-consent', acceptConsent);
+
+/**
+ * @swagger
+ * /api/consultations/appointment/{appointmentId}/end:
+ *   post:
+ *     summary: End consultation by appointment (doctor or patient ends call)
+ *     tags: [Consultations]
+ *     parameters:
+ *       - in: path
+ *         name: appointmentId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               endedBy: { type: string, enum: [doctor, patient] }
+ *     responses:
+ *       200:
+ *         description: Consultation ended
+ */
+router.post('/appointment/:appointmentId/end', endByAppointment);
 
 /**
  * @swagger

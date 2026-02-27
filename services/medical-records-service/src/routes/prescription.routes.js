@@ -4,6 +4,7 @@ const {
   createPrescription,
   getPrescriptionById,
   getPrescriptionByRxId,
+  getPrescriptionCountByDoctor,
   getPrescriptionsByPatient,
   getPrescriptionsByDoctor,
   updatePrescription,
@@ -105,6 +106,30 @@ router.get('/rx/:rxId', getPrescriptionByRxId);
  *         description: List of prescriptions
  */
 router.get('/patient/:patientId', getPrescriptionsByPatient);
+
+/**
+ * @swagger
+ * /api/prescriptions/doctor/{doctorId}/count:
+ *   get:
+ *     summary: Get prescription count for a doctor (dashboard stats)
+ *     tags: [Prescriptions]
+ *     parameters:
+ *       - in: path
+ *         name: doctorId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *       - in: query
+ *         name: lifecycle
+ *         schema:
+ *           type: string
+ *           enum: [DRAFT, SIGNED, SENT, VIEWED]
+ *     responses:
+ *       200:
+ *         description: { success, data: { count } }
+ */
+router.get('/doctor/:doctorId/count', getPrescriptionCountByDoctor);
 
 /**
  * @swagger

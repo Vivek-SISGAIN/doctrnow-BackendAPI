@@ -1,13 +1,27 @@
 const doctorService = require('../service/doctor.service');
+const specialtyService = require('../service/specialty.service');
 const ApiError = require('../utils/ApiError');
 const asyncHandler = require('../utils/asyncHandler');
 
 const getAllDoctors = asyncHandler(async (req, res) => {
-  const doctors = await doctorService.findAll();
+  const { specialty, specialtyId, search, gender, minExperience, maxFee, workingDay } = req.query;
 
-  if (!doctors) {
-    throw ApiError.notFound('Doctor not found');
+  let specialtyName = specialty;
+  if (specialtyId && !specialtyName) {
+    const spec = await specialtyService.findById(specialtyId);
+    if (spec) specialtyName = spec.name;
   }
+
+  const filters = {
+    specialtyName,
+    search,
+    gender,
+    minExperience,
+    maxFee,
+    workingDay
+  };
+
+  const doctors = await doctorService.findAllWithFilters(filters);
 
   res.status(200).json({
     success: true,

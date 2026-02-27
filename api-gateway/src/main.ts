@@ -92,6 +92,7 @@ async function bootstrap(): Promise<void> {
       .addTag('auth', 'Authentication endpoints (public)')
       .addTag('profiles', 'Profile management')
       .addTag('appointments', 'Appointment management')
+      .addTag('hospital-admin', 'Hospital admin (health services, packages, doctors)')
       .addTag('consultations', 'Consultation management')
       .build();
 

@@ -2,20 +2,25 @@ const prisma = require('../prisma/prisma');
 
 class SlotService {
   /**
-   * Find available slots for a doctor within a date range
+   * Find available slots for a doctor within a date range.
+   * Only returns slots with startTime >= now (no past slots).
+   * Deduplicates by (doctorId, startTime) so the same time never appears twice.
    */
   async findAvailableSlots(doctorId, startDate, endDate) {
+    const now = new Date();
+    const effectiveStart = startDate < now ? now : startDate;
+
     const slots = await prisma.slot.findMany({
       where: {
         doctorId,
         status: 'AVAILABLE',
         startTime: {
-          gte: startDate,
+          gte: effectiveStart,
           lte: endDate
         },
-        slotLock: null, // No active lock
+        slotLock: null,
         appointments: {
-          none: {} // No appointments booked
+          none: {}
         }
       },
       orderBy: {
@@ -23,7 +28,16 @@ class SlotService {
       }
     });
 
-    return slots;
+    // Deduplicate by (doctorId, startTime) – keep first occurrence
+    const seen = new Set();
+    const unique = slots.filter((s) => {
+      const key = `${s.doctorId}-${s.startTime.getTime()}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+
+    return unique;
   }
 
   /**
@@ -271,13 +285,11 @@ class SlotService {
   }
 
   /**
-   * Unlock a slot
+   * Unlock a slot (idempotent: no-op if no lock exists)
    */
   async unlockSlot(slotId) {
-    return prisma.slotLock.delete({
+    return prisma.slotLock.deleteMany({
       where: { slotId }
-    }).catch(() => {
-      // Ignore if lock doesn't exist
     });
   }
 
@@ -292,6 +304,34 @@ class SlotService {
         }
       }
     });
+  }
+
+  /**
+   * Delete past slots that are safe to remove:
+   * - status = AVAILABLE (not booked)
+   * - startTime < now (slot time has passed)
+   * - no appointment references this slot
+   * - no active slot lock (or lock is expired – we run cleanExpiredLocks first)
+   * Used by cron to prevent slots table bloat.
+   */
+  async deletePastAvailableSlots() {
+    const now = new Date();
+    await this.cleanExpiredLocks();
+    const pastAvailable = await prisma.slot.findMany({
+      where: {
+        status: 'AVAILABLE',
+        startTime: { lt: now },
+        appointments: { none: {} },
+        slotLock: null
+      },
+      select: { id: true }
+    });
+    if (pastAvailable.length === 0) {
+      return { deleted: 0 };
+    }
+    const ids = pastAvailable.map((s) => s.id);
+    await prisma.slot.deleteMany({ where: { id: { in: ids } } });
+    return { deleted: ids.length };
   }
 }
 

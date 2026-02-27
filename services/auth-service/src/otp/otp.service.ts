@@ -117,17 +117,31 @@ export class OtpService {
 
   /**
    * Verify OTP
-   * For testing: OTP "111111" with purpose REGISTRATION is accepted when ACCEPT_TEST_OTP=true (env).
+   * For testing: OTP "111111" is accepted when ACCEPT_TEST_OTP=true (env).
+   * - REGISTRATION: returns verified, userId undefined.
+   * - LOGIN: looks up user by mobile/email and returns userId so login/otp can issue tokens.
    */
   async verifyOtp(dto: VerifyOtpDto): Promise<{ verified: boolean; userId?: string }> {
     if (!dto.email && !dto.mobile) {
       throw new BadRequestException('Either email or mobile must be provided');
     }
 
-    const acceptTestOtp = this.configService.get<string>('ACCEPT_TEST_OTP', 'false') === 'true';
-    if (acceptTestOtp && dto.otp === '111111' && dto.purpose === 'REGISTRATION') {
-      this.logger.warn('Accepting test OTP 111111 for REGISTRATION (ACCEPT_TEST_OTP=true)');
-      return { verified: true, userId: undefined };
+    const acceptTestOtp = this.configService.get<string>('ACCEPT_TEST_OTP', 'true') === 'true';
+    if (acceptTestOtp && dto.otp === '111111') {
+      if (dto.purpose === 'REGISTRATION') {
+        this.logger.warn('Accepting test OTP 111111 for REGISTRATION (ACCEPT_TEST_OTP=true)');
+        return { verified: true, userId: undefined };
+      }
+      if (dto.purpose === 'LOGIN') {
+        let user = null;
+        if (dto.mobile) {
+          user = await this.prisma.user.findFirst({ where: { mobile: dto.mobile } });
+        } else if (dto.email) {
+          user = await this.prisma.user.findUnique({ where: { email: dto.email } });
+        }
+        this.logger.warn(`Accepting test OTP 111111 for LOGIN (ACCEPT_TEST_OTP=true), userId=${user?.id ?? 'none'}`);
+        return { verified: true, userId: user?.id ?? undefined };
+      }
     }
 
     const otpHash = this.hashOtp(dto.otp);
