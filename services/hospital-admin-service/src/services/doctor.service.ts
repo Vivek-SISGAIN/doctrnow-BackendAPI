@@ -48,7 +48,7 @@ class DoctorService {
 
         try {
             const authResponse = await axios.post(
-                'http://localhost:3001/auth/v1/register',
+                'http://localhost:8080/auth/v1/register',
                 {
                     email: profilePayload.email,
                     password,

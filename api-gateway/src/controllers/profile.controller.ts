@@ -32,11 +32,13 @@ export class ProfileController {
   @All('*')
   async proxyRequest(@Req() req: Request, @Res() res: Response): Promise<void> {
     const correlationId = req.headers['x-correlation-id'] as string;
-    // Strip gateway prefix and query string so proxy builds URL from path + req.query (no duplicate params)
-    const pathSuffix = req.url.replace('/api/v1/profiles', '').split('?')[0];
-    // Profile service expects paths under /api (e.g. /api/patients)
-    const path = `/api${pathSuffix || ''}`.replace('//', '/') || '/';
+    const rawUrl = (req as any).originalUrl || req.url || '';
+    const incomingPath = rawUrl.split('?')[0];
+    // Strip gateway prefix: /api/v1/profiles/... -> /api/... (e.g. /api/patients/me)
+    const pathSuffix = incomingPath.replace(/^\/api\/v1\/profiles/, '').trim() || '';
+    const path = `/api${pathSuffix.startsWith('/') ? pathSuffix : `/${pathSuffix}`}`.replace('//', '/') || '/api';
     const user = (req as any).user;
+    const userId = user?.userId ?? user?.sub;
 
     try {
       const response = await this.httpProxyService.proxyRequest('PROFILE', {
@@ -46,7 +48,7 @@ export class ProfileController {
         body: req.body,
         query: req.query as Record<string, any>,
         correlationId,
-        userId: user?.userId,
+        userId,
         role: user?.role,
         tenantId: user?.tenantId,
       });

@@ -60,6 +60,18 @@ const getPrescriptionsByPatient = asyncHandler(async (req, res) => {
   });
 });
 
+const getPrescriptionCountByDoctor = asyncHandler(async (req, res) => {
+  const { doctorId } = req.params;
+  const { lifecycle } = req.query;
+
+  const count = await prescriptionService.countByDoctorId(doctorId, { lifecycle });
+
+  res.status(200).json({
+    success: true,
+    data: { count }
+  });
+});
+
 const getPrescriptionsByDoctor = asyncHandler(async (req, res) => {
   const { doctorId } = req.params;
   const { lifecycle, page, limit } = req.query;
@@ -165,6 +177,7 @@ module.exports = {
   createPrescription,
   getPrescriptionById,
   getPrescriptionByRxId,
+  getPrescriptionCountByDoctor,
   getPrescriptionsByPatient,
   getPrescriptionsByDoctor,
   updatePrescription,

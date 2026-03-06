@@ -20,7 +20,9 @@ class ConsultationVitalsService {
           spo2: data.spo2,
           weight: data.weight,
           height: data.height,
-          notes: data.notes
+          notes: data.notes,
+          allergies: data.allergies,
+          criticalConditions: data.criticalConditions
         }
       });
     } else {
@@ -34,7 +36,9 @@ class ConsultationVitalsService {
           spo2: data.spo2,
           weight: data.weight,
           height: data.height,
-          notes: data.notes
+          notes: data.notes,
+          allergies: data.allergies,
+          criticalConditions: data.criticalConditions
         }
       });
     }

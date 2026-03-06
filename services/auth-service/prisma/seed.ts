@@ -11,6 +11,8 @@ const prisma = new PrismaClient();
 const DEFAULT_TENANT_ID = '00000000-0000-0000-0000-000000000001';
 const DOCTOR_USER_ID = '11111111-1111-1111-1111-111111111111';
 const PATIENT_USER_ID = '22222222-2222-2222-2222-222222222222';
+const TEST_PATIENT_USER_ID = '33333333-3333-3333-3333-333333333333';
+const HOSPITAL_ADMIN_USER_ID = '44444444-4444-4444-4444-444444444444';
 
 const SEED_PASSWORD = 'Password123!'; // Change in production
 
@@ -21,7 +23,7 @@ async function main() {
   // Create/update seed users
   const doctor = await prisma.user.upsert({
     where: { id: DOCTOR_USER_ID },
-    update: {},
+    update: { passwordHash }, // always refresh so seed password works after re-seed
     create: {
       id: DOCTOR_USER_ID,
       tenantId: DEFAULT_TENANT_ID,
@@ -36,7 +38,7 @@ async function main() {
 
   const patient = await prisma.user.upsert({
     where: { id: PATIENT_USER_ID },
-    update: {},
+    update: { passwordHash }, // always refresh so seed password works after re-seed
     create: {
       id: PATIENT_USER_ID,
       tenantId: DEFAULT_TENANT_ID,
@@ -49,10 +51,44 @@ async function main() {
     },
   });
 
+  const hospitalAdmin = await prisma.user.upsert({
+    where: { id: HOSPITAL_ADMIN_USER_ID },
+    update: { passwordHash },
+    create: {
+      id: HOSPITAL_ADMIN_USER_ID,
+      tenantId: DEFAULT_TENANT_ID,
+      email: 'admin@citycarehospital.com',
+      mobile: '+971501234580',
+      passwordHash,
+      role: UserRole.HOSPITAL_ADMIN,
+      status: UserStatus.ACTIVE,
+      failedLoginAttempts: 0,
+    },
+  });
+
+  console.log('  Hospital Admin:', hospitalAdmin.email, '(id:', hospitalAdmin.id, ')');
+
+  // Test patient (nitin.sisgain@gmail.com) – same password, same tenant for patient portal login
+  const testPatient = await prisma.user.upsert({
+    where: { id: TEST_PATIENT_USER_ID },
+    update: { passwordHash }, // always refresh hash so seed password is correct
+    create: {
+      id: TEST_PATIENT_USER_ID,
+      tenantId: DEFAULT_TENANT_ID,
+      email: 'nitin.sisgain@gmail.com',
+      mobile: null,
+      passwordHash,
+      role: UserRole.PATIENT,
+      status: UserStatus.ACTIVE,
+      failedLoginAttempts: 0,
+    },
+  });
+
   console.log('Auth seed completed:');
   console.log('  Doctor:', doctor.email, '(id:', doctor.id, ')');
   console.log('  Patient:', patient.email, '(id:', patient.id, ')');
-  console.log('  Password for both:', SEED_PASSWORD);
+  console.log('  Test patient:', testPatient.email, '(id:', testPatient.id, ')');
+  console.log('  Password for all:', SEED_PASSWORD);
   console.log('  Tenant ID:', DEFAULT_TENANT_ID);
 
   // JWT key is created by JwtKeyService.onModuleInit when auth-service starts; no seed needed

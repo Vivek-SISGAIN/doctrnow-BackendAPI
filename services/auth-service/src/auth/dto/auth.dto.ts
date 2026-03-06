@@ -45,3 +45,21 @@ export class LoginDto {
   deviceId?: string;
 }
 
+export class LoginByOtpDto {
+  @ApiProperty({ example: '+971501234567' })
+  @IsString()
+  mobile!: string;
+
+  @ApiProperty({ example: '123456' })
+  @IsString()
+  otp!: string;
+
+  @ApiProperty({ example: 'tenant-uuid' })
+  @IsString()
+  tenantId!: string;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsString()
+  deviceId?: string;
+}

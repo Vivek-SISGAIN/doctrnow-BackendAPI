@@ -10,7 +10,8 @@ import { PasswordService } from './password.service';
 import { SessionService } from './session.service';
 import { AccountLockoutService } from './account-lockout.service';
 import { EventsService } from '../events/events.service';
-import { UserRole, UserStatus } from '@prisma/client';
+import { OtpService } from '../otp/otp.service';
+import { UserRole, UserStatus, OtpPurpose } from '@prisma/client';
 
 export interface RegisterDto {
   email: string;
@@ -43,6 +44,7 @@ export class AuthService {
     private readonly sessionService: SessionService,
     private readonly accountLockoutService: AccountLockoutService,
     private readonly eventsService: EventsService,
+    private readonly otpService: OtpService,
   ) {}
 
   /**
@@ -208,6 +210,79 @@ export class AuthService {
     });
 
     this.logger.log(`User logged in: ${user.id} (${user.email})`);
+
+    return {
+      ...session,
+      user: {
+        id: user.id,
+        email: user.email,
+        role: user.role,
+        tenantId: user.tenantId,
+      },
+    };
+  }
+
+  /**
+   * Login by OTP (phone): verify OTP then create session and return tokens
+   */
+  async loginByOtp(dto: {
+    mobile: string;
+    otp: string;
+    tenantId: string;
+    deviceId?: string;
+    ipAddress?: string;
+    userAgent?: string;
+  }): Promise<{
+    accessToken: string;
+    refreshToken: string;
+    expiresIn: number;
+    user: {
+      id: string;
+      email: string;
+      role: string;
+      tenantId: string;
+    };
+  }> {
+
+
+    const result = await this.otpService.verifyOtp({
+      mobile: dto.mobile,
+      otp: dto.otp,
+      purpose: OtpPurpose.LOGIN,
+      tenantId: dto.tenantId,
+    });
+    if (!result.verified || !result.userId) {
+      throw new UnauthorizedException('Invalid or expired OTP');
+    }
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: result.userId },
+    });
+
+    if (!user) {
+      throw new UnauthorizedException('User not found');
+    }
+
+    if (user.status !== UserStatus.ACTIVE) {
+      throw new UnauthorizedException(`Account is ${user.status.toLowerCase()}`);
+    }
+
+    const session = await this.sessionService.createSession({
+      userId: user.id,
+      tenantId: user.tenantId,
+      deviceId: dto.deviceId,
+      ipAddress: dto.ipAddress,
+      userAgent: dto.userAgent,
+    });
+
+    await this.eventsService.publishLoginSucceeded({
+      userId: user.id,
+      email: user.email,
+      sessionId: session.sessionId,
+      tenantId: user.tenantId,
+    });
+
+    this.logger.log(`User logged in by OTP: ${user.id} (${user.email})`);
 
     return {
       ...session,

@@ -63,6 +63,8 @@ The service uses Prisma with the following models:
 - `startDate` - Start date for search (required)
 - `endDate` - End date for search (required)
 
+The API returns only **future** slots (startTime ≥ now) and deduplicates by (doctorId, startTime). The database enforces `UNIQUE(doctorId, startTime)` on slots to prevent duplicate slot creation.
+
 ## Events Published
 
 - `SlotCreated`
@@ -99,13 +101,32 @@ npm run prisma:generate
 ```bash
 npm run prisma:migrate
 ```
-
-5. Start the service:
+If migration `20260211100000_slot_unique_doctor_starttime` fails with a duplicate-key error, run the duplicate-cleanup script first (then re-run migrate):
 ```bash
-npm start
-# or for development
-npm run dev
+psql $DATABASE_URL -f prisma/scripts/remove-duplicate-slots.sql
 ```
+
+5. **Seed the database (creates slots for the sample doctor):**
+```bash
+npm run seed
+```
+This creates 14 days of available slots (9 AM–5 PM, every 30 min) for:
+- `SAMPLE_DOCTOR_ID` (default `00000000-0000-0000-0000-000000000001`)
+- Any IDs in `ADDITIONAL_DOCTOR_IDS` (comma-separated)
+
+If the patient portal shows no slots, the doctor you selected likely has a different ID (e.g. from profile-service). Either set that ID and re-seed:
+```bash
+# In .env (appointment-service)
+ADDITIONAL_DOCTOR_IDS=5cd73971-0faa-4b3f-81b3-ec7aeed91bf3
+```
+Then run `npm run seed` again. Or set `SAMPLE_DOCTOR_ID` to that doctor's UUID so all seeded slots are for that doctor.
+
+6. Start the service:
+   ```bash
+   npm start
+   # or for development
+   npm run dev
+   ```
 
 ## Integration with API Gateway
 

@@ -17,9 +17,13 @@ import { AuthController } from './controllers/auth.controller';
 import { ProfileController } from './controllers/profile.controller';
 import { AppointmentController } from './controllers/appointment.controller';
 import { ConsultationController } from './controllers/consultation.controller';
+import { ConsultationNotesController } from './controllers/consultation-notes.controller';
 import { PrescriptionController } from './controllers/prescription.controller';
 import { DocumentController } from './controllers/document.controller';
 import { LabReportController } from './controllers/lab-report.controller';
+import { HospitalAdminController } from './controllers/hospital-admin.controller';
+import { AgoraController } from './controllers/agora.controller';
+import { ConsultationEventsModule } from './consultation-events/consultation-events.module';
 
 import { CorrelationIdInterceptor } from './common/interceptors/correlation-id.interceptor';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
@@ -72,11 +76,7 @@ import configuration from './config/configuration';
           },
           // Remove sensitive headers
           redact: {
-            paths: [
-              'req.headers.authorization',
-              'req.headers.cookie',
-              'req.headers["x-api-key"]',
-            ],
+            paths: ['req.headers.authorization', 'req.headers.cookie', 'req.headers["x-api-key"]'],
           },
         },
       }),
@@ -105,6 +105,7 @@ import configuration from './config/configuration';
     TokenRevocationModule,
     HttpProxyModule,
     CircuitBreakerModule,
+    ConsultationEventsModule,
 
     // Controllers
     // (Imported via controller files)
@@ -115,9 +116,12 @@ import configuration from './config/configuration';
     ProfileController,
     AppointmentController,
     ConsultationController,
+    ConsultationNotesController,
     PrescriptionController,
     DocumentController,
     LabReportController,
+    HospitalAdminController,
+    AgoraController,
   ],
   providers: [
     // Global Guards (execution order: Throttler → JWT → Roles)
@@ -156,4 +160,3 @@ import configuration from './config/configuration';
   ],
 })
 export class AppModule {}
-

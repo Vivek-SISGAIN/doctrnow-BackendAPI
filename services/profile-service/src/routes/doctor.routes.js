@@ -8,7 +8,8 @@ const {
   createDoctor,
   getAllDoctors,
   getAvailability,
-  setAvailability
+  setAvailability,
+  getDoctorsByBulkIds
 } = require('../controllers/doctor.controller');
 const { updateDoctorSchema, createDoctorSchema } = require('../validations/doctor.validation');
 const validate = require('../middleware/validation');
@@ -243,5 +244,7 @@ router.delete('/:id', deleteDoctor);
 router.get('/', getAllDoctors);
 
 router.post('/', validate(createDoctorSchema), createDoctor);
+
+router.post('/bulk', getDoctorsByBulkIds);
 
 module.exports = router;

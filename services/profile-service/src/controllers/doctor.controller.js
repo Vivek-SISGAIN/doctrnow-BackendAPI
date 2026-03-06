@@ -1,13 +1,27 @@
 const doctorService = require('../service/doctor.service');
+const specialtyService = require('../service/specialty.service');
 const ApiError = require('../utils/ApiError');
 const asyncHandler = require('../utils/asyncHandler');
 
 const getAllDoctors = asyncHandler(async (req, res) => {
-  const doctors = await doctorService.findAll();
+  const { specialty, specialtyId, search, gender, minExperience, maxFee, workingDay } = req.query;
 
-  if (!doctors) {
-    throw ApiError.notFound('Doctor not found');
+  let specialtyName = specialty;
+  if (specialtyId && !specialtyName) {
+    const spec = await specialtyService.findById(specialtyId);
+    if (spec) specialtyName = spec.name;
   }
+
+  const filters = {
+    specialtyName,
+    search,
+    gender,
+    minExperience,
+    maxFee,
+    workingDay
+  };
+
+  const doctors = await doctorService.findAllWithFilters(filters);
 
   res.status(200).json({
     success: true,
@@ -225,6 +239,34 @@ const createDoctor = asyncHandler(async (req, res) => {
   });
 });
 
+const getDoctorsByBulkIds = asyncHandler(async (req, res) => {
+  const { ids } = req.body;
+
+  if (!ids || !Array.isArray(ids) || ids.length === 0) {
+    throw ApiError.badRequest("ids must be a non-empty array");
+  }
+
+  const uniqueIds = [...new Set(ids)];
+
+  if (uniqueIds.length > 100) {
+    throw ApiError.badRequest("Maximum 100 ids allowed per request");
+  }
+
+  const doctors = await doctorService.findByIdsOrUserIds(uniqueIds);
+
+  const doctorMap = {};
+
+  doctors.forEach((doctor) => {
+    doctorMap[doctor.id] = doctor;
+  });
+
+  res.status(200).json({
+    success: true,
+    data: doctorMap,
+    count: doctors.length,
+  });
+});
+
 module.exports = {
   getDoctorById,
   updateDoctor,
@@ -233,5 +275,6 @@ module.exports = {
   getAllDoctors,
   searchDoctorsBySpecialization,
   getAvailability,
-  setAvailability
+  setAvailability,
+  getDoctorsByBulkIds
 };

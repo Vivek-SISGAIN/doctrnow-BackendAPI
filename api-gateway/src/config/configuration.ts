@@ -3,8 +3,8 @@ export default () => ({
   PORT: parseInt(process.env.PORT || '8080', 10),
   TRUST_PROXY: process.env.TRUST_PROXY === 'true' || true,
 
-  // JWT Configuration
-  JWT_JWKS_URI: process.env.JWT_JWKS_URI || 'http://localhost:3001/.well-known/jwks.json',
+  // JWT Configuration (auth-service uses global prefix 'auth' + version 'v1', so JWKS is under /auth/v1/)
+  JWT_JWKS_URI: process.env.JWT_JWKS_URI || 'http://localhost:3001/auth/v1/.well-known/jwks.json',
   JWT_ISSUER: process.env.JWT_ISSUER || 'doctornow-platform',
   JWT_AUDIENCE: process.env.JWT_AUDIENCE || 'doctornow-api',
   JWT_ALGORITHM: process.env.JWT_ALGORITHM || 'RS256',
@@ -36,6 +36,7 @@ export default () => ({
     'http://127.0.0.1:5173',
     'http://127.0.0.1:3000',
     'http://localhost:8081',
+    'http://localhost:1234',
   ],
   CORS_CREDENTIALS: process.env.CORS_CREDENTIALS === 'true' || true,
 
@@ -54,17 +55,13 @@ export default () => ({
 
   // Circuit Breaker (disabled in dev so "Breaker is open" doesn't block when a service is down)
   CIRCUIT_BREAKER_ENABLED:
-    process.env.CIRCUIT_BREAKER_ENABLED === 'true' ||
-    process.env.NODE_ENV === 'production',
+    process.env.CIRCUIT_BREAKER_ENABLED === 'true' || process.env.NODE_ENV === 'production',
   CIRCUIT_BREAKER_TIMEOUT: parseInt(process.env.CIRCUIT_BREAKER_TIMEOUT || '3000', 10),
   CIRCUIT_BREAKER_ERROR_THRESHOLD: parseInt(
     process.env.CIRCUIT_BREAKER_ERROR_THRESHOLD || '50',
     10,
   ),
-  CIRCUIT_BREAKER_RESET_TIMEOUT: parseInt(
-    process.env.CIRCUIT_BREAKER_RESET_TIMEOUT || '30000',
-    10,
-  ),
+  CIRCUIT_BREAKER_RESET_TIMEOUT: parseInt(process.env.CIRCUIT_BREAKER_RESET_TIMEOUT || '30000', 10),
 
   // HTTP Client
   HTTP_TIMEOUT: parseInt(process.env.HTTP_TIMEOUT || '5000', 10),
@@ -72,5 +69,8 @@ export default () => ({
 
   // Logging
   LOG_LEVEL: process.env.LOG_LEVEL || 'info',
-});
 
+  // Agora (video call token generation – App Certificate = Primary Certificate from console)
+  AGORA_APP_ID: process.env.AGORA_APP_ID || '',
+  AGORA_APP_CERTIFICATE: process.env.AGORA_APP_CERTIFICATE || '',
+});

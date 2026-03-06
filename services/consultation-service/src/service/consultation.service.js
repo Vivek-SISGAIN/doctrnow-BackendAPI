@@ -1,4 +1,5 @@
 const prisma = require('../prisma/prisma');
+const consultationVitalsService = require('./consultation-vitals.service');
 
 class ConsultationService {
   /**
@@ -48,7 +49,7 @@ class ConsultationService {
   }
 
   /**
-   * Find consultation by appointment ID
+   * Find consultation by appointment ID. Ensures channelName is set (for Agora) even for older records.
    */
   async findByAppointmentId(appointmentId) {
     const consultation = await prisma.consultation.findUnique({
@@ -62,40 +63,200 @@ class ConsultationService {
         vitals: true
       }
     });
-
-    return consultation;
+    if (!consultation) return null;
+    const channelName = consultation.channelName || `appointment-${appointmentId}`;
+    return { ...consultation, channelName };
   }
 
   /**
-   * Start consultation
+   * Patient joins lobby: get-or-create consultation, set patientJoinedAt and channelName (Agora).
+   * Caller must pass patientId and doctorId (from appointment). Returns consultation + channelName for Agora.
    */
-  async start(appointmentId) {
+  async joinLobby(appointmentId, patientId, doctorId) {
     let consultation = await prisma.consultation.findUnique({
-      where: { appointmentId }
+      where: { appointmentId },
+      include: { notes: true, vitals: true }
     });
 
+    const channelName = `appointment-${appointmentId}`;
+    const now = new Date();
     if (!consultation) {
-      // Create consultation if it doesn't exist
       consultation = await prisma.consultation.create({
         data: {
           appointmentId,
-          patientId: '', // Should be fetched from appointment
-          doctorId: '', // Should be fetched from appointment
-          status: 'IN_PROGRESS',
-          startedAt: new Date()
-        }
+          patientId,
+          doctorId,
+          status: 'PENDING',
+          type: 'VIDEO',
+          patientJoinedAt: now
+        },
+        include: { notes: true, vitals: true }
       });
     } else {
       consultation = await prisma.consultation.update({
         where: { id: consultation.id },
+        data: { patientJoinedAt: now },
+        include: { notes: true, vitals: true }
+      });
+    }
+    // Persist channelName via raw SQL so it's saved regardless of Prisma client version (column: migration 20260211100000_add_channel_name)
+    try {
+      await prisma.$executeRawUnsafe(
+        'UPDATE consultations SET "channelName" = $1 WHERE id = $2',
+        channelName,
+        consultation.id
+      );
+    } catch (e) {
+      console.warn('ConsultationService.joinLobby: persist channelName failed (run migration 20260211100000_add_channel_name):', e?.message);
+    }
+    return { consultation: { ...consultation, channelName }, channelName };
+  }
+
+  /**
+   * Ensure consultation exists for appointment (get-or-create without setting patientJoinedAt),
+   * then save health details (vitals). Used when patient adds health details post-payment or before call.
+   * Body: { patientId, doctorId, weight, height, bloodPressure, sugarLevel, consultationReason }
+   */
+  async ensureConsultationAndSaveHealthDetails(appointmentId, patientId, doctorId, vitalsData) {
+    let consultation = await prisma.consultation.findUnique({
+      where: { appointmentId },
+      include: { notes: true, vitals: true }
+    });
+
+    if (!consultation) {
+      consultation = await prisma.consultation.create({
         data: {
-          status: 'IN_PROGRESS',
-          startedAt: new Date()
-        }
+          appointmentId,
+          patientId,
+          doctorId,
+          status: 'PENDING',
+          type: 'VIDEO'
+        },
+        include: { notes: true, vitals: true }
       });
     }
 
-    return consultation;
+    const { weight, height, bloodPressure, temperature, pulse, spo2, sugarLevel, consultationReason, allergies, criticalConditions } = vitalsData;
+    const notesParts = [];
+    if (sugarLevel) notesParts.push(`Blood sugar: ${sugarLevel} mg/dL`);
+    if (consultationReason) notesParts.push(`Reason for consultation: ${consultationReason}`);
+    const notes = notesParts.length > 0 ? notesParts.join('. ') : null;
+
+    const vitals = await consultationVitalsService.upsert(consultation.id, {
+      weight: weight || null,
+      height: height || null,
+      bloodPressure: bloodPressure || null,
+      temperature: temperature || null,
+      pulse: pulse || null,
+      spo2: spo2 || null,
+      notes,
+      allergies: allergies || null,
+      criticalConditions: criticalConditions || null
+    });
+
+    return { consultation: { ...consultation, vitals }, vitals };
+  }
+
+  /**
+   * Get health details (vitals) for an appointment's consultation, if any.
+   */
+  async getHealthDetailsByAppointmentId(appointmentId) {
+    const consultation = await prisma.consultation.findUnique({
+      where: { appointmentId },
+      include: { vitals: true }
+    });
+    return consultation?.vitals || null;
+  }
+
+  /**
+   * Doctor requests consent: set consentRequestedAt.
+   */
+  async requestConsent(appointmentId) {
+    const consultation = await prisma.consultation.findUnique({
+      where: { appointmentId }
+    });
+    if (!consultation) {
+      throw new Error('Consultation not found. Patient must join the lobby first.');
+    }
+    return prisma.consultation.update({
+      where: { id: consultation.id },
+      data: { consentRequestedAt: new Date() },
+      include: { notes: true, vitals: true }
+    });
+  }
+
+  /**
+   * Patient accepts consent: set consentAcceptedAt.
+   */
+  async acceptConsent(appointmentId) {
+    const consultation = await prisma.consultation.findUnique({
+      where: { appointmentId }
+    });
+    if (!consultation) {
+      throw new Error('Consultation not found.');
+    }
+    return prisma.consultation.update({
+      where: { id: consultation.id },
+      data: { consentAcceptedAt: new Date() },
+      include: { notes: true, vitals: true }
+    });
+  }
+
+  /**
+   * Start consultation (doctor joins call). Consultation must already exist (patient joined lobby).
+   */
+  async start(appointmentId) {
+    const consultation = await prisma.consultation.findUnique({
+      where: { appointmentId },
+      include: { notes: true, vitals: true }
+    });
+
+    if (!consultation) {
+      throw new Error('Consultation not found. Ask the patient to join the lobby first.');
+    }
+
+    return prisma.consultation.update({
+      where: { id: consultation.id },
+      data: {
+        status: 'IN_PROGRESS',
+        startedAt: new Date()
+      },
+      include: { notes: true, vitals: true }
+    });
+  }
+
+  /**
+   * End consultation by appointment ID (for doctor/patient "End call").
+   * Allows ending even if not formally started (e.g. quick leave).
+   * Returns { consultation, endedBy }.
+   */
+  async endByAppointment(appointmentId, endedBy) {
+    const consultation = await prisma.consultation.findUnique({
+      where: { appointmentId }
+    });
+
+    if (!consultation) {
+      throw new Error('Consultation not found');
+    }
+
+    const endedAt = new Date();
+    const startedAt = consultation.startedAt || consultation.patientJoinedAt || consultation.createdAt;
+    const duration = startedAt ? Math.floor((endedAt - new Date(startedAt)) / 1000) : 0;
+
+    const updated = await prisma.consultation.update({
+      where: { id: consultation.id },
+      data: {
+        status: 'COMPLETED',
+        endedAt,
+        duration
+      },
+      include: {
+        notes: { orderBy: { createdAt: 'desc' } },
+        vitals: true
+      }
+    });
+
+    return { consultation: updated, endedBy };
   }
 
   /**
@@ -213,8 +374,7 @@ class ConsultationService {
           notes: {
             orderBy: {
               createdAt: 'desc'
-            },
-            take: 1 // Get only latest note for list view
+            }
           },
           vitals: true
         },

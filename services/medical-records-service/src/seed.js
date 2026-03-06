@@ -2,16 +2,9 @@
 require('dotenv').config();
 const prisma = require('./prisma/prisma');
 
-// Match doctor portal logged-in doctor so Lab Reports and Prescriptions show data
-const SAMPLE_DOCTOR_ID = process.env.SAMPLE_DOCTOR_ID || '11111111-1111-1111-1111-111111111111';
-const SAMPLE_PATIENT_IDS = process.env.SAMPLE_PATIENT_IDS
-  ? process.env.SAMPLE_PATIENT_IDS.split(',')
-  : [
-      '00000000-0000-0000-0000-000000000101',
-      '00000000-0000-0000-0000-000000000102',
-      '00000000-0000-0000-0000-000000000103',
-      '00000000-0000-0000-0000-000000000104',
-    ];
+// prescription.doctorId = auth User id of the doctor (same as JWT sub / user.id in doctor portal), NOT profile Doctor record id
+const DOCTOR_USER_ID = process.env.DOCTOR_USER_ID || '11111111-1111-1111-1111-111111111111';
+const SEED_PATIENT_ID = process.env.SEED_PATIENT_ID || '00000000-0000-0000-0000-000000000101';
 const SAMPLE_APPOINTMENT_IDS = [
   'a1000000-0000-0000-0000-000000000001',
   'a1000000-0000-0000-0000-000000000002',
@@ -39,8 +32,8 @@ async function seedPrescriptions() {
   const prescriptionsData = [
     {
       rxId: rxId(1),
-      patientId: SAMPLE_PATIENT_IDS[0],
-      doctorId: SAMPLE_DOCTOR_ID,
+      patientId: SEED_PATIENT_ID,
+      doctorId: DOCTOR_USER_ID,
       appointmentId: SAMPLE_APPOINTMENT_IDS[0],
       consultationId: SAMPLE_CONSULTATION_IDS[0],
       diagnosis: 'Hypertension - stable',
@@ -49,8 +42,8 @@ async function seedPrescriptions() {
     },
     {
       rxId: rxId(2),
-      patientId: SAMPLE_PATIENT_IDS[1],
-      doctorId: SAMPLE_DOCTOR_ID,
+      patientId: SEED_PATIENT_ID,
+      doctorId: DOCTOR_USER_ID,
       appointmentId: SAMPLE_APPOINTMENT_IDS[1],
       consultationId: null,
       diagnosis: 'Type 2 diabetes - add metformin',
@@ -60,8 +53,8 @@ async function seedPrescriptions() {
     },
     {
       rxId: rxId(3),
-      patientId: SAMPLE_PATIENT_IDS[2],
-      doctorId: SAMPLE_DOCTOR_ID,
+      patientId: SEED_PATIENT_ID,
+      doctorId: DOCTOR_USER_ID,
       appointmentId: null,
       consultationId: null,
       diagnosis: 'Upper respiratory infection',
@@ -69,8 +62,8 @@ async function seedPrescriptions() {
     },
     {
       rxId: rxId(4),
-      patientId: SAMPLE_PATIENT_IDS[3],
-      doctorId: SAMPLE_DOCTOR_ID,
+      patientId: SEED_PATIENT_ID,
+      doctorId: DOCTOR_USER_ID,
       appointmentId: SAMPLE_APPOINTMENT_IDS[2],
       consultationId: SAMPLE_CONSULTATION_IDS[1],
       diagnosis: 'Anxiety - continue current medication',
@@ -214,7 +207,7 @@ async function seedMedicalDocuments() {
 
   const created = [];
   for (let i = 0; i < 6; i++) {
-    const patientId = SAMPLE_PATIENT_IDS[i % SAMPLE_PATIENT_IDS.length];
+    const patientId = SEED_PATIENT_ID;
     const filePath = docTypes[i] === 'LAB_REPORT' || docTypes[i] === 'RADIOLOGY'
       ? `/uploads/patients/${patientId}/${String(Date.now()).slice(-6)}-doc-${i + 1}.pdf`
       : '';
@@ -222,7 +215,7 @@ async function seedMedicalDocuments() {
     const doc = await prisma.medicalDocument.create({
       data: {
         patientId,
-        doctorId: SAMPLE_DOCTOR_ID,
+        doctorId: DOCTOR_USER_ID,
         appointmentId: i < 3 ? SAMPLE_APPOINTMENT_IDS[i % SAMPLE_APPOINTMENT_IDS.length] : null,
         consultationId: i === 3 ? SAMPLE_CONSULTATION_IDS[0] : null,
         name: names[i],
@@ -230,7 +223,7 @@ async function seedMedicalDocuments() {
         filePath: filePath || '',
         fileSize,
         mimeType: filePath ? 'application/pdf' : null,
-        uploadedBy: SAMPLE_DOCTOR_ID,
+        uploadedBy: DOCTOR_USER_ID,
         description: descriptions[i],
       },
     });
@@ -248,8 +241,8 @@ async function seedLabReports() {
 
   const reportsData = [
     {
-      patientId: SAMPLE_PATIENT_IDS[0],
-      doctorId: SAMPLE_DOCTOR_ID,
+      patientId: SEED_PATIENT_ID,
+      doctorId: DOCTOR_USER_ID,
       reportId: 'LAB-2024-001234-001',
       consultationDate: twoDaysAgo,
       consultationTime: '09:00 AM',
@@ -267,8 +260,8 @@ async function seedLabReports() {
       ],
     },
     {
-      patientId: SAMPLE_PATIENT_IDS[0],
-      doctorId: SAMPLE_DOCTOR_ID,
+      patientId: SEED_PATIENT_ID,
+      doctorId: DOCTOR_USER_ID,
       reportId: 'LAB-2024-001234-002',
       consultationDate: twoDaysAgo,
       consultationTime: '10:30 AM',
@@ -289,8 +282,8 @@ async function seedLabReports() {
       ],
     },
     {
-      patientId: SAMPLE_PATIENT_IDS[1],
-      doctorId: SAMPLE_DOCTOR_ID,
+      patientId: SEED_PATIENT_ID,
+      doctorId: DOCTOR_USER_ID,
       reportId: 'LAB-2024-001235-001',
       consultationDate: twoDaysAgo,
       consultationTime: '10:30 AM',
@@ -306,8 +299,8 @@ async function seedLabReports() {
       ],
     },
     {
-      patientId: SAMPLE_PATIENT_IDS[2],
-      doctorId: SAMPLE_DOCTOR_ID,
+      patientId: SEED_PATIENT_ID,
+      doctorId: DOCTOR_USER_ID,
       reportId: 'LAB-2024-001236-001',
       consultationDate: yesterday,
       consultationTime: '02:00 PM',
@@ -320,8 +313,8 @@ async function seedLabReports() {
       results: null,
     },
     {
-      patientId: SAMPLE_PATIENT_IDS[3],
-      doctorId: SAMPLE_DOCTOR_ID,
+      patientId: SEED_PATIENT_ID,
+      doctorId: DOCTOR_USER_ID,
       reportId: 'LAB-2024-001237-001',
       consultationDate: twoDaysAgo,
       consultationTime: '11:00 AM',

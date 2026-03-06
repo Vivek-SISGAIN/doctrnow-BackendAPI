@@ -79,12 +79,36 @@ class FamilyMemberService {
   }
 
   /**
+   * Create family member for a patient
+   */
+  create(data) {
+    return prisma.familyMember.create({
+      data: {
+        patientId: data.patientId,
+        relationshipType: data.relationshipType,
+        firstName: data.firstName,
+        lastName: data.lastName,
+        dateOfBirth: new Date(data.dateOfBirth),
+        gender: data.gender,
+        nationality: data.nationality,
+        emiratesId: data.emiratesId || null,
+        mobileNumber: data.mobileNumber || null,
+        email: data.email || null,
+        bloodGroup: data.bloodGroup || null,
+        isEmergencyContact: data.isEmergencyContact === true
+      }
+    });
+  }
+
+  /**
    * Update family member by ID
    */
   update(id, data) {
+    const updateData = { ...data };
+    if (data.dateOfBirth) updateData.dateOfBirth = new Date(data.dateOfBirth);
     return prisma.familyMember.update({
       where: { id },
-      data
+      data: updateData
     });
   }
 
