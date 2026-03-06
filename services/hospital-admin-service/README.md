@@ -54,7 +54,7 @@ npx prisma migrate dev
 npm run dev
 ```
 
-The service will be available at `http://localhost:5001`
+The service will be available at `http://localhost:3009`
 
 ## Project Structure
 

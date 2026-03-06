@@ -1,6 +1,6 @@
 /**
  * Profile Service - Database Seed
- * Creates a seed patient and doctor linked to auth-service user IDs.
+ * Creates specialties, seed patient and doctors linked to auth-service user IDs.
  * Run auth-service seed first so these user IDs exist in auth_db.
  * Run: npx prisma db seed
  */
@@ -10,12 +10,45 @@ const prisma = new PrismaClient();
 
 const DOCTOR_USER_ID = '11111111-1111-1111-1111-111111111111';
 const PATIENT_USER_ID = '22222222-2222-2222-2222-222222222222';
+// Fixed profile entity IDs so other services (appointment, consultation, medical-records) can reference them
+const SEED_DOCTOR_ID = '00000000-0000-0000-0000-000000000001';
+const SEED_PATIENT_ID = '00000000-0000-0000-0000-000000000101';
+
+const SPECIALTIES = [
+  { name: 'General Physician', slug: 'general-physician', imageKey: 'general-physician', bgColor: 'bg-purple-100', displayOrder: 1 },
+  { name: 'Ophthalmology', slug: 'ophthalmology', imageKey: 'ophthalmology', bgColor: 'bg-blue-100', displayOrder: 2 },
+  { name: 'Neurology', slug: 'neurology', imageKey: 'neurology', bgColor: 'bg-teal-100', displayOrder: 3 },
+  { name: 'Orthopedics', slug: 'orthopedics', imageKey: 'orthopedics', bgColor: 'bg-green-100', displayOrder: 4 },
+  { name: 'Pediatrics', slug: 'pediatrics', imageKey: 'pediatrics', bgColor: 'bg-pink-100', displayOrder: 5 },
+  { name: 'Vaccination', slug: 'vaccination', imageKey: 'vaccination', bgColor: 'bg-yellow-100', displayOrder: 6 },
+  { name: 'Cardiology', slug: 'cardiology', imageKey: 'cardiology', bgColor: 'bg-red-100', displayOrder: 7 },
+  { name: 'Pulmonology', slug: 'pulmonology', imageKey: 'pulmonology', bgColor: 'bg-cyan-100', displayOrder: 8 },
+  { name: 'Pharmacy', slug: 'pharmacy', imageKey: 'pharmacy', bgColor: 'bg-orange-100', displayOrder: 9 },
+  { name: 'Laboratory', slug: 'laboratory', imageKey: 'laboratory', bgColor: 'bg-violet-100', displayOrder: 10 },
+  { name: 'ENT', slug: 'ent', imageKey: 'ent', bgColor: 'bg-indigo-100', displayOrder: 11 },
+  { name: 'Dermatology', slug: 'dermatology', imageKey: 'dermatology', bgColor: 'bg-amber-100', displayOrder: 12 },
+  { name: 'Dentistry', slug: 'dentistry', imageKey: 'dentistry', bgColor: 'bg-emerald-100', displayOrder: 13 },
+  { name: 'Nephrology', slug: 'nephrology', imageKey: 'nephrology', bgColor: 'bg-rose-100', displayOrder: 14 },
+  { name: 'Immunology', slug: 'immunology', imageKey: 'immunology', bgColor: 'bg-lime-100', displayOrder: 15 },
+  { name: 'Physiotherapy', slug: 'physiotherapy', imageKey: 'physiotherapy', bgColor: 'bg-amber-100', displayOrder: 16 },
+];
 
 async function main() {
+  // Seed specialties
+  for (const s of SPECIALTIES) {
+    await prisma.specialty.upsert({
+      where: { slug: s.slug },
+      update: { name: s.name, imageKey: s.imageKey, bgColor: s.bgColor, displayOrder: s.displayOrder },
+      create: s,
+    });
+  }
+  console.log('Specialties seeded:', SPECIALTIES.length);
+
   const patient = await prisma.patient.upsert({
     where: { userId: PATIENT_USER_ID },
     update: {},
     create: {
+      id: SEED_PATIENT_ID,
       userId: PATIENT_USER_ID,
       mobileNumber: '+971509876543',
       profileImage: 'https://api.dicebear.com/7.x/avataaars/svg?seed=patient',
@@ -33,8 +66,9 @@ async function main() {
 
   const doctor = await prisma.doctor.upsert({
     where: { userId: DOCTOR_USER_ID },
-    update: {},
+    update: { primarySpecialization: 'General Physician' },
     create: {
+      id: SEED_DOCTOR_ID,
       userId: DOCTOR_USER_ID,
       status: 'ACTIVE',
       fullName: 'Dr. Sarah Doctor',
@@ -43,7 +77,7 @@ async function main() {
       gender: 'FEMALE',
       nationality: 'UAE',
       emiratesId: '784-1985-7654321-2',
-      primarySpecialization: 'General Practice',
+      primarySpecialization: 'General Physician',
       subSpecialization: 'Family Medicine',
       licenseNumber: 'DHA-GP-2020-001',
       licenseType: 'DHA',
@@ -69,9 +103,64 @@ async function main() {
     },
   });
 
+  // Additional doctors for other specialties (use distinct userIds; auth may not have these)
+  const extraDoctors = [
+    { userId: '11111111-1111-1111-1111-111111111112', primarySpecialization: 'Cardiology', fullName: 'Dr. Ahmed Rahman', email: 'ahmed.rahman@doctornow.com', mobile: '+971501234568', licenseNumber: 'DHA-CARD-2021-002' },
+    { userId: '11111111-1111-1111-1111-111111111113', primarySpecialization: 'Dermatology', fullName: 'Dr. Fatima Hassan', email: 'fatima.hassan@doctornow.com', mobile: '+971501234569', licenseNumber: 'DHA-DERM-2019-003' },
+    { userId: '11111111-1111-1111-1111-111111111114', primarySpecialization: 'General Physician', fullName: 'Dr. Mohammed Ali', email: 'mohammed.ali@doctornow.com', mobile: '+971501234570', licenseNumber: 'DHA-GP-2022-004' },
+  ];
+  const baseDoctor = {
+    status: 'ACTIVE',
+    gender: 'MALE',
+    nationality: 'UAE',
+    emiratesId: '784-1988-1111111-1',
+    subSpecialization: null,
+    licenseType: 'DHA',
+    licenseExpiry: new Date('2026-12-31'),
+    yearsOfExperience: 10,
+    medicalDegree: 'MBBS',
+    university: 'Dubai Medical College',
+    profileImage: 'https://api.dicebear.com/7.x/avataaars/svg?seed=doc2',
+    languagesSpoken: ['English', 'Arabic'],
+    servicesOffered: ['VIDEO', 'PHONE'],
+    certifications: ['DHA'],
+    professionalMemberships: [],
+    professionalBio: 'Experienced specialist.',
+    workingDays: ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY'],
+    workingHoursFrom: '09:00',
+    workingHoursTo: '17:00',
+    consultationDuration: 30,
+    videoConsultationFee: 200,
+    phoneConsultationFee: 150,
+    followUpFee: 100,
+    hospitalSharePercent: 70,
+    platformSharePercent: 30,
+  };
+  const emiratesIds = ['784-1988-2222222-2', '784-1988-3333333-3', '784-1988-4444444-4'];
+  extraDoctors.forEach((d, i) => {
+    d.emiratesId = emiratesIds[i];
+  });
+  for (const d of extraDoctors) {
+    await prisma.doctor.upsert({
+      where: { userId: d.userId },
+      update: { primarySpecialization: d.primarySpecialization },
+      create: {
+        ...baseDoctor,
+        userId: d.userId,
+        fullName: d.fullName,
+        email: d.email,
+        mobile: d.mobile,
+        emiratesId: d.emiratesId,
+        primarySpecialization: d.primarySpecialization,
+        licenseNumber: d.licenseNumber,
+      },
+    });
+  }
+
   console.log('Profile seed completed:');
-  console.log('  Patient:', patient.firstName, patient.lastName, '(userId:', patient.userId, ')');
-  console.log('  Doctor:', doctor.fullName, '(userId:', doctor.userId, ')');
+  console.log('  Patient:', patient.firstName, patient.lastName, '(id:', patient.id, ', userId:', patient.userId, ')');
+  console.log('  Doctor:', doctor.fullName, '(id:', doctor.id, ', userId:', doctor.userId, ')');
+  console.log('  Extra doctors:', extraDoctors.length);
 }
 
 main()

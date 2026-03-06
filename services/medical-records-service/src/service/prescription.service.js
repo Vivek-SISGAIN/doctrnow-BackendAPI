@@ -14,7 +14,8 @@ class PrescriptionService {
   }
 
   /**
-   * Create a new prescription
+   * Create a new prescription.
+   * data.doctorId = auth User id of the doctor (same as JWT sub), not profile Doctor record id.
    */
   async create(data) {
     const rxId = this.generateRxId();
@@ -121,7 +122,20 @@ class PrescriptionService {
   }
 
   /**
-   * Find prescriptions by doctor ID
+   * Count prescriptions by doctor ID (for dashboard stats).
+   * doctorId = auth User id of the doctor (JWT sub / user.id from doctor portal).
+   */
+  async countByDoctorId(doctorId, filters = {}) {
+    const where = { doctorId };
+    if (filters.lifecycle) {
+      where.lifecycle = filters.lifecycle;
+    }
+    return prisma.prescription.count({ where });
+  }
+
+  /**
+   * Find prescriptions by doctor ID.
+   * doctorId = auth User id of the doctor (JWT sub / user.id from doctor portal), not profile Doctor record id.
    */
   async findByDoctorId(doctorId, filters = {}) {
     const { lifecycle, page = 1, limit = 20 } = filters;

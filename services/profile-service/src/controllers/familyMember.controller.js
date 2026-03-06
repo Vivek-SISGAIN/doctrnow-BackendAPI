@@ -34,6 +34,26 @@ const getFamilyMembersByPatientId = asyncHandler(async (req, res) => {
   });
 });
 
+const createFamilyMember = asyncHandler(async (req, res) => {
+  const { patientId } = req.body;
+  const patient = await familyMemberService.findPatientById(patientId);
+  if (!patient) {
+    throw ApiError.notFound('Patient not found');
+  }
+  if (req.body.emiratesId) {
+    const conflict = await familyMemberService.findByEmiratesId(req.body.emiratesId);
+    if (conflict) {
+      throw ApiError.conflict('Emirates ID already in use');
+    }
+  }
+  const familyMember = await familyMemberService.create(req.body);
+  res.status(201).json({
+    success: true,
+    message: 'Family member created successfully',
+    data: familyMember
+  });
+});
+
 const updateFamilyMember = asyncHandler(async (req, res) => {
   const { id } = req.params;
   const { emiratesId } = req.body;
@@ -80,6 +100,7 @@ const deleteFamilyMember = asyncHandler(async (req, res) => {
 module.exports = {
   getFamilyMemberById,
   getFamilyMembersByPatientId,
+  createFamilyMember,
   updateFamilyMember,
   deleteFamilyMember
 };

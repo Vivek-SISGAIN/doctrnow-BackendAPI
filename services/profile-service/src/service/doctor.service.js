@@ -90,7 +90,7 @@ class DoctorService {
     }
 
     if (specialization) {
-      where.primarySpecialization = { contains: specialization, mode: 'insensitive' };
+      where.primarySpecialization = { equals: specialization, mode: 'insensitive' };
     }
 
     if (gender) {
@@ -147,6 +147,29 @@ class DoctorService {
 
   findAll() {
     return prisma.doctor.findMany();
+  }
+
+  /**
+   * Find doctors with optional filters (for listing by specialty, search, etc.)
+   * specialtyName: filter by primarySpecialization (case-insensitive match)
+   */
+  async findAllWithFilters(filters = {}) {
+    const where = this.buildWhereClause({
+      search: filters.search,
+      specialization: filters.specialty || filters.specialtyName,
+      gender: filters.gender,
+      minExperience: filters.minExperience,
+      maxFee: filters.maxFee,
+      workingDay: filters.workingDay
+    });
+
+    // For public listing, only active doctors
+    where.status = 'ACTIVE';
+
+    return prisma.doctor.findMany({
+      where,
+      orderBy: [{ yearsOfExperience: 'desc' }, { fullName: 'asc' }]
+    });
   }
 
   searchBySpecialization(query) {

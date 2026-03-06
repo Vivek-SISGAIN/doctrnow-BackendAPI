@@ -33,9 +33,21 @@ async function bootstrap(): Promise<void> {
     }),
   );
 
-  // CORS
+  // CORS — use a callback so only the single matched origin is echoed back,
+  // never a comma-joined list (which browsers reject per the CORS spec).
+  const rawOrigins = configService.get<string | string[]>('CORS_ORIGINS', []);
+  const allowedOrigins: string[] =
+    typeof rawOrigins === 'string' ? rawOrigins.split(',').map((o) => o.trim()) : rawOrigins;
+
   app.enableCors({
-    origin: configService.get<string[]>('CORS_ORIGINS', []),
+    origin: (requestOrigin, callback) => {
+      // Allow server-to-server requests (no Origin header) and matched origins
+      if (!requestOrigin || allowedOrigins.includes(requestOrigin)) {
+        callback(null, requestOrigin || true);
+      } else {
+        callback(new Error(`Origin '${requestOrigin}' not allowed by CORS policy`));
+      }
+    },
     credentials: configService.get<boolean>('CORS_CREDENTIALS', true),
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
     allowedHeaders: [
@@ -44,6 +56,7 @@ async function bootstrap(): Promise<void> {
       'X-Correlation-ID',
       'X-Tenant-ID',
       'X-Request-ID',
+      'x-client',
     ],
     exposedHeaders: ['X-Correlation-ID', 'X-RateLimit-Limit', 'X-RateLimit-Remaining'],
   });
@@ -92,6 +105,7 @@ async function bootstrap(): Promise<void> {
       .addTag('auth', 'Authentication endpoints (public)')
       .addTag('profiles', 'Profile management')
       .addTag('appointments', 'Appointment management')
+      .addTag('hospital-admin', 'Hospital admin (health services, packages, doctors)')
       .addTag('consultations', 'Consultation management')
       .build();
 
@@ -117,4 +131,3 @@ bootstrap().catch((error) => {
   console.error('Failed to start API Gateway:', error);
   process.exit(1);
 });
-

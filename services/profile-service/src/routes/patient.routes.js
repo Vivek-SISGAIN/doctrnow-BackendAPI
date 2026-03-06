@@ -3,10 +3,14 @@ const router = express.Router();
 const {
   getAllPatients,
   getPatientById,
+  getCurrentPatient,
+  createCurrentPatient,
   updatePatient,
-  deletePatient
+  deletePatient,
+  getPatientsByBulkIds,
+  // getPatientsByBulkIds
 } = require('../controllers/patient.controller');
-const { updatePatientSchema } = require('../validations/patient.validation');
+const { createPatientSchema, updatePatientSchema } = require('../validations/patient.validation');
 const validate = require('../middleware/validation');
 
 /**
@@ -97,6 +101,52 @@ const validate = require('../middleware/validation');
  *                       type: integer
  */
 router.get('/', getAllPatients);
+
+/**
+ * @swagger
+ * /api/patients/me:
+ *   get:
+ *     summary: Get current patient profile (by X-User-ID from gateway)
+ *     tags: [Patients]
+ *     responses:
+ *       200:
+ *         description: Current patient profile
+ *       404:
+ *         description: Patient profile not found
+ */
+router.get('/me', getCurrentPatient);
+
+/**
+ * @swagger
+ * /api/patients/me:
+ *   post:
+ *     summary: Create patient profile for current user (after registration)
+ *     tags: [Patients]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [email, firstName, lastName, dateOfBirth, gender, emiratesId, nationality]
+ *             properties:
+ *               email: { type: string }
+ *               mobileNumber: { type: string }
+ *               firstName: { type: string }
+ *               lastName: { type: string }
+ *               dateOfBirth: { type: string, format: date }
+ *               gender: { type: string, enum: [MALE, FEMALE, OTHER] }
+ *               emiratesId: { type: string }
+ *               nationality: { type: string }
+ *               bloodGroup: { type: string }
+ *               maritalStatus: { type: string }
+ *     responses:
+ *       201:
+ *         description: Patient profile created
+ *       409:
+ *         description: Email/Mobile/Emirates ID already in use
+ */
+router.post('/me', validate(createPatientSchema), createCurrentPatient);
 
 /**
  * @swagger
@@ -228,5 +278,7 @@ router.patch('/:id', validate(updatePatientSchema), updatePatient);
  *         description: Patient not found
  */
 router.delete('/:id', deletePatient);
+
+router.post('/bulk', getPatientsByBulkIds);
 
 module.exports = router;

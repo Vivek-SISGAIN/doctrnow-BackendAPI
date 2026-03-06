@@ -33,12 +33,45 @@ const getConsultationByAppointment = asyncHandler(async (req, res) => {
   const { appointmentId } = req.params;
   const consultation = await consultationService.findByAppointmentId(appointmentId);
 
-  if (!consultation) {
-    throw ApiError.notFound('Consultation not found');
-  }
-
+  // No consultation yet = patient has not joined the lobby; return 200 with null so UI can show "Patient not in lobby" instead of an error
   res.status(200).json({
     success: true,
+    data: consultation || null
+  });
+});
+
+const joinLobby = asyncHandler(async (req, res) => {
+  const { appointmentId } = req.params;
+  const { patientId, doctorId } = req.body;
+
+  // Note: x-user-id from gateway (JWT) may be auth user id; appointment patientId is profile id.
+  // They often differ, so we do not block join when they mismatch. Rely on auth + knowing appointment ids.
+  const { consultation, channelName } = await consultationService.joinLobby(appointmentId, patientId, doctorId);
+  res.status(200).json({
+    success: true,
+    message: 'Joined lobby',
+    data: { ...consultation, channelName }
+  });
+});
+
+const requestConsent = asyncHandler(async (req, res) => {
+  const { appointmentId } = req.params;
+
+  const consultation = await consultationService.requestConsent(appointmentId);
+  res.status(200).json({
+    success: true,
+    message: 'Consent requested',
+    data: consultation
+  });
+});
+
+const acceptConsent = asyncHandler(async (req, res) => {
+  const { appointmentId } = req.params;
+
+  const consultation = await consultationService.acceptConsent(appointmentId);
+  res.status(200).json({
+    success: true,
+    message: 'Consent accepted',
     data: consultation
   });
 });
@@ -63,6 +96,23 @@ const endConsultation = asyncHandler(async (req, res) => {
 
   try {
     const consultation = await consultationService.end(id);
+    res.status(200).json({
+      success: true,
+      message: 'Consultation ended',
+      data: consultation
+    });
+  } catch (error) {
+    throw ApiError.badRequest(error.message);
+  }
+});
+
+const endByAppointment = asyncHandler(async (req, res) => {
+  const { appointmentId } = req.params;
+  const { endedBy } = req.body || {};
+  const who = endedBy === 'patient' ? 'patient' : 'doctor';
+
+  try {
+    const { consultation } = await consultationService.endByAppointment(appointmentId, who);
     res.status(200).json({
       success: true,
       message: 'Consultation ended',
@@ -145,14 +195,55 @@ const markNoShow = asyncHandler(async (req, res) => {
   }
 });
 
+const saveHealthDetails = asyncHandler(async (req, res) => {
+  const { appointmentId } = req.params;
+  const { patientId, doctorId, weight, height, bloodPressure, temperature, pulse, spo2, sugarLevel, consultationReason, allergies, criticalConditions } = req.body;
+
+  const { vitals } = await consultationService.ensureConsultationAndSaveHealthDetails(appointmentId, patientId, doctorId, {
+    weight,
+    height,
+    bloodPressure,
+    temperature,
+    pulse,
+    spo2,
+    sugarLevel,
+    consultationReason,
+    allergies,
+    criticalConditions
+  });
+
+  res.status(200).json({
+    success: true,
+    message: 'Health details saved successfully',
+    data: vitals
+  });
+});
+
+const getHealthDetails = asyncHandler(async (req, res) => {
+  const { appointmentId } = req.params;
+
+  const vitals = await consultationService.getHealthDetailsByAppointmentId(appointmentId);
+
+  res.status(200).json({
+    success: true,
+    data: vitals
+  });
+});
+
 module.exports = {
   createConsultation,
   getConsultationById,
   getConsultationByAppointment,
+  joinLobby,
+  requestConsent,
+  acceptConsent,
   startConsultation,
   endConsultation,
+  endByAppointment,
   getHistoryByPatient,
   getHistoryByDoctor,
   updateConsultation,
-  markNoShow
+  markNoShow,
+  saveHealthDetails,
+  getHealthDetails
 };

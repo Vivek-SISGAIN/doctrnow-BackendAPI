@@ -7,7 +7,7 @@ import app from './app';
 // Load environment variables
 dotenv.config();
 
-const PORT: number = parseInt(process.env.PORT || '5001', 10);
+const PORT: number = parseInt(process.env.PORT || '3009', 10);
 const HOST: string = process.env.HOST || 'localhost';
 
 const server: Server = app.listen(PORT, () => {
@@ -15,7 +15,7 @@ const server: Server = app.listen(PORT, () => {
   console.log('🚀 Server is running');
   console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
   console.log(`📡 URL: http://${HOST}:${PORT}`);
-  console.log(`📊 Health Check: http://${HOST}:${PORT}/health`);
+  console.log(`📊 Health Check: http://${HOST}:${PORT}/api/health`);
   console.log('=================================');
 });
 

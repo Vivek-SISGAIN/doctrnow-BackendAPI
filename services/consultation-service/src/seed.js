@@ -2,25 +2,22 @@
 require('dotenv').config();
 const prisma = require('./prisma/prisma');
 
-// Doctor ID used by doctor portal when logged in (so Consultation History shows seeded data)
-const SAMPLE_DOCTOR_ID = process.env.SAMPLE_DOCTOR_ID || '11111111-1111-1111-1111-111111111111';
-const SAMPLE_PATIENT_IDS = process.env.SAMPLE_PATIENT_IDS
-  ? process.env.SAMPLE_PATIENT_IDS.split(',')
-  : [
-      '00000000-0000-0000-0000-000000000101',
-      '00000000-0000-0000-0000-000000000102',
-      '00000000-0000-0000-0000-000000000103',
-      '00000000-0000-0000-0000-000000000104',
-      '00000000-0000-0000-0000-000000000105',
-    ];
-
-// Use distinct appointment IDs (consultation.appointmentId is unique)
+// Align with profile-service (doctor/patient entity IDs) and appointment-service (fixed appointment IDs)
+const SAMPLE_DOCTOR_ID = process.env.SAMPLE_DOCTOR_ID || '00000000-0000-0000-0000-000000000001';
+const SEED_PATIENT_ID = process.env.SEED_PATIENT_ID || '00000000-0000-0000-0000-000000000101';
 const SAMPLE_APPOINTMENT_IDS = [
   'a1000000-0000-0000-0000-000000000001',
   'a1000000-0000-0000-0000-000000000002',
   'a1000000-0000-0000-0000-000000000003',
   'a1000000-0000-0000-0000-000000000004',
   'a1000000-0000-0000-0000-000000000005',
+];
+const SEED_CONSULTATION_IDS = [
+  'c1000000-0000-0000-0000-000000000001',
+  'c1000000-0000-0000-0000-000000000002',
+  'c1000000-0000-0000-0000-000000000003',
+  'c1000000-0000-0000-0000-000000000004',
+  'c1000000-0000-0000-0000-000000000005',
 ];
 
 const diagnoses = [
@@ -48,20 +45,22 @@ async function seedConsultations() {
 
   const consultationsData = [
     {
+      id: SEED_CONSULTATION_IDS[0],
       appointmentId: SAMPLE_APPOINTMENT_IDS[0],
-      patientId: SAMPLE_PATIENT_IDS[0],
+      patientId: SEED_PATIENT_ID,
       doctorId: SAMPLE_DOCTOR_ID,
       status: 'COMPLETED',
       type: 'VIDEO',
       startedAt: twoHoursAgo,
       endedAt: oneHourAgo,
-      duration: 900, // 15 min
+      duration: 900,
       diagnosis: diagnoses[0],
       followUp: followUps[0],
     },
     {
+      id: SEED_CONSULTATION_IDS[1],
       appointmentId: SAMPLE_APPOINTMENT_IDS[1],
-      patientId: SAMPLE_PATIENT_IDS[1],
+      patientId: SEED_PATIENT_ID,
       doctorId: SAMPLE_DOCTOR_ID,
       status: 'COMPLETED',
       type: 'VIDEO',
@@ -72,8 +71,9 @@ async function seedConsultations() {
       followUp: followUps[1],
     },
     {
+      id: SEED_CONSULTATION_IDS[2],
       appointmentId: SAMPLE_APPOINTMENT_IDS[2],
-      patientId: SAMPLE_PATIENT_IDS[2],
+      patientId: SEED_PATIENT_ID,
       doctorId: SAMPLE_DOCTOR_ID,
       status: 'IN_PROGRESS',
       type: 'VIDEO',
@@ -82,8 +82,9 @@ async function seedConsultations() {
       followUp: null,
     },
     {
+      id: SEED_CONSULTATION_IDS[3],
       appointmentId: SAMPLE_APPOINTMENT_IDS[3],
-      patientId: SAMPLE_PATIENT_IDS[3],
+      patientId: SEED_PATIENT_ID,
       doctorId: SAMPLE_DOCTOR_ID,
       status: 'PENDING',
       type: 'AUDIO',
@@ -91,8 +92,9 @@ async function seedConsultations() {
       followUp: null,
     },
     {
+      id: SEED_CONSULTATION_IDS[4],
       appointmentId: SAMPLE_APPOINTMENT_IDS[4],
-      patientId: SAMPLE_PATIENT_IDS[4],
+      patientId: SEED_PATIENT_ID,
       doctorId: SAMPLE_DOCTOR_ID,
       status: 'COMPLETED',
       type: 'CHAT',
@@ -106,20 +108,21 @@ async function seedConsultations() {
 
   const created = [];
   for (const data of consultationsData) {
+    const { id, ...rest } = data;
     const c = await prisma.consultation.upsert({
       where: { appointmentId: data.appointmentId },
       update: {
-        doctorId: data.doctorId,
-        patientId: data.patientId,
-        status: data.status,
-        type: data.type,
-        startedAt: data.startedAt,
-        endedAt: data.endedAt,
-        duration: data.duration,
-        diagnosis: data.diagnosis,
-        followUp: data.followUp,
+        doctorId: rest.doctorId,
+        patientId: rest.patientId,
+        status: rest.status,
+        type: rest.type,
+        startedAt: rest.startedAt,
+        endedAt: rest.endedAt,
+        duration: rest.duration,
+        diagnosis: rest.diagnosis,
+        followUp: rest.followUp,
       },
-      create: data,
+      create: { id, ...rest },
     });
     created.push(c);
   }

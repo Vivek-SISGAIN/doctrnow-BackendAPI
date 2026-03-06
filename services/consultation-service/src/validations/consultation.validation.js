@@ -10,6 +10,26 @@ const createConsultationSchema = Joi.object({
   followUp: Joi.string().max(500).optional()
 });
 
+const joinLobbySchema = Joi.object({
+  patientId: Joi.string().uuid().required(),
+  doctorId: Joi.string().uuid().required()
+});
+
+const saveHealthDetailsSchema = Joi.object({
+  patientId: Joi.string().uuid().required(),
+  doctorId: Joi.string().uuid().required(),
+  weight: Joi.string().allow('').optional(),
+  height: Joi.string().allow('').optional(),
+  bloodPressure: Joi.string().allow('').optional(),
+  temperature: Joi.string().allow('').optional(),
+  pulse: Joi.string().allow('').optional(),
+  spo2: Joi.string().allow('').optional(),
+  sugarLevel: Joi.string().allow('').optional(),
+  consultationReason: Joi.string().max(1000).allow('').optional(),
+  allergies: Joi.string().max(1000).allow('').optional(),
+  criticalConditions: Joi.string().max(1000).allow('').optional()
+});
+
 const updateConsultationSchema = Joi.object({
   status: Joi.string().valid('PENDING', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED', 'NO_SHOW').optional(),
   diagnosis: Joi.string().max(500).optional(),
@@ -40,6 +60,8 @@ const createVitalsSchema = Joi.object({
 
 module.exports = {
   createConsultationSchema,
+  joinLobbySchema,
+  saveHealthDetailsSchema,
   updateConsultationSchema,
   createNoteSchema,
   updateNoteSchema,

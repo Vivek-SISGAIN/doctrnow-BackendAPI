@@ -1,11 +1,4 @@
-import {
-  Controller,
-  All,
-  Req,
-  Res,
-  HttpStatus,
-  UseGuards,
-} from '@nestjs/common';
+import { Controller, All, Req, Res, HttpStatus, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { Request, Response } from 'express';
 import { HttpProxyService } from '../http-proxy/http-proxy.service';
@@ -63,11 +56,18 @@ export class AppointmentController {
       res.status(response.status).json(response.data);
     } catch (error: any) {
       const status = error.status || HttpStatus.INTERNAL_SERVER_ERROR;
+      const downstream = error?.data;
+      const message =
+        downstream?.message ??
+        downstream?.error?.message ??
+        error.message ??
+        'Internal server error';
       res.status(status).json({
         error: {
-          code: 'PROXY_ERROR',
-          message: error.message || 'Internal server error',
+          code: downstream?.error?.code ?? 'PROXY_ERROR',
+          message,
           correlationId,
+          ...(downstream && { details: downstream }),
         },
       });
     }
@@ -75,7 +75,7 @@ export class AppointmentController {
 
   private extractHeaders(req: Request): Record<string, string> {
     const headers: Record<string, string> = {};
-    const allowedHeaders = ['content-type', 'accept', 'x-tenant-id'];
+    const allowedHeaders = ['content-type', 'accept', 'x-tenant-id', 'authorization'];
 
     for (const [key, value] of Object.entries(req.headers)) {
       if (allowedHeaders.includes(key.toLowerCase())) {
@@ -87,4 +87,3 @@ export class AppointmentController {
     return headers;
   }
 }
-

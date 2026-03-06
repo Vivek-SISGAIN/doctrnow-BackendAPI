@@ -1,5 +1,6 @@
 const prisma = require('../prisma/prisma');
 const slotService = require('./slot.service');
+const ApiError = require('../utils/ApiError');
 
 class AppointmentService {
   /**
@@ -97,17 +98,17 @@ class AppointmentService {
     // Check if slot exists and is available
     const slot = await slotService.findById(data.slotId);
     if (!slot) {
-      throw new Error('Slot not found');
+      throw ApiError.notFound('Slot not found');
     }
 
     if (slot.status !== 'AVAILABLE') {
-      throw new Error('Slot is not available');
+      throw ApiError.conflict('Slot is not available');
     }
 
     // Check if slot is locked by someone else
     if (slot.slotLock && slot.slotLock.expiresAt > new Date()) {
       if (slot.slotLock.lockedBy !== data.patientId) {
-        throw new Error('Slot is currently locked by another user');
+        throw ApiError.conflict('Slot is currently locked by another user');
       }
     }
 
@@ -117,7 +118,7 @@ class AppointmentService {
     });
 
     if (existingAppointment) {
-      throw new Error('Slot is already booked');
+      throw ApiError.conflict('Slot is already booked');
     }
 
     // Create appointment and update slot status in a transaction
@@ -342,6 +343,37 @@ class AppointmentService {
         slot: true
       }
     });
+  }
+
+  /**
+   * Mark missed appointments as no-show (slot end time passed, status still CONFIRMED/PENDING, no action taken).
+   * Call when loading appointments to auto-update missed slots.
+   * @param {string} [doctorId] - Optional: only mark appointments for this doctor
+   * @returns {Object} { count: number of appointments marked }
+   */
+  async markMissedAsNoShow(doctorId) {
+    const now = new Date();
+    const where = {
+      status: { in: ['CONFIRMED', 'PENDING'] },
+      slot: {
+        endTime: { lt: now }
+      }
+    };
+    if (doctorId) where.doctorId = doctorId;
+
+    const missed = await prisma.appointment.findMany({
+      where,
+      select: { id: true }
+    });
+
+    for (const apt of missed) {
+      await prisma.appointment.update({
+        where: { id: apt.id },
+        data: { status: 'NO_SHOW' }
+      });
+    }
+
+    return { count: missed.length };
   }
 
   /**

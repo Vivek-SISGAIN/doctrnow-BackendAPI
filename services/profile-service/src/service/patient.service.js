@@ -133,6 +133,42 @@ class PatientService {
   }
 
   /**
+   * Find patient by auth userId (for "current user" profile)
+   */
+  findByUserId(userId) {
+    return prisma.patient.findUnique({
+      where: { userId }
+    });
+  }
+
+  /**
+   * Create patient profile for current user (after registration).
+   * Called with userId from X-User-ID; body must include required patient fields.
+   */
+  async createForUser(userId, data) {
+    const existing = await this.findByUserId(userId);
+    if (existing) {
+      throw new Error('Patient profile already exists for this user');
+    }
+    return prisma.patient.create({
+      data: {
+        userId,
+        email: data.email,
+        mobileNumber: data.mobileNumber || '',
+        profileImage: data.profileImage || '',
+        firstName: data.firstName,
+        lastName: data.lastName,
+        dateOfBirth: new Date(data.dateOfBirth),
+        gender: data.gender,
+        emiratesId: data.emiratesId,
+        nationality: data.nationality,
+        bloodGroup: data.bloodGroup || null,
+        maritalStatus: data.maritalStatus || null
+      }
+    });
+  }
+
+  /**
    * Check for conflicts when updating unique fields
    */
   findConflictingPatient(id, { mobileNumber, email, emiratesId }) {

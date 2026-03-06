@@ -85,6 +85,30 @@ cd services/appointment-service && npm run dev
 # ... etc
 ```
 
+## Step 5b: Seed databases (optional)
+
+To get consistent demo data (doctor, patient, appointments, consultations, medical records), run seeds in this order. See **`docs/SEED_IDS.md`** for canonical IDs and details.
+
+```bash
+# 1. Auth (users: doctor@doctornow.com, patient@doctornow.com)
+cd services/auth-service && npm run seed
+
+# 2. Profile (specialties, patient & doctor with fixed IDs)
+cd services/profile-service && npx prisma db seed
+
+# 3. Appointments (slots + 8 sample appointments for seed patient)
+cd services/appointment-service && npm run seed
+
+# 4. Consultations (linked to those appointments)
+cd services/consultation-service && npm run seed
+
+# 5. Medical records (prescriptions, lab reports)
+cd services/medical-records-service && npm run seed
+
+# 6. Hospital admin (health services & packages)
+cd services/hospital-admin-service && npm run seed
+```
+
 ## Step 6: Start API Gateway
 
 ```bash

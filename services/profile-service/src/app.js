@@ -116,6 +116,7 @@ app.use(
 const patientRoutes = require('./routes/patient.routes');
 const familyMemberRoutes = require('./routes/familyMember.routes');
 const doctorRoutes = require('./routes/doctor.routes');
+const specialtyRoutes = require('./routes/specialty.routes');
 const hospitalAdminRoutes = require('./routes/hospitalAdmin.routes');
 const superAdminRoutes = require('./routes/superAdmin.routes');
 const insuranceProviderRoutes = require('./routes/insuranceProvider.routes');
@@ -124,6 +125,7 @@ const insuranceProviderRoutes = require('./routes/insuranceProvider.routes');
 app.use('/api/patients', patientRoutes);
 app.use('/api/family-members', familyMemberRoutes);
 app.use('/api/doctors', doctorRoutes);
+app.use('/api/specialties', specialtyRoutes);
 app.use('/api/hospital-admins', hospitalAdminRoutes);
 app.use('/api/super-admins', superAdminRoutes);
 app.use('/api/insurance-providers', insuranceProviderRoutes);

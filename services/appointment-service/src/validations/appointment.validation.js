@@ -20,6 +20,10 @@ const createAppointmentSchema = Joi.object({
     .messages({
       'any.only': 'Consultation type must be VIDEO, AUDIO, or CHAT'
     }),
+  paymentStatus: Joi.string().valid('PENDING', 'PAID', 'FAILED', 'REFUNDED').optional()
+    .messages({
+      'any.only': 'Payment status must be PENDING, PAID, FAILED, or REFUNDED'
+    }),
   reason: Joi.string().max(500).optional()
     .messages({
       'string.max': 'Reason must not exceed 500 characters'

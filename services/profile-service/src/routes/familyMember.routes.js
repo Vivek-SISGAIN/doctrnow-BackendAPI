@@ -3,10 +3,11 @@ const router = express.Router();
 const {
   getFamilyMemberById,
   getFamilyMembersByPatientId,
+  createFamilyMember,
   updateFamilyMember,
   deleteFamilyMember
 } = require('../controllers/familyMember.controller');
-const {  updateFamilyMemberSchema } = require('../validations/familyMember.validation');
+const { createFamilyMemberSchema, updateFamilyMemberSchema } = require('../validations/familyMember.validation');
 const validate = require('../middleware/validation');
 
 /**
@@ -39,6 +40,25 @@ const validate = require('../middleware/validation');
  *                     $ref: '#/components/schemas/FamilyMember'
  */
 router.get('/patient/:patientId', getFamilyMembersByPatientId);
+
+/**
+ * @swagger
+ * /api/family-members:
+ *   post:
+ *     summary: Create a family member for a patient
+ *     tags: [Family Members]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [patientId, relationshipType, firstName, lastName, dateOfBirth, gender, nationality]
+ *     responses:
+ *       201:
+ *         description: Family member created
+ */
+router.post('/', validate(createFamilyMemberSchema), createFamilyMember);
 
 /**
  * @swagger

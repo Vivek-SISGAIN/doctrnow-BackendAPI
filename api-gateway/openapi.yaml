@@ -27,6 +27,206 @@ paths:
         '200':
           description: Gateway is healthy
 
+  /hospital:
+    get:
+      summary: Hospital admin service info (proxied)
+      tags:
+        - Hospital Admin
+      responses:
+        '200':
+          description: Proxied response from hospital-admin-service
+
+  /hospital/health:
+    get:
+      summary: Hospital admin service health (proxied)
+      tags:
+        - Hospital Admin
+      responses:
+        '200':
+          description: Proxied response from hospital-admin-service
+
+  /hospital/health-services:
+    get:
+      summary: List health services (proxied)
+      tags:
+        - Hospital Admin
+      responses:
+        '200':
+          description: Proxied response from hospital-admin-service
+    post:
+      summary: Create health service (proxied)
+      tags:
+        - Hospital Admin
+      responses:
+        '201':
+          description: Proxied response from hospital-admin-service
+
+  /hospital/health-services/type/{type}:
+    get:
+      summary: List health services by type (proxied)
+      tags:
+        - Hospital Admin
+      parameters:
+        - in: path
+          name: type
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Proxied response from hospital-admin-service
+
+  /hospital/health-services/{id}:
+    get:
+      summary: Get health service by id (proxied)
+      tags:
+        - Hospital Admin
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Proxied response from hospital-admin-service
+    patch:
+      summary: Update health service (proxied)
+      tags:
+        - Hospital Admin
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Proxied response from hospital-admin-service
+    delete:
+      summary: Delete health service (proxied)
+      tags:
+        - Hospital Admin
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Proxied response from hospital-admin-service
+
+  /hospital/health-packages:
+    get:
+      summary: List health packages (proxied)
+      tags:
+        - Hospital Admin
+      responses:
+        '200':
+          description: Proxied response from hospital-admin-service
+    post:
+      summary: Create health package (proxied)
+      tags:
+        - Hospital Admin
+      responses:
+        '201':
+          description: Proxied response from hospital-admin-service
+
+  /hospital/health-packages/{id}:
+    get:
+      summary: Get health package by id (proxied)
+      tags:
+        - Hospital Admin
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Proxied response from hospital-admin-service
+    patch:
+      summary: Update health package (proxied)
+      tags:
+        - Hospital Admin
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Proxied response from hospital-admin-service
+    delete:
+      summary: Delete health package (proxied)
+      tags:
+        - Hospital Admin
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Proxied response from hospital-admin-service
+
+  /hospital/health-packages/services:
+    post:
+      summary: Add service to package (proxied)
+      tags:
+        - Hospital Admin
+      responses:
+        '201':
+          description: Proxied response from hospital-admin-service
+
+  /hospital/health-packages/{packageId}/services:
+    get:
+      summary: List services in a package (proxied)
+      tags:
+        - Hospital Admin
+      parameters:
+        - in: path
+          name: packageId
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Proxied response from hospital-admin-service
+
+  /hospital/health-packages/{packageId}/services/{serviceId}:
+    delete:
+      summary: Remove service from a package (proxied)
+      tags:
+        - Hospital Admin
+      parameters:
+        - in: path
+          name: packageId
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: serviceId
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Proxied response from hospital-admin-service
+
+  /hospital/doctors:
+    post:
+      summary: Create doctor (proxied)
+      tags:
+        - Hospital Admin
+      responses:
+        '201':
+          description: Proxied response from hospital-admin-service
+
 components:
   securitySchemes:
     bearerAuth:
