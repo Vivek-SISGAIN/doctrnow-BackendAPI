@@ -351,6 +351,7 @@ const completeAppointment = asyncHandler(async (req, res) => {
   });
 });
 
+
 const markMissedAsNoShow = asyncHandler(async (req, res) => {
   const { doctorId } = req.query;
   const result = await appointmentService.markMissedAsNoShow(doctorId);

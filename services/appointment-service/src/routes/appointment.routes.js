@@ -96,6 +96,9 @@ router.post('/mark-missed-no-shows', markMissedAsNoShow);
 /** POST /api/appointments/mark-missed-no-shows - must be before /:id to avoid matching as id */
 router.post('/mark-missed-no-shows', markMissedAsNoShow);
 
+/** POST /api/appointments/mark-missed-no-shows - must be before /:id to avoid matching as id */
+router.post('/mark-missed-no-shows', markMissedAsNoShow);
+
 /**
  * @swagger
  * /api/appointments/{id}:

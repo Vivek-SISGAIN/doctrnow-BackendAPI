@@ -40,14 +40,12 @@ export class ConsultationEventsGateway implements OnGatewayConnection, OnGateway
   async handleConnection(client: any) {
     try {
       const token = client.handshake?.auth?.token ?? client.handshake?.query?.token;
-
       if (!token) {
         client.disconnect();
         return;
       }
       const payload = await this.verifyToken(token);
       if (!payload) {
-
         client.disconnect();
         return;
       }
