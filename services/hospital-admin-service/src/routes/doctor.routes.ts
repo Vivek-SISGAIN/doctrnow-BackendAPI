@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { asyncHandler } from '../utils';
 import doctorController from '../controllers/doctor.controller';
 import validate from '../middlewares/validation.middleware';
-import createDoctorSchema from '../validators/doctor.validator';
+import createDoctorSchema, { updateDoctorStatusSchema } from '../validators/doctor.validator';
 
 const router = Router();
 
@@ -29,5 +29,50 @@ const router = Router();
  */
 
 router.post('/', validate(createDoctorSchema), asyncHandler(doctorController.createDoctor.bind(doctorController)));
+
+
+/**
+ * @swagger
+ * /api/doctors/{id}/status:
+ *   patch:
+ *     summary: Activate or deactivate a doctor
+ *     tags:
+ *       - Doctors
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Doctor profile ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - status
+ *             properties:
+ *               status:
+ *                 type: string
+ *                 enum: [ACTIVE, INACTIVE]
+ *                 example: ACTIVE
+ *     responses:
+ *       200:
+ *         description: Doctor status updated successfully
+ *       400:
+ *         $ref: '#/components/responses/BadRequest'
+ *       404:
+ *         description: Doctor not found
+ *       502:
+ *         description: Upstream service error
+ */
+router.patch(
+    '/:id/status',
+    validate(updateDoctorStatusSchema),
+    asyncHandler(doctorController.updateStatus.bind(doctorController))
+);
+
 
 export default router;

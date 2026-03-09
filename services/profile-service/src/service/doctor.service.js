@@ -163,8 +163,6 @@ class DoctorService {
       workingDay: filters.workingDay
     });
 
-    // For public listing, only active doctors
-    where.status = 'ACTIVE';
 
     return prisma.doctor.findMany({
       where,

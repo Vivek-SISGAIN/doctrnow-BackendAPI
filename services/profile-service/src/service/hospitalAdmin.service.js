@@ -47,7 +47,7 @@ class HospitalAdminService {
    */
   findById(id) {
     return prisma.hospitalAdmin.findUnique({
-      where: { id }
+      where: { userId : id }
     });
   }
 
@@ -95,7 +95,7 @@ class HospitalAdminService {
    */
   update(id, data) {
     return prisma.hospitalAdmin.update({
-      where: { id },
+      where: { userId : id },
       data
     });
   }

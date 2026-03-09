@@ -2,15 +2,6 @@ import { Request, Response } from 'express';
 import doctorService from '../services/doctor.service';
 
 export class DoctorController {
-    // async getAllDoctors(req: Request, res: Response) {
-    //     const doctors = await DoctorService.getAllDoctors();
-    //     return res.status(200).json({
-    //         success: true,
-    //         message: 'Doctors retrieved successfully',
-    //         data: doctors
-    //     });
-    // }
-
     async createDoctor(req: Request, res: Response) {
         const {
             fullName,
@@ -176,6 +167,28 @@ export class DoctorController {
             data: doctor
         });
     }
+
+
+    async updateStatus(req: Request, res: Response) {
+    const { id } = req.params;
+    const { status } = req.body;
+    const authHeader = req.headers.authorization ?? '';
+
+    if (!status || !['ACTIVE', 'INACTIVE'].includes(status)) {
+        return res.status(400).json({
+            success: false,
+            message: "Status must be 'ACTIVE' or 'INACTIVE'",
+        });
+    }
+
+    const result = await doctorService.updateStatus(id, status, authHeader);
+
+    return res.status(200).json({
+        success: true,
+        message: `Doctor status updated to ${status}`,
+        data: result,
+    });
+}
 
 }
 

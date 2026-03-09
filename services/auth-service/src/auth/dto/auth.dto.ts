@@ -1,6 +1,6 @@
 import { IsEmail, IsString, IsEnum, IsOptional, MinLength } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
-import { UserRole } from '@prisma/client';
+import { UserRole , UserStatus  } from '@prisma/client';
 
 export class RegisterDto {
   @ApiProperty({ example: 'user@example.com' })
@@ -62,4 +62,10 @@ export class LoginByOtpDto {
   @IsOptional()
   @IsString()
   deviceId?: string;
+}
+
+export class UpdateUserStatusDto {
+  @ApiProperty({ enum: UserStatus, example: 'ACTIVE' })
+  @IsEnum(UserStatus)
+  status!: UserStatus;
 }

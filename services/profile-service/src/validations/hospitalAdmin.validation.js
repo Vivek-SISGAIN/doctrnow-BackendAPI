@@ -47,7 +47,7 @@ const createHospitalAdminSchema = Joi.object({
 const updateHospitalAdminSchema = Joi.object({
   fullName: Joi.string().min(3).max(100).optional(),
   email: Joi.string().email().optional(),
-  phoneNumber: Joi.string().pattern(/^[0-9]{10,15}$/).optional(),
+ phoneNumber: Joi.string().pattern(/^[0-9+-]{10,15}$/).optional(),
   gender: Joi.string().valid('MALE', 'FEMALE', 'OTHER').optional(),
   nationality: Joi.string().min(2).max(50).optional(),
   emiratesId: Joi.string().pattern(/^784-[0-9]{4}-[0-9]{7}-[0-9]$/).optional(),

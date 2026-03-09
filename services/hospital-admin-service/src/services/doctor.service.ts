@@ -48,7 +48,7 @@ class DoctorService {
 
         try {
             const authResponse = await axios.post(
-                'http://localhost:8080/auth/v1/register',
+                'http://localhost:8080/api/v1/auth/register',
                 {
                     email: profilePayload.email,
                     password,
@@ -60,7 +60,7 @@ class DoctorService {
             createdUserId = authResponse.data.userId;
 
             const doctorResponse = await axios.post(
-                'http://localhost:5000/api/doctors',
+                'http://localhost:8080/api/v1/profiles/doctors',
                 {
                     ...profilePayload,
                     workingDays,
@@ -96,7 +96,47 @@ class DoctorService {
             throw error;
         }
     }
+    // In DoctorService class
 
+async updateStatus(doctorProfileId: string, status: 'ACTIVE' | 'INACTIVE', authHeader: string) {
+    const forwardHeaders = {
+        Authorization: authHeader,
+        'Content-Type': 'application/json',
+    };
+
+    // Step 1: Fetch doctor profile to get linked userId
+    const profileRes = await axios.get(
+        `http://localhost:8080/api/v1/profiles/doctors/${doctorProfileId}`,
+        { headers: forwardHeaders }
+    );
+
+    const doctorProfile = profileRes.data?.data;
+    const userId: string = doctorProfile?.userId;
+
+    console.log(doctorProfileId , "DOCTOR PROFILE" )
+    if (!userId) {
+        throw new Error('Doctor profile has no linked userId');
+    }
+
+    // Step 2: Update profile-service
+    const profileUpdateRes = await axios.patch(
+        `http://localhost:8080/api/v1/profiles/doctors/${doctorProfileId}`,
+        { status },
+        { headers: forwardHeaders }
+    );
+
+    // Step 3: Update auth-service
+    const authUpdateRes = await axios.patch(
+        `http://localhost:8080/api/v1/auth/users/${userId}/status`,
+        { status },
+        { headers: forwardHeaders }
+    );
+
+    return {
+        profile: profileUpdateRes.data?.data,
+        auth: authUpdateRes.data,
+    };
+}
 }
 
 
