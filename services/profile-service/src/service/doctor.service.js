@@ -61,9 +61,7 @@ class DoctorService {
 
         professionalBio: data.professionalBio,
 
-        workingDays: data.workingDays || [],
-        workingHoursFrom: data.workingHoursFrom,
-        workingHoursTo: data.workingHoursTo,
+        schedule: data.schedule,
         consultationDuration: data.consultationDuration,
 
         videoConsultationFee: data.videoConsultationFee,

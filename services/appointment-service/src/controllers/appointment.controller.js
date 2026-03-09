@@ -46,7 +46,8 @@ const getAllAppointments = asyncHandler(async (req, res) => {
   const doctorIds = [
     ...new Set(
       result.appointments
-        .map((appointment) => appointment.doctorId)
+        .map((appointment) => { 
+          return appointment.doctorId; })
         .filter(Boolean),
     ),
   ];
@@ -66,7 +67,7 @@ const getAllAppointments = asyncHandler(async (req, res) => {
   if (doctorIds.length > 0) {
     const doctorResponses = await Promise.all(
       doctorIds.map((id) =>
-        axios.get(`${baseUrl}/profiles/doctors/${id}`, {
+        axios.get(`${baseUrl}profiles/doctors/${id}`, {
           headers: {
             Authorization: authHeader,
           },
@@ -85,7 +86,7 @@ const getAllAppointments = asyncHandler(async (req, res) => {
   if (patientIds.length > 0) {
     const patientResponses = await Promise.all(
       patientIds.map((id) =>
-        axios.get(`${baseUrl}/profiles/patients/${id}`, {
+        axios.get(`${baseUrl}profiles/patients/${id}`, {
           headers: {
             Authorization: authHeader,
           },
@@ -121,115 +122,115 @@ const getAllAppointments = asyncHandler(async (req, res) => {
 });
 
 // const getAllAppointments = asyncHandler(async (req, res) => {
-// //   const {
-// //     patientId,
-// //     doctorId,
-// //     status,
-// //     paymentStatus,
-// //     consultationType,
-// //     startDate,
-// //     endDate,
-// //     page = 1,
-// //     limit = 20,
-// //   } = req.query;
+//   const {
+//     patientId,
+//     doctorId,
+//     status,
+//     paymentStatus,
+//     consultationType,
+//     startDate,
+//     endDate,
+//     page = 1,
+//     limit = 20,
+//   } = req.query;
 
-// //   const filters = {
-// //     patientId,
-// //     doctorId,
-// //     status,
-// //     paymentStatus,
-// //     consultationType,
-// //     startDate,
-// //     endDate,
-// //   };
+//   const filters = {
+//     patientId,
+//     doctorId,
+//     status,
+//     paymentStatus,
+//     consultationType,
+//     startDate,
+//     endDate,
+//   };
 
-// //   const pagination = {
-// //     page: parseInt(page, 10),
-// //     limit: parseInt(limit, 10),
-// //   };
+//   const pagination = {
+//     page: parseInt(page, 10),
+//     limit: parseInt(limit, 10),
+//   };
 
-// //   const result = await appointmentService.findAll(filters, pagination);
+//   const result = await appointmentService.findAll(filters, pagination);
 
-// //   if (!result || !result.appointments) {
-// //     return res.status(200).json({
-// //       success: true,
-// //       data: [],
-// //       pagination: result?.pagination || {},
-// //     });
-// //   }
+//   if (!result || !result.appointments) {
+//     return res.status(200).json({
+//       success: true,
+//       data: [],
+//       pagination: result?.pagination || {},
+//     });
+//   }
 
-// //   const doctorIds = [
-// //     ...new Set(
-// //       result.appointments
-// //         .map((appointment) => appointment.doctorId)
-// //         .filter(Boolean),
-// //     ),
-// //   ];
+//   const doctorIds = [
+//     ...new Set(
+//       result.appointments
+//         .map((appointment) => appointment.doctorId)
+//         .filter(Boolean),
+//     ),
+//   ];
 
-// //   const patientIds = [
-// //     ...new Set(
-// //       result.appointments
-// //         .map((appointment) => appointment.patientId)
-// //         .filter(Boolean),
-// //     ),
-// //   ];
+//   const patientIds = [
+//     ...new Set(
+//       result.appointments
+//         .map((appointment) => appointment.patientId)
+//         .filter(Boolean),
+//     ),
+//   ];
 
-// //   let doctorMap = {};
-// // let patientMap = {};
+//   let doctorMap = {};
+// let patientMap = {};
 
-// // const authHeader = req.headers.authorization;
+// const authHeader = req.headers.authorization;
 
-// // //
-// // // 🔹 BULK DOCTOR FETCH
-// // //
-// // if (doctorIds.length > 0) {
-// //   const doctorResponse = await axios.post(
-// //     `${baseUrl}/profiles/doctors/bulk`,
-// //     { ids: doctorIds },
-// //     {
-// //       headers: {
-// //         Authorization: authHeader,
-// //       },
-// //     },
-// //   );
+// //
+// // 🔹 BULK DOCTOR FETCH
+// //
+// if (doctorIds.length > 0) {
+//   const doctorResponse = await axios.post(
+//     `${baseUrl}profiles/doctors/bulk`,
+//     { ids: doctorIds },
+//     {
+//       headers: {
+//         Authorization: authHeader,
+//       },
+//     },
+//   );
 
-// //   doctorMap = doctorResponse.data?.data || {};
-// // }
+//   doctorMap = doctorResponse.data?.data || {};
+// }
 
-// // //
-// // // 🔹 BULK PATIENT FETCH
-// // //
-// // if (patientIds.length > 0) {
-// //   const patientResponse = await axios.post(
-// //     `${baseUrl}/profiles/patients/bulk`,
-// //     { ids: patientIds },
-// //     {
-// //       headers: {
-// //         Authorization: authHeader,
-// //       },
-// //     },
-// //   );
+// //
+// // 🔹 BULK PATIENT FETCH
+// //
+// if (patientIds.length > 0) {
+//   const patientResponse = await axios.post(
+//     `${baseUrl}profiles/patients/bulk`,
+//     { ids: patientIds },
+//     {
+//       headers: {
+//         Authorization: authHeader,
+//       },
+//     },
+//   );
 
-// //   patientMap = patientResponse.data?.data || {};
-// // }
-// //   // -----------------------------
-// //   // Merge Doctor Data Into Appointments
-// //   // -----------------------------
-// //   const transformedAppointments = result.appointments.map((appointment) => ({
-// //     ...appointment,
-// //     doctor: doctorMap[appointment.doctorId] || null,
-// //     patient: patientMap[appointment.patientId] || null,
-// //   }));
+//   patientMap = patientResponse.data?.data || {};
+// }
+//   // -----------------------------
+//   // Merge Doctor Data Into Appointments
+//   // -----------------------------
+//   const transformedAppointments = result.appointments.map((appointment) => ({
+//     ...appointment,
+//     doctor: doctorMap[appointment.doctorId] || null,
+//     patient: patientMap[appointment.patientId] || null,
+//   }));
 
-// //   // -----------------------------
-// //   // Final Response
-// //   // -----------------------------
-// //   res.status(200).json({
-// //     success: true,
-// //     data: transformedAppointments,
-// //     pagination: result.pagination,
-// //   });
-// // });
+//   // -----------------------------
+//   // Final Response
+//   // -----------------------------
+//   res.status(200).json({
+//     success: true,
+//     data: transformedAppointments,
+//     pagination: result.pagination,
+//   });
+// });
 
 const getAppointmentById = asyncHandler(async (req, res) => {
   const { id } = params;

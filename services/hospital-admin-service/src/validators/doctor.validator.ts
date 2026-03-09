@@ -1,5 +1,7 @@
 const Joi = require('joi');
 
+const timePattern = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/;
+
 const createDoctorSchema = Joi.object({
   fullName: Joi.string().min(3).max(100).required(),
 
@@ -38,28 +40,27 @@ const createDoctorSchema = Joi.object({
 
   professionalBio: Joi.string().min(20).required(),
 
-  workingDays: Joi.array()
-    .items(
+   schedule: Joi.object()
+    .pattern(
       Joi.string().valid(
-        'MONDAY',
-        'TUESDAY',
-        'WEDNESDAY',
-        'THURSDAY',
-        'FRIDAY',
-        'SATURDAY',
-        'SUNDAY'
-      )
+        "MONDAY",
+        "TUESDAY",
+        "WEDNESDAY",
+        "THURSDAY",
+        "FRIDAY",
+        "SATURDAY",
+        "SUNDAY"
+      ),
+      Joi.object({
+        from: Joi.string().pattern(timePattern).required(),
+        to: Joi.string().pattern(timePattern).required(),
+      })
     )
-    .optional(),
-
-  workingHoursFrom: Joi.string()
-    .pattern(/^([01]\d|2[0-3]):([0-5]\d)$/)
-    .required(),
-
-  workingHoursTo: Joi.string()
-    .pattern(/^([01]\d|2[0-3]):([0-5]\d)$/)
-    .required(),
-
+    .min(1)
+    .required()
+    .messages({
+      "any.required": "Schedule is required",
+    }),
   consultationDuration: Joi.number().integer().min(5).required(),
 
   videoConsultationFee: Joi.number().min(0).required(),

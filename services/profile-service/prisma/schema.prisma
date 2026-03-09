@@ -85,9 +85,7 @@ model Doctor {
   certifications          String[]
   professionalMemberships String[]
   professionalBio         String
-  workingDays             WorkingDay[]
-  workingHoursFrom        String
-  workingHoursTo          String
+  schedule                Json
   consultationDuration    Int
   videoConsultationFee    Decimal      @db.Decimal(10, 2)
   phoneConsultationFee    Decimal      @db.Decimal(10, 2)

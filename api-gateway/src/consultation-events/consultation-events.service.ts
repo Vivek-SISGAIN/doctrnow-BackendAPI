@@ -7,6 +7,7 @@ export class ConsultationEventsService {
 
   patientJoinedLobby(appointmentId: string, consultationId?: string, doctorId?: string): void {
     const payload = { appointmentId, consultationId };
+    console.log("patientJoinedLobby" , payload, "doctorId: " , doctorId)
     if (doctorId) {
       this.gateway.emitToDoctorRoom(doctorId, CONSULTATION_EVENTS.PATIENT_JOINED_LOBBY, payload);
     } else {

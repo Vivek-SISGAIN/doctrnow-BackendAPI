@@ -1,5 +1,7 @@
 const Joi = require('joi');
 
+const timePattern = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/;
+
 const createDoctorSchema = Joi.object({
   userId: Joi.string().uuid().required(),
   profileImage: Joi.string().uri().required(),
@@ -70,38 +72,27 @@ const createDoctorSchema = Joi.object({
     'string.min': 'Professional bio must be at least 50 characters',
     'any.required': 'Professional bio is required'
   }),
-  workingDays: Joi.array()
-    .items(
-      Joi.string().valid(
-        'MONDAY',
-        'TUESDAY',
-        'WEDNESDAY',
-        'THURSDAY',
-        'FRIDAY',
-        'SATURDAY',
-        'SUNDAY'
-      )
-    )
-    .min(1)
-    .required()
-    .messages({
-      'array.min': 'At least one working day must be specified',
-      'any.required': 'Working days is required'
-    }),
-  workingHoursFrom: Joi.string()
-    .pattern(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/)
-    .required()
-    .messages({
-      'string.pattern.base': 'Working hours from must be in HH:MM format',
-      'any.required': 'Working hours from is required'
-    }),
-  workingHoursTo: Joi.string()
-    .pattern(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/)
-    .required()
-    .messages({
-      'string.pattern.base': 'Working hours to must be in HH:MM format',
-      'any.required': 'Working hours to is required'
-    }),
+  schedule: Joi.object()
+  .pattern(
+    Joi.string().valid(
+      "MONDAY",
+      "TUESDAY",
+      "WEDNESDAY",
+      "THURSDAY",
+      "FRIDAY",
+      "SATURDAY",
+      "SUNDAY"
+    ),
+    Joi.object({
+      from: Joi.string().pattern(timePattern).required(),
+      to: Joi.string().pattern(timePattern).required(),
+    })
+  )
+  .min(1)
+  .required()
+  .messages({
+    "any.required": "Schedule is required",
+  }),
   consultationDuration: Joi.number().integer().min(5).max(180).required().messages({
     'number.min': 'Consultation duration must be at least 5 minutes',
     'number.max': 'Consultation duration cannot exceed 180 minutes',

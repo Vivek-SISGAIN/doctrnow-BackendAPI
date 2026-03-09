@@ -10,7 +10,6 @@ const prisma = new PrismaClient();
 
 const DOCTOR_USER_ID = '11111111-1111-1111-1111-111111111111';
 const PATIENT_USER_ID = '22222222-2222-2222-2222-222222222222';
-// Fixed profile entity IDs so other services (appointment, consultation, medical-records) can reference them
 const SEED_DOCTOR_ID = '00000000-0000-0000-0000-000000000001';
 const SEED_PATIENT_ID = '00000000-0000-0000-0000-000000000101';
 
@@ -32,6 +31,26 @@ const SPECIALTIES = [
   { name: 'Immunology', slug: 'immunology', imageKey: 'immunology', bgColor: 'bg-lime-100', displayOrder: 15 },
   { name: 'Physiotherapy', slug: 'physiotherapy', imageKey: 'physiotherapy', bgColor: 'bg-amber-100', displayOrder: 16 },
 ];
+
+// ─── Reusable schedule helpers ────────────────────────────────────────────────
+
+function makeSchedule(days, from, to) {
+  return Object.fromEntries(days.map((day) => [day, { from, to }]));
+}
+
+const FULL_WEEK_SCHEDULE = makeSchedule(
+  ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'SUNDAY'],
+  '09:00',
+  '18:00'
+);
+
+const WEEKDAY_SCHEDULE = makeSchedule(
+  ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY'],
+  '09:00',
+  '17:00'
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 async function main() {
   // Seed specialties
@@ -91,9 +110,7 @@ async function main() {
       certifications: ['DHA', 'MOH'],
       professionalMemberships: ['EMA'],
       professionalBio: 'Experienced general practitioner with focus on family medicine.',
-      workingDays: ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'SUNDAY'],
-      workingHoursFrom: '09:00',
-      workingHoursTo: '18:00',
+      schedule: FULL_WEEK_SCHEDULE,   // ← replaces workingDays, workingHoursFrom, workingHoursTo
       consultationDuration: 30,
       videoConsultationFee: 150,
       phoneConsultationFee: 100,
@@ -103,17 +120,10 @@ async function main() {
     },
   });
 
-  // Additional doctors for other specialties (use distinct userIds; auth may not have these)
-  const extraDoctors = [
-    { userId: '11111111-1111-1111-1111-111111111112', primarySpecialization: 'Cardiology', fullName: 'Dr. Ahmed Rahman', email: 'ahmed.rahman@doctornow.com', mobile: '+971501234568', licenseNumber: 'DHA-CARD-2021-002' },
-    { userId: '11111111-1111-1111-1111-111111111113', primarySpecialization: 'Dermatology', fullName: 'Dr. Fatima Hassan', email: 'fatima.hassan@doctornow.com', mobile: '+971501234569', licenseNumber: 'DHA-DERM-2019-003' },
-    { userId: '11111111-1111-1111-1111-111111111114', primarySpecialization: 'General Physician', fullName: 'Dr. Mohammed Ali', email: 'mohammed.ali@doctornow.com', mobile: '+971501234570', licenseNumber: 'DHA-GP-2022-004' },
-  ];
   const baseDoctor = {
     status: 'ACTIVE',
     gender: 'MALE',
     nationality: 'UAE',
-    emiratesId: '784-1988-1111111-1',
     subSpecialization: null,
     licenseType: 'DHA',
     licenseExpiry: new Date('2026-12-31'),
@@ -126,9 +136,7 @@ async function main() {
     certifications: ['DHA'],
     professionalMemberships: [],
     professionalBio: 'Experienced specialist.',
-    workingDays: ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY'],
-    workingHoursFrom: '09:00',
-    workingHoursTo: '17:00',
+    schedule: WEEKDAY_SCHEDULE,       // ← replaces workingDays, workingHoursFrom, workingHoursTo
     consultationDuration: 30,
     videoConsultationFee: 200,
     phoneConsultationFee: 150,
@@ -136,10 +144,13 @@ async function main() {
     hospitalSharePercent: 70,
     platformSharePercent: 30,
   };
-  const emiratesIds = ['784-1988-2222222-2', '784-1988-3333333-3', '784-1988-4444444-4'];
-  extraDoctors.forEach((d, i) => {
-    d.emiratesId = emiratesIds[i];
-  });
+
+  const extraDoctors = [
+    { userId: '11111111-1111-1111-1111-111111111112', primarySpecialization: 'Cardiology',       fullName: 'Dr. Ahmed Rahman',   email: 'ahmed.rahman@doctornow.com',   mobile: '+971501234568', licenseNumber: 'DHA-CARD-2021-002', emiratesId: '784-1988-2222222-2' },
+    { userId: '11111111-1111-1111-1111-111111111113', primarySpecialization: 'Dermatology',      fullName: 'Dr. Fatima Hassan',  email: 'fatima.hassan@doctornow.com',  mobile: '+971501234569', licenseNumber: 'DHA-DERM-2019-003', emiratesId: '784-1988-3333333-3' },
+    { userId: '11111111-1111-1111-1111-111111111114', primarySpecialization: 'General Physician',fullName: 'Dr. Mohammed Ali',   email: 'mohammed.ali@doctornow.com',   mobile: '+971501234570', licenseNumber: 'DHA-GP-2022-004',   emiratesId: '784-1988-4444444-4' },
+  ];
+
   for (const d of extraDoctors) {
     await prisma.doctor.upsert({
       where: { userId: d.userId },

@@ -177,9 +177,7 @@ const createDoctor = asyncHandler(async (req, res) => {
 
     professionalBio,
 
-    workingDays,
-    workingHoursFrom,
-    workingHoursTo,
+    schedule,   
     consultationDuration,
 
     videoConsultationFee,
@@ -219,9 +217,7 @@ const createDoctor = asyncHandler(async (req, res) => {
 
     professionalBio,
 
-    workingDays,
-    workingHoursFrom,
-    workingHoursTo,
+    schedule,   
     consultationDuration,
 
     videoConsultationFee,
