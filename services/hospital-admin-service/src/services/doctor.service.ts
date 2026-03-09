@@ -23,9 +23,7 @@ class DoctorService {
         certifications?: string[];
         professionalMemberships?: string[];
         professionalBio: string;
-        workingDays?: any[];
-        workingHoursFrom: string;
-        workingHoursTo: string;
+        schedule: Record<string, { from: string; to: string }>;
         consultationDuration: number;
         videoConsultationFee: number;
         phoneConsultationFee: number;
@@ -40,7 +38,7 @@ class DoctorService {
             password,
             role,
             tenantId,
-            workingDays,
+            schedule,
             ...profilePayload
         } = data;
 
@@ -63,7 +61,7 @@ class DoctorService {
                 'http://localhost:8080/api/v1/profiles/doctors',
                 {
                     ...profilePayload,
-                    workingDays,
+                    schedule,
                     userId: createdUserId,
                 },
                 {

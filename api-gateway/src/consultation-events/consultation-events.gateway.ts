@@ -80,6 +80,7 @@ export class ConsultationEventsGateway implements OnGatewayConnection, OnGateway
 
   @SubscribeMessage('join_room')
   handleJoinRoom(client: any, payload: { appointmentId: string }) {
+    console.log("join_room payload: " , payload)
     const appointmentId = payload?.appointmentId;
     if (!appointmentId || typeof appointmentId !== 'string') {
       return { error: 'appointmentId required' };
@@ -97,6 +98,7 @@ export class ConsultationEventsGateway implements OnGatewayConnection, OnGateway
     }
     const room = `${DOCTOR_ROOM_PREFIX}${doctorId}`;
     client.join(room);
+    console.log("Doctor " , doctorId, "joined room ", room)
     this.logger.debug(`Doctor ${doctorId} joined room ${room}`);
     return { ok: true, room };
   }

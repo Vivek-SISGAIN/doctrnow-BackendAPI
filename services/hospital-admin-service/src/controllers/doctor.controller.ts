@@ -24,9 +24,7 @@ export class DoctorController {
             certifications,
             professionalMemberships,
             professionalBio,
-            workingDays,
-            workingHoursFrom,
-            workingHoursTo,
+            schedule,
             consultationDuration,
             videoConsultationFee,
             phoneConsultationFee,
@@ -119,10 +117,10 @@ export class DoctorController {
             });
         }
 
-        if (workingDays && !Array.isArray(workingDays)) {
+        if (schedule && typeof schedule !== 'object') {
             return res.status(400).json({
                 success: false,
-                message: 'workingDays must be an array'
+                message: 'schedule must be an object'
             });
         }
 
@@ -147,9 +145,7 @@ export class DoctorController {
             certifications,
             professionalMemberships,
             professionalBio,
-            workingDays,
-            workingHoursFrom,
-            workingHoursTo,
+            schedule,
             consultationDuration: parseInt(consultationDuration),
             videoConsultationFee: parseFloat(videoConsultationFee),
             phoneConsultationFee: parseFloat(phoneConsultationFee),
