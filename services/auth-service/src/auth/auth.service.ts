@@ -371,4 +371,26 @@ export class AuthService {
 
     return { success: true };
   }
+
+  async updateUserStatus(
+  userId: string,
+  status: UserStatus,
+): Promise<{ userId: string; status: string }> {
+  const user = await this.prisma.user.findUnique({
+    where: { id: userId },
+  });
+
+  if (!user) {
+    throw new BadRequestException('User not found');
+  }
+
+  const updated = await this.prisma.user.update({
+    where: { id: userId },
+    data: { status },
+  });
+
+  this.logger.log(`User ${userId} status updated to ${status}`);
+
+  return { userId: updated.id, status: updated.status };
+}
 }

@@ -61,7 +61,7 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
     // Public read-only profile routes: specialties and doctors list (not single doctor by id) work without JWT
     const path = (request?.url || request?.originalUrl || request?.path || '').split('?')[0];
     const method = (request?.method || '').toUpperCase();
-    if (method === 'GET' && path.includes('profiles')) {
+    if (method === 'GET' || method === 'POST' && path.includes('profiles')) {
       const isDoctorsList = path.includes('profiles/doctors') && !/profiles\/doctors\/[^/]+$/.test(path);
       if (path.includes('profiles/specialties') || isDoctorsList) {
         return true;
@@ -121,6 +121,8 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
       path.includes('/documents'),
       path.includes('/consultations'),
       path.includes('/lab-reports'),
+      path.includes('/hospital'),
+      path.includes('/profiles')
     ];
     if (doctorPortalPaths.some(Boolean)) {
       const authHeader = request?.headers?.authorization;
@@ -198,8 +200,28 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
         path.includes('/consultations') ||
         path.includes('/consultation-notes') ||
         path.includes('/lab-reports') ||
-        path.includes('/hospital')
+        path.includes('/hospital') ||
+        path.include('/profiles')
       ) {
+        const authHeader = request?.headers?.authorization;
+        console.log("Auth Header" , authHeader)
+        const token =
+          typeof authHeader === 'string' && authHeader.startsWith('Bearer ')
+            ? authHeader.slice(7)
+            : null;
+        if (token) {
+          const payload = decodeJwtPayloadUnsafe(token);
+          const userId = payload?.userId ?? payload?.sub;
+          if (userId) {
+            (request as any).user = {
+              userId,
+              sub: userId,
+              role: payload?.role ?? 'USER',
+              tenantId: payload?.tenantId,
+            };
+            return true;
+          }
+        }
         return true;
       }
       // Doctor availability: GET/PATCH /profiles/doctors/:id/availability (avoids 401 → instant logout)

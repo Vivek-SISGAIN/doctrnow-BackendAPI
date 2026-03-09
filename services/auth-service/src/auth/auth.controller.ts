@@ -1,9 +1,19 @@
-import { Controller, Post, Body, HttpCode, HttpStatus, Req, Delete, Param } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Body,
+  HttpCode,
+  HttpStatus,
+  Req,
+  Delete,
+  Param,
+  Patch,
+} from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { Request } from 'express';
 import { Public } from '../common/decorators/public.decorator';
 import { AuthService } from './auth.service';
-import { RegisterDto, LoginDto, LoginByOtpDto } from './dto/auth.dto';
+import { RegisterDto, LoginDto, LoginByOtpDto, UpdateUserStatusDto } from './dto/auth.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { LogoutDto } from './dto/logout.dto';
 
@@ -128,5 +138,15 @@ export class AuthController {
   })
   async hardDeleteUser(@Param('userId') userId: string) {
     return this.authService.hardDeleteUser(userId);
+  }
+
+  @Patch('users/:userId/status')
+  @HttpCode(HttpStatus.OK)
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: 'Update user status (ACTIVE / INACTIVE)' })
+  @ApiResponse({ status: 200, description: 'Status updated successfully' })
+  @ApiResponse({ status: 400, description: 'User not found' })
+  async updateUserStatus(@Param('userId') userId: string, @Body() dto: UpdateUserStatusDto) {
+    return this.authService.updateUserStatus(userId, dto.status);
   }
 }

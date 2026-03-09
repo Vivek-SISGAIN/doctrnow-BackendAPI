@@ -1,6 +1,10 @@
 import {
   Controller,
-  All,
+  Get,
+  Post,
+  Put,
+  Patch,
+  Delete,
   Req,
   Res,
   HttpStatus,
@@ -22,19 +26,72 @@ import { Roles, UserRole } from '../common/decorators/roles.decorator';
 @ApiBearerAuth('JWT-auth')
 @Controller('hospital')
 @UseGuards(JwtAuthGuard)
-@Roles(UserRole.HOSPITAL_ADMIN, UserRole.SUPER_ADMIN)
 export class HospitalAdminController {
   constructor(private readonly httpProxyService: HttpProxyService) {}
 
   /** Base path: GET /api/v1/hospital, GET /api/v1/hospital/health, etc. */
-  @All()
-  async proxyBase(@Req() req: Request, @Res() res: Response): Promise<void> {
+  @Get()
+  @Roles(UserRole.PATIENT, UserRole.DOCTOR, UserRole.HOSPITAL_ADMIN, UserRole.SUPER_ADMIN)
+  async proxyBaseGet(@Req() req: Request, @Res() res: Response): Promise<void> {
+    return this.proxyRequest(req, res);
+  }
+
+  @Post()
+  @Roles(UserRole.HOSPITAL_ADMIN, UserRole.SUPER_ADMIN)
+  async proxyBasePost(@Req() req: Request, @Res() res: Response): Promise<void> {
+    return this.proxyRequest(req, res);
+  }
+
+  @Put()
+  @Roles(UserRole.HOSPITAL_ADMIN, UserRole.SUPER_ADMIN)
+  async proxyBasePut(@Req() req: Request, @Res() res: Response): Promise<void> {
+    return this.proxyRequest(req, res);
+  }
+
+  @Patch()
+  @Roles(UserRole.HOSPITAL_ADMIN, UserRole.SUPER_ADMIN)
+  async proxyBasePatch(@Req() req: Request, @Res() res: Response): Promise<void> {
+    return this.proxyRequest(req, res);
+  }
+
+  @Delete()
+  @Roles(UserRole.HOSPITAL_ADMIN, UserRole.SUPER_ADMIN)
+  async proxyBaseDelete(@Req() req: Request, @Res() res: Response): Promise<void> {
     return this.proxyRequest(req, res);
   }
 
   /** Subpaths: /api/v1/hospital/health-services, /api/v1/hospital/doctors, etc. */
-  @All('*')
-  async proxyRequest(@Req() req: Request, @Res() res: Response): Promise<void> {
+  @Get('*')
+  @Roles(UserRole.PATIENT, UserRole.DOCTOR, UserRole.HOSPITAL_ADMIN, UserRole.SUPER_ADMIN)
+  async proxyRequestGet(@Req() req: Request, @Res() res: Response): Promise<void> {
+    return this.proxyRequest(req, res);
+  }
+
+  @Post('*')
+  @Roles(UserRole.HOSPITAL_ADMIN, UserRole.SUPER_ADMIN)
+  async proxyRequestPost(@Req() req: Request, @Res() res: Response): Promise<void> {
+    return this.proxyRequest(req, res);
+  }
+
+  @Put('*')
+  @Roles(UserRole.HOSPITAL_ADMIN, UserRole.SUPER_ADMIN)
+  async proxyRequestPut(@Req() req: Request, @Res() res: Response): Promise<void> {
+    return this.proxyRequest(req, res);
+  }
+
+  @Patch('*')
+  @Roles(UserRole.HOSPITAL_ADMIN, UserRole.SUPER_ADMIN)
+  async proxyRequestPatch(@Req() req: Request, @Res() res: Response): Promise<void> {
+    return this.proxyRequest(req, res);
+  }
+
+  @Delete('*')
+  @Roles(UserRole.HOSPITAL_ADMIN, UserRole.SUPER_ADMIN)
+  async proxyRequestDelete(@Req() req: Request, @Res() res: Response): Promise<void> {
+    return this.proxyRequest(req, res);
+  }
+
+  private async proxyRequest(@Req() req: Request, @Res() res: Response): Promise<void> {
     const correlationId =
       (req.headers['x-correlation-id'] as string) ||
       ((req as any).id as string) ||
