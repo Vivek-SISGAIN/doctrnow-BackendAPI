@@ -62,7 +62,7 @@ export class AuthController {
 
   private extractHeaders(req: Request): Record<string, string> {
     const headers: Record<string, string> = {};
-    const allowedHeaders = ['content-type', 'accept', 'x-tenant-id'];
+    const allowedHeaders = ['content-type', 'accept', 'x-tenant-id' , 'authorization', 'x-correlation-id'];
 
     for (const [key, value] of Object.entries(req.headers)) {
       if (allowedHeaders.includes(key.toLowerCase())) {

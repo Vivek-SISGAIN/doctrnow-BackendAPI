@@ -393,4 +393,23 @@ export class AuthService {
 
   return { userId: updated.id, status: updated.status };
 }
+
+async getUserById(userId: string) {
+  const user = await this.prisma.user.findUnique({
+    where: { id: userId },
+    select: {
+      id: true,
+      email: true,
+      mobile: true,
+      status: true,
+      createdAt: true,
+    },
+  });
+
+  if (!user) {
+    throw new BadRequestException('User not found');
+  }
+
+  return user;
+}
 }
