@@ -72,6 +72,7 @@ model Doctor {
   nationality             String
   emiratesId              String       @unique
   primarySpecialization   String
+  hospitalId              String
   subSpecialization       String?
   licenseNumber           String       @unique
   licenseType             LicenseType
@@ -109,7 +110,7 @@ model HospitalAdmin {
   emiratesId   String   @unique
   hospitalName String
   profileImage String
-  hospitalId   String
+  hospitalId   String   @default(cuid())
   position     String
   department   String?
   createdAt    DateTime @default(now())
