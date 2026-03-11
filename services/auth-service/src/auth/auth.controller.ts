@@ -8,6 +8,7 @@ import {
   Delete,
   Param,
   Patch,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { Request } from 'express';
@@ -16,7 +17,20 @@ import { AuthService } from './auth.service';
 import { RegisterDto, LoginDto, LoginByOtpDto, UpdateUserStatusDto } from './dto/auth.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { LogoutDto } from './dto/logout.dto';
+import { Get } from '@nestjs/common';
 
+ function decodeJwtPayloadUnsafe(token: string): { sub?: string; userId?: string; role?: string; tenantId?: string } | null {
+  try {
+    const parts = token.split('.');
+    if (parts.length !== 3) return null;
+    const payload = JSON.parse(
+      Buffer.from(parts[1], 'base64url').toString('utf8'),
+    ) as { sub?: string; userId?: string; role?: string; tenantId?: string };
+    return payload;
+  } catch {
+    return null;
+  }
+}
 @ApiTags('auth')
 @Controller()
 export class AuthController {
@@ -149,4 +163,25 @@ export class AuthController {
   async updateUserStatus(@Param('userId') userId: string, @Body() dto: UpdateUserStatusDto) {
     return this.authService.updateUserStatus(userId, dto.status);
   }
+
+ @Get('me')
+  @HttpCode(HttpStatus.OK)
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: 'Get current authenticated user' })
+  @ApiResponse({ status: 200, description: 'User fetched successfully' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  async getCurrentUser(@Req() req: Request) {
+    const user = req.user as { sub?: string; userId?: string };
+
+    const userId = user?.sub || user?.userId;
+
+    if (!userId) {
+      throw new UnauthorizedException('Invalid authentication token');
+    }
+
+    return this.authService.getUserById(userId);
+  }
 }
+
+  
+

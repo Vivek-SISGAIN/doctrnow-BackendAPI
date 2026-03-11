@@ -4,6 +4,8 @@ class DoctorService {
   /**
    * Find doctor by unique fields
    */
+
+
   findByUniqueFields({ email, mobile, emiratesId, licenseNumber }) {
     return prisma.doctor.findFirst({
       where: {
@@ -16,6 +18,12 @@ class DoctorService {
       }
     });
   }
+
+ async findDocByHospital({ hospitalId }) {
+  return prisma.doctor.findMany({
+    where: { hospitalId }
+  });
+}
 
   async createDoctor(data) {
     // 1️⃣ Check for uniqueness conflicts
@@ -73,6 +81,8 @@ class DoctorService {
       }
     });
   }
+
+  
   /**
    * Build where clause for filtering
    */

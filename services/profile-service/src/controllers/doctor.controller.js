@@ -44,6 +44,17 @@ const getDoctorById = asyncHandler(async (req, res) => {
   });
 });
 
+const getDocByHospitalId = asyncHandler(async (req, res) => {
+  const { hospitalId } = req.params;
+  console.log(hospitalId , "hospitalId in controller")
+  const doctors = await doctorService.findDocByHospital({ hospitalId });;
+
+  res.status(200).json({
+    success: true,
+    data: doctors
+  });
+});
+
 const updateDoctor = asyncHandler(async (req, res) => {
   const { id } = req.params;
   const { email, mobile, emiratesId, licenseNumber } = req.body;
@@ -272,5 +283,6 @@ module.exports = {
   searchDoctorsBySpecialization,
   getAvailability,
   setAvailability,
-  getDoctorsByBulkIds
+  getDoctorsByBulkIds,
+  getDocByHospitalId
 };

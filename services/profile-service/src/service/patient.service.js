@@ -205,7 +205,10 @@ class PatientService {
   update(id, data) {
     return prisma.patient.update({
       where: { id },
-      data
+      data: {
+        ...data,
+        dateOfBirth : new Date(data.dateOfBirth),
+      }
     });
   }
 
