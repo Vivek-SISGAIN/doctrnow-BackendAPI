@@ -143,7 +143,8 @@ app.use((err, req, res, next) => {
   res.status(statusCode).json(response);
 });
 
-app.use((req, res) => {
+// 404 handler only for API routes, let Socket.io handle other paths like its own polling
+app.use('/api', (req, res) => {
   res.status(404).json({
     success: false,
     message: 'Route not found'

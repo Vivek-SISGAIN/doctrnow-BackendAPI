@@ -15,6 +15,20 @@ async function bootstrap(): Promise<void> {
   const configService = app.get(ConfigService);
   const logger = app.get(Logger);
 
+  // Proxy WebSocket /consultation-events to consultation-service
+  const { createProxyMiddleware } = require('http-proxy-middleware');
+  const consultationUrl = configService.get<string>('CONSULTATION_SERVICE_URL', 'http://localhost:3005');
+  
+  app.use(
+    '/consultation-events',
+    createProxyMiddleware({
+      target: consultationUrl,
+      changeOrigin: true,
+      ws: true, // proxy websockets
+      logLevel: 'debug',
+    })
+  );
+
   // Trust proxy (Express expects number, string, or array, not boolean)
   // Use 1 to trust first proxy, or 'loopback' for local development
   const trustProxy = configService.get<boolean>('TRUST_PROXY', true);
