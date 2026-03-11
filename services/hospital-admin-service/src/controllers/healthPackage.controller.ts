@@ -5,7 +5,7 @@ import healthServiceService from '../services/healthService.service';
 export class HealthPackageController {
   
   async createPackage(req: Request, res: Response) {
-    const { name, description, originalPrice, finalPrice, discountPct, validityDays, serviceIds } = req.body;
+    const { name, description, hospitalId,  originalPrice, finalPrice, discountPct, validityDays, serviceIds } = req.body;
 
     // Validate required fields
     if (!name || !description || !originalPrice || !finalPrice || discountPct === undefined || !validityDays) {
@@ -55,6 +55,7 @@ export class HealthPackageController {
     const healthPackage = await healthPackageService.createPackage({
       name,
       description,
+      hospitalId,
       originalPrice: parseFloat(originalPrice),
       finalPrice: parseFloat(finalPrice),
       discountPct: parseInt(discountPct),

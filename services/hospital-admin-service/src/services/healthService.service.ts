@@ -7,6 +7,7 @@ export class HealthServiceService {
     type: ServiceType;
     originalPrice: number;
     finalPrice: number;
+    hospitalId: string;
     status?: ServiceStatus;
   }) {
     return await prisma.healthService.create({
@@ -15,6 +16,7 @@ export class HealthServiceService {
         type: data.type,
         originalPrice: data.originalPrice,
         finalPrice: data.finalPrice,
+        hospitalId : data.hospitalId,
         status: data.status || ServiceStatus.ACTIVE
       }
     });

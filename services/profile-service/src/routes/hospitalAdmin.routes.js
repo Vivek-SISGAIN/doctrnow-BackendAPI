@@ -5,9 +5,10 @@ const {
   getHospitalAdminById,
   getHospitalAdminsByHospital,
   updateHospitalAdmin,
-  deleteHospitalAdmin
+  deleteHospitalAdmin,
+  createHospitalAdmin
 } = require('../controllers/hospitalAdmin.controller');
-const {  updateHospitalAdminSchema } = require('../validations/hospitalAdmin.validation');
+const {  updateHospitalAdminSchema, createHospitalAdminSchema } = require('../validations/hospitalAdmin.validation');
 const validate = require('../middleware/validation');
 
 /**
@@ -145,5 +146,7 @@ router.patch('/:id', validate(updateHospitalAdminSchema), updateHospitalAdmin);
  *         description: Hospital admin not found
  */
 router.delete('/:id', deleteHospitalAdmin);
+
+router.post('/',  createHospitalAdmin);
 
 module.exports = router;
