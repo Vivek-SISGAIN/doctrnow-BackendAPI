@@ -47,7 +47,7 @@ class HospitalAdminService {
    */
   findById(id) {
     return prisma.hospitalAdmin.findUnique({
-      where: { userId : id }
+      where: { userId: id }
     });
   }
 
@@ -66,6 +66,48 @@ class HospitalAdminService {
     });
   }
 
+  async createHospitalAdmin(data) {
+    // 1️⃣ Check for uniqueness conflicts
+    const existingAdmin = await prisma.hospitalAdmin.findFirst({
+      where: {
+        OR: [
+          { email: data.email },
+          { phoneNumber: data.phoneNumber },
+          { emiratesId: data.emiratesId },
+          { userId: data.userId }
+        ]
+      }
+    });
+
+    if (existingAdmin) {
+      throw new Error(
+        'Hospital admin already exists with given email / phoneNumber / emiratesId / userId'
+      );
+    }
+
+    // 2️⃣ Create hospital admin
+    return prisma.hospitalAdmin.create({
+      data: {
+        userId: data.userId,
+
+        fullName: data.fullName,
+        email: data.email,
+        phoneNumber: data.phoneNumber,
+
+        gender: data.gender,
+        nationality: data.nationality,
+        emiratesId: data.emiratesId,
+
+        hospitalName: data.hospitalName,
+        hospitalId: data.hospitalId,
+
+        position: data.position,
+        department: data.department || null,
+
+        profileImage: data.profileImage || null
+      }
+    });
+  }
   /**
    * Check for conflicts when updating unique fields
    */
@@ -95,7 +137,7 @@ class HospitalAdminService {
    */
   update(id, data) {
     return prisma.hospitalAdmin.update({
-      where: { userId : id },
+      where: { userId: id },
       data
     });
   }

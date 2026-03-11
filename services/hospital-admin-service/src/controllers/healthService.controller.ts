@@ -8,7 +8,7 @@ export class HealthServiceController {
    * POST /api/health-services
    */
   async createService(req: Request, res: Response) {
-    const { name, type, originalPrice, finalPrice, status } = req.body;
+    const { name, type, originalPrice, finalPrice, status , hospitalId} = req.body;
 
     // Validate required fields
     if (!name || !type || !originalPrice || !finalPrice) {
@@ -37,6 +37,7 @@ export class HealthServiceController {
     const service = await healthServiceService.createService({
       name,
       type,
+      hospitalId,
       originalPrice: parseFloat(originalPrice),
       finalPrice: parseFloat(finalPrice),
       status: status || ServiceStatus.ACTIVE

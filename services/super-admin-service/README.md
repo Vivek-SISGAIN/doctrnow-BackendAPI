@@ -26,4 +26,3 @@ Manages platform-wide administration and configuration.
 - `UserStatusChanged`
 - `FeatureFlagUpdated`
 - `ComplianceReportGenerated`
-

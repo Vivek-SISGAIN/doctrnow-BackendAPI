@@ -7,6 +7,7 @@ export class HealthPackageService {
     originalPrice: number;
     finalPrice: number;
     discountPct: number;
+    hospitalId: string;
     validityDays: number;
     serviceIds?: string[];
   }) {

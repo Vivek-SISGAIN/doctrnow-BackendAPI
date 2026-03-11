@@ -28,6 +28,44 @@ const getHospitalAdminsByHospital = asyncHandler(async (req, res) => {
   });
 });
 
+const createHospitalAdmin = asyncHandler(async (req, res) => {
+  const {
+    userId,
+    fullName,
+    email,
+    phoneNumber,
+    gender,
+    nationality,
+    emiratesId,
+    hospitalName,
+    profileImage,
+    hospitalId,
+    position,
+    department
+  } = req.body;
+
+  const hospitalAdmin = await hospitalAdminService.createHospitalAdmin({
+    userId,
+    fullName,
+    email,
+    phoneNumber,
+    gender,
+    nationality,
+    emiratesId,
+    hospitalName,
+    profileImage,
+    hospitalId,
+    position,
+    department
+  });
+
+  res.status(201).json({
+    success: true,
+    message: "Hospital admin created successfully",
+    data: hospitalAdmin
+  });
+});
+
 const updateHospitalAdmin = asyncHandler(async (req, res) => {
   const { id } = req.params;
 
@@ -67,5 +105,7 @@ module.exports = {
   getHospitalAdminById,
   getHospitalAdminsByHospital,
   updateHospitalAdmin,
-  deleteHospitalAdmin
+  deleteHospitalAdmin,
+  createHospitalAdmin
+
 };

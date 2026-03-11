@@ -109,4 +109,5 @@ router.patch('/:id', validate(updateSuperAdminSchema), updateSuperAdmin);
  */
 router.delete('/:id', deleteSuperAdmin);
 
+
 module.exports = router;
