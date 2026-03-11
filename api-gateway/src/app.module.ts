@@ -23,7 +23,6 @@ import { DocumentController } from './controllers/document.controller';
 import { LabReportController } from './controllers/lab-report.controller';
 import { HospitalAdminController } from './controllers/hospital-admin.controller';
 import { AgoraController } from './controllers/agora.controller';
-import { ConsultationEventsModule } from './consultation-events/consultation-events.module';
 
 import { CorrelationIdInterceptor } from './common/interceptors/correlation-id.interceptor';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
@@ -105,7 +104,6 @@ import configuration from './config/configuration';
     TokenRevocationModule,
     HttpProxyModule,
     CircuitBreakerModule,
-    ConsultationEventsModule,
 
     // Controllers
     // (Imported via controller files)

@@ -3,10 +3,18 @@
 require('dotenv').config();
 const app = require('./src/app');
 
+const http = require('http');
+
 const PORT = process.env.PORT || 3005;
 const HOST = process.env.HOST || 'localhost';
 
-const server = app.listen(PORT, () => {
+const server = http.createServer(app);
+
+// Initialize WebSocket server
+const { initializeSocket } = require('./src/utils/socket');
+initializeSocket(server);
+
+server.listen(PORT, () => {
   console.log('=================================');
   console.log('🚀 Consultation Service is running');
   console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
@@ -14,6 +22,7 @@ const server = app.listen(PORT, () => {
   console.log(`📊 Health Check: http://${HOST}:${PORT}/health`);
   console.log('=================================');
 });
+
 
 // Graceful shutdown
 process.on('SIGTERM', () => {

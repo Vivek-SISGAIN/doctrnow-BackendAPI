@@ -1,6 +1,8 @@
 const consultationService = require('../service/consultation.service');
 const ApiError = require('../utils/ApiError');
 const asyncHandler = require('../utils/asyncHandler');
+const { emitToRoom, emitToDoctorRoom, CONSULTATION_EVENTS } = require('../utils/socket');
+
 
 const createConsultation = asyncHandler(async (req, res) => {
   try {
@@ -47,6 +49,13 @@ const joinLobby = asyncHandler(async (req, res) => {
   // Note: x-user-id from gateway (JWT) may be auth user id; appointment patientId is profile id.
   // They often differ, so we do not block join when they mismatch. Rely on auth + knowing appointment ids.
   const { consultation, channelName } = await consultationService.joinLobby(appointmentId, patientId, doctorId);
+  
+  if (doctorId) {
+    emitToDoctorRoom(doctorId, CONSULTATION_EVENTS.PATIENT_JOINED_LOBBY, { appointmentId, consultationId: consultation?.id });
+  } else {
+    emitToRoom(appointmentId, CONSULTATION_EVENTS.PATIENT_JOINED_LOBBY, { appointmentId, consultationId: consultation?.id });
+  }
+
   res.status(200).json({
     success: true,
     message: 'Joined lobby',
@@ -58,6 +67,9 @@ const requestConsent = asyncHandler(async (req, res) => {
   const { appointmentId } = req.params;
 
   const consultation = await consultationService.requestConsent(appointmentId);
+  
+  emitToRoom(appointmentId, CONSULTATION_EVENTS.CONSENT_REQUESTED, { appointmentId, consultationId: consultation?.id });
+
   res.status(200).json({
     success: true,
     message: 'Consent requested',
@@ -69,6 +81,9 @@ const acceptConsent = asyncHandler(async (req, res) => {
   const { appointmentId } = req.params;
 
   const consultation = await consultationService.acceptConsent(appointmentId);
+  
+  emitToRoom(appointmentId, CONSULTATION_EVENTS.CONSENT_ACCEPTED, { appointmentId, consultationId: consultation?.id });
+
   res.status(200).json({
     success: true,
     message: 'Consent accepted',
@@ -108,11 +123,14 @@ const endConsultation = asyncHandler(async (req, res) => {
 
 const endByAppointment = asyncHandler(async (req, res) => {
   const { appointmentId } = req.params;
-  const { endedBy } = req.body || {};
+  const { endedBy, reason } = req.body || {};
   const who = endedBy === 'patient' ? 'patient' : 'doctor';
 
   try {
     const { consultation } = await consultationService.endByAppointment(appointmentId, who);
+    
+    emitToRoom(appointmentId, CONSULTATION_EVENTS.CALL_ENDED, { appointmentId, consultationId: consultation?.id, endedBy: who, reason });
+
     res.status(200).json({
       success: true,
       message: 'Consultation ended',
