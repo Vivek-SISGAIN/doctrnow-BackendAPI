@@ -5,6 +5,44 @@ const axios = require("axios");
 
 const baseUrl = process.env.BASE_URL;
 
+async function fetchProfilesByIds(ids, buildUrl, authHeader, entityName) {
+  const responses = await Promise.allSettled(
+    ids.map((id) =>
+      axios.get(buildUrl(id), {
+        headers: {
+          Authorization: authHeader,
+        },
+      }),
+    ),
+  );
+
+  const profileMap = {};
+
+  responses.forEach((result, index) => {
+    const requestedId = ids[index];
+
+    if (result.status === "fulfilled") {
+      const profile = result.value.data?.data;
+      if (profile?.id) {
+        profileMap[profile.id] = profile;
+      }
+      return;
+    }
+
+    const status = result.reason?.response?.status;
+    if (status === 404) {
+      console.warn(
+        `[appointments] Missing ${entityName} profile for referenced id ${requestedId}`,
+      );
+      return;
+    }
+
+    throw result.reason;
+  });
+
+  return profileMap;
+}
+
 const getAllAppointments = asyncHandler(async (req, res) => {
   const {
     patientId,
@@ -65,41 +103,21 @@ const getAllAppointments = asyncHandler(async (req, res) => {
   const authHeader = req.headers.authorization;
 
   if (doctorIds.length > 0) {
-    const doctorResponses = await Promise.all(
-      doctorIds.map((id) =>
-        axios.get(`${baseUrl}profiles/doctors/${id}`, {
-          headers: {
-            Authorization: authHeader,
-          },
-        }),
-      ),
+    doctorMap = await fetchProfilesByIds(
+      doctorIds,
+      (id) => `${baseUrl}profiles/doctors/${id}`,
+      authHeader,
+      "doctor",
     );
-
-    doctorResponses.forEach((resp) => {
-      const doctor = resp.data?.data;
-      if (doctor) {
-        doctorMap[doctor.id] = doctor;
-      }
-    });
   }
 
   if (patientIds.length > 0) {
-    const patientResponses = await Promise.all(
-      patientIds.map((id) =>
-        axios.get(`${baseUrl}profiles/patients/${id}`, {
-          headers: {
-            Authorization: authHeader,
-          },
-        }),
-      ),
+    patientMap = await fetchProfilesByIds(
+      patientIds,
+      (id) => `${baseUrl}profiles/patients/${id}`,
+      authHeader,
+      "patient",
     );
-
-    patientResponses.forEach((resp) => {
-      const patient = resp.data?.data;
-      if (patient) {
-        patientMap[patient.id] = patient;
-      }
-    });
   }
 
   // -----------------------------
