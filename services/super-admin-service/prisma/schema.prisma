@@ -5,10 +5,94 @@
 // Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
 
 generator client {
-  provider = "prisma-client"
-  output   = "../generated/prisma"
+  provider = "prisma-client-js"
 }
 
 datasource db {
   provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+
+model Hospital {
+  id                String   @id @default(uuid())
+
+  // Basic Information
+  officialName      String   @map("official_name")
+  shortName         String?  @map("short_name")
+  registrationNumber String  @unique @map("registration_number")
+  dhaLicenseNumber  String   @unique @map("dha_license_number")
+
+  hospitalType      String   @map("hospital_type")
+  specializationFocus String? @map("specialization_focus")
+
+  // Branch
+  branchId          String?  @map("branch_id")
+
+  // Location
+  emirate           String
+  area              String?
+  fullAddress       String
+  poBox             String?
+  latitude          Float?
+  longitude         Float?
+
+  // Contact
+  landline          String?
+  mobile            String
+  officialEmail     String   @unique
+  website           String?
+  facebook          String?
+  instagram         String?
+
+  // Operations
+  operations        String?
+
+  // Services & Specializations
+  servicesOffered        String[]
+  specializationsAvailable String[]
+
+  // Documents
+  tradeLicenseDocument           String?
+  dhaLicenseDocument             String?
+  insuranceDocuments             String[]
+  establishmentCard              String?
+  accreditationCertificates      String[]
+  finance                        Finance?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@map("hospitals")
+}
+
+model Finance {
+  id                     String   @id @default(uuid())
+
+  // Commission Structure
+  platformCommission     Float    @map("platform_commission")
+  hospitalShare          Float    @map("hospital_share")
+  doctorShare            Float    @map("doctor_share")
+
+  // Payout Settings
+  payoutFrequency        String   @map("payout_frequency")
+  paymentMethod          String   @map("payment_method")
+  minPayoutThreshold     Float    @map("min_payout_threshold")
+
+  // Bank Details
+  bankName               String   @map("bank_name")
+  accountNumber          String   @map("account_number")
+  iban                   String
+  swiftCode              String   @map("swift_code")
+  accountHolderName      String   @map("account_holder_name")
+  branchAddress          String?  @map("branch_address")
+
+  // Relation
+  hospitalId             String   @unique
+  hospital               Hospital @relation(fields: [hospitalId], references: [id])
+
+  // System Fields
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  @@map("finances")
 }

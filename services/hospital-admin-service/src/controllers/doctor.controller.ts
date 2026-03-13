@@ -9,6 +9,7 @@ export class DoctorController {
             mobile,
             gender,
             nationality,
+            hospitalId,
             emiratesId,
             primarySpecialization,
             subSpecialization,
@@ -25,7 +26,6 @@ export class DoctorController {
             professionalMemberships,
             professionalBio,
             schedule,
-            consultationDuration,
             videoConsultationFee,
             phoneConsultationFee,
             followUpFee,
@@ -66,12 +66,6 @@ export class DoctorController {
             });
         }
 
-        if (consultationDuration < 5) {
-            return res.status(400).json({
-                success: false,
-                message: 'Consultation duration must be at least 5 minutes'
-            });
-        }
 
         if (
             videoConsultationFee < 0 ||
@@ -130,6 +124,7 @@ export class DoctorController {
             mobile,
             gender,
             nationality,
+            hospitalId,
             emiratesId,
             primarySpecialization,
             subSpecialization,
@@ -146,7 +141,6 @@ export class DoctorController {
             professionalMemberships,
             professionalBio,
             schedule,
-            consultationDuration: parseInt(consultationDuration),
             videoConsultationFee: parseFloat(videoConsultationFee),
             phoneConsultationFee: parseFloat(phoneConsultationFee),
             followUpFee: parseFloat(followUpFee),

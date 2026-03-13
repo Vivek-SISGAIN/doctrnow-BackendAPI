@@ -1,6 +1,8 @@
 /* eslint-disable no-console */
-require("dotenv").config();
-const app = require("./app");
+import dotenv from "dotenv";
+import app from "./app.js";
+
+dotenv.config();
 
 const PORT = process.env.PORT || 5001;
 const HOST = process.env.HOST || "localhost";
@@ -40,4 +42,4 @@ process.on("unhandledRejection", (err) => {
   server.close(() => process.exit(1));
 });
 
-module.exports = server;
+export default server;

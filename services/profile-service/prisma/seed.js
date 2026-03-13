@@ -102,6 +102,8 @@ async function main() {
       licenseType: 'DHA',
       licenseExpiry: new Date('2026-12-31'),
       yearsOfExperience: 8,
+    hospitalId : "7a8b9c0d-1e2f-4a3b-8c9d-0e1f2a3b4c5d" ,
+
       medicalDegree: 'MBBS',
       university: 'Dubai Medical College',
       profileImage: 'https://api.dicebear.com/7.x/avataaars/svg?seed=doctor',
@@ -142,13 +144,15 @@ async function main() {
     phoneConsultationFee: 150,
     followUpFee: 100,
     hospitalSharePercent: 70,
+    hospitalId : "7a8b9c0d-1e2f-4a3b-8c9d-0e1f2a3b4c5d" ,
     platformSharePercent: 30,
   };
 
   const extraDoctors = [
-    { userId: '11111111-1111-1111-1111-111111111112', primarySpecialization: 'Cardiology',       fullName: 'Dr. Ahmed Rahman',   email: 'ahmed.rahman@doctornow.com',   mobile: '+971501234568', licenseNumber: 'DHA-CARD-2021-002', emiratesId: '784-1988-2222222-2' },
-    { userId: '11111111-1111-1111-1111-111111111113', primarySpecialization: 'Dermatology',      fullName: 'Dr. Fatima Hassan',  email: 'fatima.hassan@doctornow.com',  mobile: '+971501234569', licenseNumber: 'DHA-DERM-2019-003', emiratesId: '784-1988-3333333-3' },
-    { userId: '11111111-1111-1111-1111-111111111114', primarySpecialization: 'General Physician',fullName: 'Dr. Mohammed Ali',   email: 'mohammed.ali@doctornow.com',   mobile: '+971501234570', licenseNumber: 'DHA-GP-2022-004',   emiratesId: '784-1988-4444444-4' },
+    
+    { userId: '11111111-1111-1111-1111-111111111112', hospitalId : "7a8b9c0d-1e2f-4a3b-8c9d-0e1f2a3b4c5d" ,primarySpecialization: 'Cardiology',       fullName: 'Dr. Ahmed Rahman',   email: 'ahmed.rahman@doctornow.com',   mobile: '+971501234568', licenseNumber: 'DHA-CARD-2021-002', emiratesId: '784-1988-2222222-2' ,  },
+    { userId: '11111111-1111-1111-1111-111111111113',hospitalId : "7a8b9c0d-1e2f-4a3b-8c9d-0e1f2a3b4c5d" , primarySpecialization: 'Dermatology',      fullName: 'Dr. Fatima Hassan',  email: 'fatima.hassan@doctornow.com',  mobile: '+971501234569', licenseNumber: 'DHA-DERM-2019-003', emiratesId: '784-1988-3333333-3' },
+    { userId: '11111111-1111-1111-1111-111111111114', hospitalId : "7a8b9c0d-1e2f-4a3b-8c9d-0e1f2a3b4c5d" ,primarySpecialization: 'General Physician',fullName: 'Dr. Mohammed Ali',   email: 'mohammed.ali@doctornow.com',   mobile: '+971501234570', licenseNumber: 'DHA-GP-2022-004',   emiratesId: '784-1988-4444444-4' },
   ];
 
   for (const d of extraDoctors) {

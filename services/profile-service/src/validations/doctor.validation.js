@@ -2,6 +2,42 @@ const Joi = require('joi');
 
 const timePattern = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/;
 
+const slotSchema = Joi.object({
+  startTime: Joi.string().pattern(timePattern).required().messages({
+    'string.pattern.base': 'Start time must be in HH:MM format',
+    'any.required': 'Start time is required',
+  }),
+  endTime: Joi.string().pattern(timePattern).required().messages({
+    'string.pattern.base': 'End time must be in HH:MM format',
+    'any.required': 'End time is required',
+  }),
+  consultationDuration: Joi.alternatives()
+    .try(Joi.number().integer().min(5).max(180), Joi.string().pattern(/^\d+$/))
+    .required()
+    .messages({
+      'any.required': 'Consultation duration is required',
+    }),
+}).custom((value, helpers) => {
+  if (value.startTime >= value.endTime) {
+    return helpers.error('any.invalid', {
+      message: `'startTime' must be before 'endTime'`,
+    });
+  }
+  return value;
+});
+
+const dayScheduleSchema = Joi.object({
+  enabled: Joi.boolean().required(),
+  slots: Joi.when('enabled', {
+    is: true,
+    then: Joi.array().items(slotSchema).min(1).required().messages({
+      'array.min': 'At least one slot is required when day is enabled',
+      'any.required': 'Slots are required when day is enabled',
+    }),
+    otherwise: Joi.array().items(slotSchema).optional(),
+  }),
+});
+
 const createDoctorSchema = Joi.object({
   userId: Joi.string().uuid().required(),
   profileImage: Joi.string().uri().required(),
@@ -48,6 +84,7 @@ const createDoctorSchema = Joi.object({
     'date.min': 'License expiry date must be in the future',
     'any.required': 'License expiry date is required'
   }),
+  hospitalId : Joi.string().required().messages({'any.required': 'License number is required'}),
   yearsOfExperience: Joi.number().integer().min(0).max(70).required().messages({
     'number.min': 'Years of experience cannot be negative',
     'any.required': 'Years of experience is required'
@@ -72,32 +109,22 @@ const createDoctorSchema = Joi.object({
     'string.min': 'Professional bio must be at least 50 characters',
     'any.required': 'Professional bio is required'
   }),
-  schedule: Joi.object()
-  .pattern(
-    Joi.string().valid(
-      "MONDAY",
-      "TUESDAY",
-      "WEDNESDAY",
-      "THURSDAY",
-      "FRIDAY",
-      "SATURDAY",
-      "SUNDAY"
-    ),
-    Joi.object({
-      from: Joi.string().pattern(timePattern).required(),
-      to: Joi.string().pattern(timePattern).required(),
-    })
-  )
+  schedule: Joi.object({
+  MONDAY:    dayScheduleSchema.optional(),
+  TUESDAY:   dayScheduleSchema.optional(),
+  WEDNESDAY: dayScheduleSchema.optional(),
+  THURSDAY:  dayScheduleSchema.optional(),
+  FRIDAY:    dayScheduleSchema.optional(),
+  SATURDAY:  dayScheduleSchema.optional(),
+  SUNDAY:    dayScheduleSchema.optional(),
+})
   .min(1)
   .required()
   .messages({
-    "any.required": "Schedule is required",
+    'object.min': 'At least one day must be scheduled',
+    'any.required': 'Schedule is required',
   }),
-  consultationDuration: Joi.number().integer().min(5).max(180).required().messages({
-    'number.min': 'Consultation duration must be at least 5 minutes',
-    'number.max': 'Consultation duration cannot exceed 180 minutes',
-    'any.required': 'Consultation duration is required'
-  }),
+
   videoConsultationFee: Joi.number().min(0).required().messages({
     'number.min': 'Video consultation fee cannot be negative',
     'any.required': 'Video consultation fee is required'

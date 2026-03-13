@@ -42,7 +42,7 @@ class DoctorService {
     return prisma.doctor.create({
       data: {
         userId: data.userId,
-
+        hospitalId : data.hospitalId,
         fullName: data.fullName,
         email: data.email,
         mobile: data.mobile,
@@ -70,7 +70,6 @@ class DoctorService {
         professionalBio: data.professionalBio,
 
         schedule: data.schedule,
-        consultationDuration: data.consultationDuration,
 
         videoConsultationFee: data.videoConsultationFee,
         phoneConsultationFee: data.phoneConsultationFee,

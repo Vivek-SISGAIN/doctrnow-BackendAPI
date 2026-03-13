@@ -61,7 +61,6 @@ const createDoctorSchema = Joi.object({
     .messages({
       "any.required": "Schedule is required",
     }),
-  consultationDuration: Joi.number().integer().min(5).required(),
 
   videoConsultationFee: Joi.number().min(0).required(),
   phoneConsultationFee: Joi.number().min(0).required(),

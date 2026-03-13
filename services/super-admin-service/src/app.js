@@ -1,11 +1,11 @@
-const express = require("express");
-const cors = require("cors");
-const morgan = require("morgan");
-const helmet = require("helmet");
-const compression = require("compression");
-const cookieParser = require("cookie-parser");
-const rateLimit = require("express-rate-limit");
-const hpp = require("hpp");
+import express, { json, urlencoded } from "express";
+import cors from "cors";
+import morgan from "morgan";
+import helmet from "helmet";
+import compression from "compression";
+import cookieParser from "cookie-parser";
+import rateLimit from "express-rate-limit";
+import hpp from "hpp";
 
 const app = express();
 
@@ -39,8 +39,8 @@ app.use(
 /**
  * Body Parsing
  */
-app.use(express.json({ limit: "10mb" }));
-app.use(express.urlencoded({ extended: true, limit: "10mb" }));
+app.use(json({ limit: "10mb" }));
+app.use(urlencoded({ extended: true, limit: "10mb" }));
 
 /**
  * Cookies
@@ -92,7 +92,7 @@ app.get("/", (req, res) => {
 /**
  * Routes
  */
-const superAdminRoutes = require("./routes/user.routes");
+import superAdminRoutes from "./routes/hospital.routes.js";
 
 app.use("/api/super-admins", superAdminRoutes);
 
@@ -121,4 +121,4 @@ app.use((req, res) => {
   });
 });
 
-module.exports = app;
+export default app;

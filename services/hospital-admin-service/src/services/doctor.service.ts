@@ -4,6 +4,7 @@ import axios from 'axios';
 class DoctorService {
     async createDoctor(data: {
         fullName: string;
+        hospitalId :string;
         email: string;
         mobile: string;
         gender: any;
@@ -24,7 +25,6 @@ class DoctorService {
         professionalMemberships?: string[];
         professionalBio: string;
         schedule: Record<string, { from: string; to: string }>;
-        consultationDuration: number;
         videoConsultationFee: number;
         phoneConsultationFee: number;
         followUpFee: number;
