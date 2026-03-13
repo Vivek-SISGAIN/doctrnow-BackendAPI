@@ -1,8 +1,6 @@
 import { Router } from 'express';
 import { asyncHandler } from '../utils';
 import doctorController from '../controllers/doctor.controller';
-import validate from '../middlewares/validation.middleware';
-import createDoctorSchema, { updateDoctorStatusSchema } from '../validators/doctor.validator';
 
 const router = Router();
 
@@ -28,7 +26,7 @@ const router = Router();
  *         $ref: '#/components/responses/InternalServerError'
  */
 
-router.post('/', validate(createDoctorSchema), asyncHandler(doctorController.createDoctor.bind(doctorController)));
+router.post('/', asyncHandler(doctorController.createDoctor.bind(doctorController)));
 
 
 /**
@@ -70,7 +68,6 @@ router.post('/', validate(createDoctorSchema), asyncHandler(doctorController.cre
  */
 router.patch(
     '/:id/status',
-    validate(updateDoctorStatusSchema),
     asyncHandler(doctorController.updateStatus.bind(doctorController))
 );
 

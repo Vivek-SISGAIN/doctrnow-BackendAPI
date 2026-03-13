@@ -188,8 +188,7 @@ const createDoctor = asyncHandler(async (req, res) => {
     professionalBio,
 
     schedule,   
-    consultationDuration,
-
+    hospitalId,
     videoConsultationFee,
     phoneConsultationFee,
     followUpFee,
@@ -200,7 +199,7 @@ const createDoctor = asyncHandler(async (req, res) => {
 
   const doctor = await doctorService.createDoctor({
     userId,
-
+    hospitalId,
     fullName,
     email,
     mobile,
@@ -228,7 +227,6 @@ const createDoctor = asyncHandler(async (req, res) => {
     professionalBio,
 
     schedule,   
-    consultationDuration,
 
     videoConsultationFee,
     phoneConsultationFee,
