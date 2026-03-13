@@ -4,6 +4,7 @@ const createConsultationSchema = Joi.object({
   appointmentId: Joi.string().uuid().required(),
   patientId: Joi.string().uuid().required(),
   doctorId: Joi.string().uuid().required(),
+  hospitalId: Joi.string().allow('').optional(),
   status: Joi.string().valid('PENDING', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED', 'NO_SHOW').optional(),
   type: Joi.string().valid('VIDEO', 'AUDIO', 'CHAT').optional(),
   diagnosis: Joi.string().max(500).optional(),
@@ -12,12 +13,14 @@ const createConsultationSchema = Joi.object({
 
 const joinLobbySchema = Joi.object({
   patientId: Joi.string().uuid().required(),
-  doctorId: Joi.string().uuid().required()
+  doctorId: Joi.string().uuid().required(),
+  hospitalId: Joi.string().allow('').optional()
 });
 
 const saveHealthDetailsSchema = Joi.object({
   patientId: Joi.string().uuid().required(),
   doctorId: Joi.string().uuid().required(),
+  hospitalId: Joi.string().allow('').optional(),
   weight: Joi.string().allow('').optional(),
   height: Joi.string().allow('').optional(),
   bloodPressure: Joi.string().allow('').optional(),
@@ -34,6 +37,7 @@ const updateConsultationSchema = Joi.object({
   status: Joi.string().valid('PENDING', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED', 'NO_SHOW').optional(),
   diagnosis: Joi.string().max(500).optional(),
   followUp: Joi.string().max(500).optional(),
+  hospitalId: Joi.string().allow('').optional(),
   type: Joi.string().valid('VIDEO', 'AUDIO', 'CHAT').optional()
 }).min(1);
 

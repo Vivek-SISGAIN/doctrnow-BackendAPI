@@ -30,6 +30,7 @@ model Appointment {
   id               String            @id @default(uuid())
   patientId        String
   doctorId         String
+  hospitalId       String
   slotId           String            @unique
   status           AppointmentStatus @default(PENDING)
   paymentStatus    PaymentStatus     @default(PENDING)
@@ -45,6 +46,7 @@ model Appointment {
   @@map("appointments")
   @@index([patientId])
   @@index([doctorId])
+  @@index([hospitalId])
   @@index([slotId])
   @@index([status])
   @@index([paymentStatus])

@@ -6,11 +6,22 @@ class ConsultationService {
    * Create a new consultation
    */
   async create(data) {
-    const consultation = await prisma.consultation.create({
-      data: {
+    const consultation = await prisma.consultation.upsert({
+      where: { appointmentId: data.appointmentId },
+      update: {
+        patientId: data.patientId,
+        doctorId: data.doctorId,
+        hospitalId: data.hospitalId ?? undefined,
+        status: data.status || 'PENDING',
+        type: data.type || 'VIDEO',
+        diagnosis: data.diagnosis,
+        followUp: data.followUp
+      },
+      create: {
         appointmentId: data.appointmentId,
         patientId: data.patientId,
         doctorId: data.doctorId,
+        hospitalId: data.hospitalId,
         status: data.status || 'PENDING',
         type: data.type || 'VIDEO',
         diagnosis: data.diagnosis,
@@ -86,6 +97,7 @@ class ConsultationService {
           appointmentId,
           patientId,
           doctorId,
+          hospitalId: null,
           status: 'PENDING',
           type: 'VIDEO',
           patientJoinedAt: now
@@ -129,9 +141,18 @@ class ConsultationService {
           appointmentId,
           patientId,
           doctorId,
+          hospitalId: vitalsData.hospitalId || null,
           status: 'PENDING',
           type: 'VIDEO'
         },
+        include: { notes: true, vitals: true }
+      });
+    }
+
+    if (vitalsData.hospitalId && consultation.hospitalId !== vitalsData.hospitalId) {
+      consultation = await prisma.consultation.update({
+        where: { id: consultation.id },
+        data: { hospitalId: vitalsData.hospitalId },
         include: { notes: true, vitals: true }
       });
     }
@@ -415,6 +436,7 @@ class ConsultationService {
     if (data.diagnosis !== undefined) updateData.diagnosis = data.diagnosis;
     if (data.followUp !== undefined) updateData.followUp = data.followUp;
     if (data.type !== undefined) updateData.type = data.type;
+    if (data.hospitalId !== undefined) updateData.hospitalId = data.hospitalId;
 
     const updated = await prisma.consultation.update({
       where: { id },

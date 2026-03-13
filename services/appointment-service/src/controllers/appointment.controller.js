@@ -233,7 +233,7 @@ const getAllAppointments = asyncHandler(async (req, res) => {
 // });
 
 const getAppointmentById = asyncHandler(async (req, res) => {
-  const { id } = params;
+  const { id } = req.params;
 
   const appointment = await appointmentService.findById(id);
 

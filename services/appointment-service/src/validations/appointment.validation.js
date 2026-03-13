@@ -11,6 +11,10 @@ const createAppointmentSchema = Joi.object({
       'string.guid': 'Doctor ID must be a valid UUID',
       'any.required': 'Doctor ID is required'
     }),
+  hospitalId: Joi.string().min(1).required()
+    .messages({
+      'any.required': 'Hospital ID is required'
+    }),
   slotId: Joi.string().uuid().required()
     .messages({
       'string.guid': 'Slot ID must be a valid UUID',

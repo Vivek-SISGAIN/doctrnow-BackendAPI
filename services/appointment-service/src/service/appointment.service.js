@@ -128,6 +128,7 @@ class AppointmentService {
           patientId: data.patientId,
           doctorId: data.doctorId,
           slotId: data.slotId,
+          hospitalId: data.hospitalId,
           status: data.status || 'PENDING',
           paymentStatus: data.paymentStatus || 'PENDING',
           consultationType: data.consultationType || 'VIDEO',
@@ -266,6 +267,7 @@ class AppointmentService {
         data: {
           patientId: appointment.patientId,
           doctorId: appointment.doctorId,
+          hospitalId: appointment.hospitalId,
           slotId: newSlotId,
           status: appointment.paymentStatus === 'PAID' ? 'CONFIRMED' : 'PENDING',
           paymentStatus: appointment.paymentStatus,

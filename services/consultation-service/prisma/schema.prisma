@@ -12,6 +12,7 @@ model Consultation {
   appointmentId     String            @unique
   patientId         String
   doctorId         String
+  hospitalId        String?
   status            ConsultationStatus @default(PENDING)
   startedAt         DateTime?
   endedAt           DateTime?
@@ -32,6 +33,7 @@ model Consultation {
   @@map("consultations")
   @@index([patientId])
   @@index([doctorId])
+  @@index([hospitalId])
   @@index([appointmentId])
   @@index([status])
   @@index([startedAt])

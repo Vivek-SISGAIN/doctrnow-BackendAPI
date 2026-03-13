@@ -72,7 +72,7 @@ model Doctor {
   nationality             String
   emiratesId              String       @unique
   primarySpecialization   String
-  hospitalId              String
+  hospitalId              String?
   subSpecialization       String?
   licenseNumber           String       @unique
   licenseType             LicenseType
@@ -86,7 +86,7 @@ model Doctor {
   certifications          String[]
   professionalMemberships String[]
   professionalBio         String
-  schedule                Json
+  schedule                Json?
   consultationDuration    Int
   videoConsultationFee    Decimal      @db.Decimal(10, 2)
   phoneConsultationFee    Decimal      @db.Decimal(10, 2)

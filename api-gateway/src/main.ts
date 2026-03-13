@@ -15,30 +15,48 @@ async function bootstrap(): Promise<void> {
   const configService = app.get(ConfigService);
   const logger = app.get(Logger);
 
-  // Proxy WebSocket /consultation-events to consultation-service
+  // ─── Helper: safely parse env booleans ───────────────────────────────────────
+  // ConfigService.get<boolean>() does NOT cast strings — it returns the raw
+  // string from .env. Always use this helper for any boolean env var.
+  const getBool = (key: string, fallback: boolean): boolean => {
+    const val = configService.get<string>(key);
+    if (val === undefined || val === null || val === '') return fallback;
+    return val === 'true';
+  };
+
+  // ─── Helper: safely parse env integers ───────────────────────────────────────
+  const getInt = (key: string, fallback: number): number => {
+    const val = configService.get<string>(key);
+    const parsed = parseInt(val ?? '', 10);
+    return isNaN(parsed) ? fallback : parsed;
+  };
+
+  // ─── WebSocket proxy for consultation-service SSE/WS ─────────────────────────
   const { createProxyMiddleware } = require('http-proxy-middleware');
-  const consultationUrl = configService.get<string>('CONSULTATION_SERVICE_URL', 'http://localhost:3005');
-  
+  const consultationUrl =
+    configService.get<string>('CONSULTATION_SERVICE_URL') ?? 'http://localhost:3005';
+
   app.use(
     '/consultation-events',
     createProxyMiddleware({
       target: consultationUrl,
       changeOrigin: true,
-      ws: true, // proxy websockets
-      logLevel: 'debug',
-    })
+      ws: true,
+      logLevel: 'warn',
+    }),
   );
 
-  // Trust proxy (Express expects number, string, or array, not boolean)
-  // Use 1 to trust first proxy, or 'loopback' for local development
-  const trustProxy = configService.get<boolean>('TRUST_PROXY', true);
+  // ─── Trust proxy ─────────────────────────────────────────────────────────────
+  // Required for correct IP detection behind Nginx / load balancers.
+  // Use 1 (first proxy) in production, false for direct local dev.
+  const trustProxy = getBool('TRUST_PROXY', true);
   app.set('trust proxy', trustProxy ? 1 : false);
 
-  // Security: Helmet
+  // ─── Helmet (security headers) ───────────────────────────────────────────────
   app.use(
     helmet({
-      contentSecurityPolicy: false, // Adjust based on frontend requirements
-      crossOriginEmbedderPolicy: false,
+      contentSecurityPolicy: false,     // frontend sets its own CSP
+      crossOriginEmbedderPolicy: false, // needed for Agora / video embeds
       hsts: {
         maxAge: 31536000,
         includeSubDomains: true,
@@ -47,22 +65,39 @@ async function bootstrap(): Promise<void> {
     }),
   );
 
-  // CORS — use a callback so only the single matched origin is echoed back,
-  // never a comma-joined list (which browsers reject per the CORS spec).
-  const rawOrigins = configService.get<string | string[]>('CORS_ORIGINS', []);
-  const allowedOrigins: string[] =
-    typeof rawOrigins === 'string' ? rawOrigins.split(',').map((o) => o.trim()) : rawOrigins;
+  // ─── CORS ────────────────────────────────────────────────────────────────────
+  // Reads CORS_ORIGINS as a comma-separated string from .env.
+  // Uses a callback so exactly ONE matched origin is echoed back —
+  // browsers reject responses where Access-Control-Allow-Origin is a list.
+  const rawOrigins = configService.get<string>('CORS_ORIGINS') ?? '';
+  const parsedOrigins: string[] = rawOrigins
+    .split(',')
+    .map((o) => o.trim())
+    .filter(Boolean);
+
+  // Fallback for local dev when CORS_ORIGINS is not set in .env
+  const devFallbackOrigins = [
+    'http://localhost:3000',
+    'http://localhost:5173',
+    'http://127.0.0.1:3000',
+    'http://127.0.0.1:5173',
+    'http://localhost:8081',
+    'http://localhost:1234',
+  ];
+  const allowedOrigins = parsedOrigins.length > 0 ? parsedOrigins : devFallbackOrigins;
+
+  // getBool ensures this is always a real boolean — never a string 'true'.
+  // The cors package requires strict boolean true for credentials, not 'true'.
+  const corsCredentials = getBool('CORS_CREDENTIALS', true);
 
   app.enableCors({
     origin: (requestOrigin, callback) => {
-      // Allow server-to-server requests (no Origin header) and matched origins
-      if (!requestOrigin || allowedOrigins.includes(requestOrigin)) {
-        callback(null, requestOrigin || true);
-      } else {
-        callback(new Error(`Origin '${requestOrigin}' not allowed by CORS policy`));
-      }
+      // Allow server-to-server / curl / health-check requests (no Origin header)
+      if (!requestOrigin) return callback(null, true);
+      if (allowedOrigins.includes(requestOrigin)) return callback(null, requestOrigin);
+      callback(new Error(`CORS: Origin '${requestOrigin}' is not allowed`));
     },
-    credentials: configService.get<boolean>('CORS_CREDENTIALS', true),
+    credentials: corsCredentials, // ← must be boolean true, never string 'true'
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
     allowedHeaders: [
       'Content-Type',
@@ -73,34 +108,34 @@ async function bootstrap(): Promise<void> {
       'x-client',
     ],
     exposedHeaders: ['X-Correlation-ID', 'X-RateLimit-Limit', 'X-RateLimit-Remaining'],
+    maxAge: 86400, // cache preflight for 24h — reduces OPTIONS request spam
   });
 
-  // API Versioning
+  // ─── API versioning ───────────────────────────────────────────────────────────
   app.setGlobalPrefix('api');
   app.enableVersioning({
     type: VersioningType.URI,
     defaultVersion: '1',
   });
 
-  // Global Validation Pipe (strict, whitelist)
+  // ─── Global validation pipe ───────────────────────────────────────────────────
+  const isProduction = configService.get<string>('NODE_ENV') === 'production';
   app.useGlobalPipes(
     new ValidationPipe({
-      whitelist: true, // Strip unknown properties
-      forbidNonWhitelisted: true, // Reject requests with unknown properties
-      transform: true, // Auto-transform payloads to DTOs
-      transformOptions: {
-        enableImplicitConversion: true,
-      },
-      disableErrorMessages: configService.get<string>('NODE_ENV') === 'production',
+      whitelist: true,
+      forbidNonWhitelisted: true,
+      transform: true,
+      transformOptions: { enableImplicitConversion: true },
+      disableErrorMessages: isProduction,
     }),
   );
 
-  // Global Interceptors
+  // ─── Global interceptors ──────────────────────────────────────────────────────
   app.useGlobalInterceptors(new LoggerErrorInterceptor());
 
-  // Swagger/OpenAPI (dev/staging only)
-  if (configService.get<string>('NODE_ENV') !== 'production') {
-    const config = new DocumentBuilder()
+  // ─── Swagger (dev + staging only, never in production) ───────────────────────
+  if (!isProduction) {
+    const swaggerConfig = new DocumentBuilder()
       .setTitle('DoctorNow API Gateway')
       .setDescription(
         'Enterprise-grade API Gateway for DoctorNow Platform. Single entry point for all microservices.',
@@ -123,25 +158,28 @@ async function bootstrap(): Promise<void> {
       .addTag('consultations', 'Consultation management')
       .build();
 
-    const document = SwaggerModule.createDocument(app, config);
+    const document = SwaggerModule.createDocument(app, swaggerConfig);
     SwaggerModule.setup('api-docs', app, document, {
-      swaggerOptions: {
-        persistAuthorization: true,
-      },
+      swaggerOptions: { persistAuthorization: true },
     });
 
-    logger.log('Swagger documentation available at /api-docs');
+    logger.log(
+      `📖 Swagger docs → http://localhost:${getInt('PORT', 8080)}/api-docs`,
+    );
   }
 
-  const port = configService.get<number>('PORT', 8080);
+  // ─── Start server ─────────────────────────────────────────────────────────────
+  const port = getInt('PORT', 8080);
   await app.listen(port);
 
   logger.log(`🚀 API Gateway running on port ${port}`);
-  logger.log(`📝 Environment: ${configService.get<string>('NODE_ENV', 'development')}`);
-  logger.log(`🔐 JWT JWKS URI: ${configService.get<string>('JWT_JWKS_URI', 'not configured')}`);
+  logger.log(`🌍 Environment : ${configService.get<string>('NODE_ENV') ?? 'development'}`);
+  logger.log(`🔐 JWKS URI    : ${configService.get<string>('JWT_JWKS_URI') ?? 'not configured'}`);
+  logger.log(`🌐 CORS origins: ${allowedOrigins.join(', ')}`);
+  logger.log(`🔑 Credentials : ${corsCredentials}`);
 }
 
 bootstrap().catch((error) => {
-  console.error('Failed to start API Gateway:', error);
+  console.error('❌ Failed to start API Gateway:', error);
   process.exit(1);
 });

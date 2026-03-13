@@ -7,6 +7,7 @@ const DOCTOR_ROOM_PREFIX = 'doctor:';
 // Same events as defined in libs/event-models/src/consultation-events.ts
 const CONSULTATION_EVENTS = {
   PATIENT_JOINED_LOBBY: 'patient_joined_lobby',
+  APPOINTMENT_BOOKED: 'appointment_booked',
   CONSENT_REQUESTED: 'consent_requested',
   CONSENT_ACCEPTED: 'consent_accepted',
   CONSENT_REJECTED: 'consent_rejected',

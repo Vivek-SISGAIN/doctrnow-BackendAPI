@@ -7,6 +7,15 @@ const { emitToRoom, emitToDoctorRoom, CONSULTATION_EVENTS } = require('../utils/
 const createConsultation = asyncHandler(async (req, res) => {
   try {
     const consultation = await consultationService.create(req.body);
+    if (consultation?.doctorId) {
+      emitToDoctorRoom(consultation.doctorId, CONSULTATION_EVENTS.APPOINTMENT_BOOKED, {
+        appointmentId: consultation.appointmentId,
+        consultationId: consultation.id,
+        doctorId: consultation.doctorId,
+        patientId: consultation.patientId,
+        hospitalId: consultation.hospitalId ?? null,
+      });
+    }
     res.status(201).json({
       success: true,
       message: 'Consultation created successfully',
@@ -44,11 +53,14 @@ const getConsultationByAppointment = asyncHandler(async (req, res) => {
 
 const joinLobby = asyncHandler(async (req, res) => {
   const { appointmentId } = req.params;
-  const { patientId, doctorId } = req.body;
+  const { patientId, doctorId, hospitalId } = req.body;
 
   // Note: x-user-id from gateway (JWT) may be auth user id; appointment patientId is profile id.
   // They often differ, so we do not block join when they mismatch. Rely on auth + knowing appointment ids.
-  const { consultation, channelName } = await consultationService.joinLobby(appointmentId, patientId, doctorId);
+  let { consultation, channelName } = await consultationService.joinLobby(appointmentId, patientId, doctorId);
+  if (hospitalId && consultation?.id && consultation.hospitalId !== hospitalId) {
+    consultation = await consultationService.update(consultation.id, { hospitalId });
+  }
   
   if (doctorId) {
     emitToDoctorRoom(doctorId, CONSULTATION_EVENTS.PATIENT_JOINED_LOBBY, { appointmentId, consultationId: consultation?.id });
@@ -215,9 +227,10 @@ const markNoShow = asyncHandler(async (req, res) => {
 
 const saveHealthDetails = asyncHandler(async (req, res) => {
   const { appointmentId } = req.params;
-  const { patientId, doctorId, weight, height, bloodPressure, temperature, pulse, spo2, sugarLevel, consultationReason, allergies, criticalConditions } = req.body;
+  const { patientId, doctorId, hospitalId, weight, height, bloodPressure, temperature, pulse, spo2, sugarLevel, consultationReason, allergies, criticalConditions } = req.body;
 
   const { vitals } = await consultationService.ensureConsultationAndSaveHealthDetails(appointmentId, patientId, doctorId, {
+    hospitalId,
     weight,
     height,
     bloodPressure,
