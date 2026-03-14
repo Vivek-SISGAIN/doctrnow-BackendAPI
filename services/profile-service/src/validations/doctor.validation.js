@@ -176,6 +176,21 @@ const updateDoctorSchema = Joi.object({
   licenseType: Joi.string()
     .valid('FULL_LICENSE', 'TEMPORARY_LICENSE', 'SPECIALIST_LICENSE', 'CONSULTANT_LICENSE')
     .optional(),
+     schedule: Joi.object({
+  MONDAY:    dayScheduleSchema.optional(),
+  TUESDAY:   dayScheduleSchema.optional(),
+  WEDNESDAY: dayScheduleSchema.optional(),
+  THURSDAY:  dayScheduleSchema.optional(),
+  FRIDAY:    dayScheduleSchema.optional(),
+  SATURDAY:  dayScheduleSchema.optional(),
+  SUNDAY:    dayScheduleSchema.optional(),
+})
+  .min(1)
+  .required()
+  .messages({
+    'object.min': 'At least one day must be scheduled',
+    'any.required': 'Schedule is required',
+  }),
   licenseExpiry: Joi.date().min('now').optional(),
   yearsOfExperience: Joi.number().integer().min(0).max(70).optional(),
   medicalDegree: Joi.string().min(2).max(100).optional(),

@@ -4,11 +4,11 @@ import financeController from "../controllers/finance.controller.js";
 
 const router = Router();
 
-router.post("/", hospitalController.createHospital);
-router.get("/", hospitalController.getHospitals);
-router.get("/:id", hospitalController.getHospitalById);
-router.put("/:id", hospitalController.updateHospital);
-router.delete("/:id", hospitalController.deleteHospital);
+router.post("/hospital", hospitalController.createHospital);
+router.get("/hospital", hospitalController.getHospitals);
+router.get("/hospital/:id", hospitalController.getHospitalById);
+router.put("/hospital/:id", hospitalController.updateHospital);
+router.delete("/hospital/:id", hospitalController.deleteHospital);
 
 // Finance routes
 router.post("/finance", financeController.createFinance);
