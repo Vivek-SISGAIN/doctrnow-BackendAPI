@@ -29,7 +29,7 @@ export const config = {
     medicalRecords: process.env.MEDICAL_RECORDS_SERVICE_URL || 'http://localhost:3007',
     notification: process.env.NOTIFICATION_SERVICE_URL || 'http://localhost:3008',
     hospitalAdmin: process.env.HOSPITAL_ADMIN_SERVICE_URL || 'http://localhost:3009',
-    superAdmin: process.env.SUPER_ADMIN_SERVICE_URL || 'http://localhost:3010',
+    superAdmin: process.env.SUPER_ADMIN_SERVICE_URL || 'http://localhost:5001',
     audit: process.env.AUDIT_SERVICE_URL || 'http://localhost:3011',
   },
   rateLimit: {

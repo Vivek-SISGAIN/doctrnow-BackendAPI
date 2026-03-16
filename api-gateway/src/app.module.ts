@@ -23,6 +23,7 @@ import { DocumentController } from './controllers/document.controller';
 import { LabReportController } from './controllers/lab-report.controller';
 import { HospitalAdminController } from './controllers/hospital-admin.controller';
 import { AgoraController } from './controllers/agora.controller';
+import { SuperAdminController } from './controllers/super-admin.controller';
 
 import { CorrelationIdInterceptor } from './common/interceptors/correlation-id.interceptor';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
@@ -119,6 +120,7 @@ import configuration from './config/configuration';
     DocumentController,
     LabReportController,
     HospitalAdminController,
+    SuperAdminController,
     AgoraController,
   ],
   providers: [

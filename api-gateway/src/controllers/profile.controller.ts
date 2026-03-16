@@ -31,6 +31,8 @@ export class ProfileController {
 
   @All('*')
   async proxyRequest(@Req() req: Request, @Res() res: Response): Promise<void> {
+    console.log("working path")
+
     const correlationId = req.headers['x-correlation-id'] as string;
     const rawUrl = (req as any).originalUrl || req.url || '';
     const incomingPath = rawUrl.split('?')[0];

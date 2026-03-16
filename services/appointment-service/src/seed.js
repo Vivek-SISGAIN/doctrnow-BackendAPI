@@ -215,6 +215,7 @@ async function createAppointments() {
           doctorId: SAMPLE_DOCTOR_ID,
           slotId: slot.id,
           status,
+          hospitalId: "7a8b9c0d-1e2f-4a3b-8c9d-0e1f2a3b4c5d",
           paymentStatus: paymentStatuses[i] || 'PAID',
           consultationType: 'VIDEO',
           reason: reasons[i] || concerns[i] || 'General consultation',
