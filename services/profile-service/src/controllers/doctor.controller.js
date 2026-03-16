@@ -9,7 +9,7 @@ const getAllDoctors = asyncHandler(async (req, res) => {
   let specialtyName = specialty;
   if (specialtyId && !specialtyName) {
     const spec = await specialtyService.findById(specialtyId);
-    if (spec) specialtyName = spec.name;
+    if (spec) {specialtyName = spec.name};
   }
 
   const filters = {

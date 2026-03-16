@@ -201,7 +201,7 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
         path.includes('/consultation-notes') ||
         path.includes('/lab-reports') ||
         path.includes('/hospital') ||
-        path.include('/profiles')
+        path.includes('/profiles')
       ) {
         const authHeader = request?.headers?.authorization;
         console.log("Auth Header" , authHeader)
@@ -282,4 +282,3 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
     return user;
   }
 }
-

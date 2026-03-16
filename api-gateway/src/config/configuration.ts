@@ -50,7 +50,7 @@ export default () => ({
   MEDICAL_RECORDS_SERVICE_URL: process.env.MEDICAL_RECORDS_SERVICE_URL || 'http://localhost:3004',
   NOTIFICATION_SERVICE_URL: process.env.NOTIFICATION_SERVICE_URL || 'http://localhost:3008',
   HOSPITAL_ADMIN_SERVICE_URL: process.env.HOSPITAL_ADMIN_SERVICE_URL || 'http://localhost:3009',
-  SUPER_ADMIN_SERVICE_URL: process.env.SUPER_ADMIN_SERVICE_URL || 'http://localhost:3010',
+  SUPER_ADMIN_SERVICE_URL: process.env.SUPER_ADMIN_SERVICE_URL || 'http://localhost:5001',
   AUDIT_SERVICE_URL: process.env.AUDIT_SERVICE_URL || 'http://localhost:3011',
 
   // Circuit Breaker (disabled in dev so "Breaker is open" doesn't block when a service is down)

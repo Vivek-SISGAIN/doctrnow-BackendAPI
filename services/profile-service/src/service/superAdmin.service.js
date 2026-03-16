@@ -41,8 +41,10 @@ class SuperAdminService {
    * Find super admin by ID
    */
   findById(id) {
-    return prisma.superAdmin.findUnique({
-      where: { id }
+    return prisma.superAdmin.findFirst({
+      where: {
+        OR: [{ id }, { userId: id }]
+      }
     });
   }
 

@@ -12,6 +12,7 @@ const DEFAULT_TENANT_ID = '00000000-0000-0000-0000-000000000001';
 const DOCTOR_USER_ID = '11111111-1111-1111-1111-111111111111';
 const PATIENT_USER_ID = '22222222-2222-2222-2222-222222222222';
 const TEST_PATIENT_USER_ID = '33333333-3333-3333-3333-333333333333';
+const SUPER_ADMIN_USER_ID = '55555555-5555-5555-5555-555555555555';
 const HOSPITAL_ADMIN_USER_ID = '44444444-4444-4444-4444-444444444444';
 
 const SEED_PASSWORD = 'Password123!'; // Change in production
@@ -68,6 +69,22 @@ async function main() {
 
   console.log('  Hospital Admin:', hospitalAdmin.email, '(id:', hospitalAdmin.id, ')');
 
+  const superAdmin = await prisma.user.upsert({
+    where: { id: SUPER_ADMIN_USER_ID },
+    update: { passwordHash },
+    create: {
+      id: SUPER_ADMIN_USER_ID,
+      tenantId: DEFAULT_TENANT_ID,
+      email: 'superadmin@doctornow.com',
+      mobile: '+971501111111',
+      passwordHash,
+      role: UserRole.SUPER_ADMIN,
+      status: UserStatus.ACTIVE,
+      failedLoginAttempts: 0,
+    },
+  });
+
+  console.log('  Super Admin:', superAdmin.email, '(id:', superAdmin.id, ')');
   // Test patient (nitin.sisgain@gmail.com) – same password, same tenant for patient portal login
   const testPatient = await prisma.user.upsert({
     where: { id: TEST_PATIENT_USER_ID },

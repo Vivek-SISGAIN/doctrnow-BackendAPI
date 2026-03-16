@@ -5,7 +5,6 @@ class DoctorService {
    * Find doctor by unique fields
    */
 
-
   findByUniqueFields({ email, mobile, emiratesId, licenseNumber }) {
     return prisma.doctor.findFirst({
       where: {
@@ -19,11 +18,11 @@ class DoctorService {
     });
   }
 
- async findDocByHospital({ hospitalId }) {
-  return prisma.doctor.findMany({
-    where: { hospitalId }
-  });
-}
+  async findDocByHospital({ hospitalId }) {
+    return prisma.doctor.findMany({
+      where: { hospitalId }
+    });
+  }
 
   async createDoctor(data) {
     // 1️⃣ Check for uniqueness conflicts
@@ -35,14 +34,16 @@ class DoctorService {
     });
 
     if (existingDoctor) {
-      throw new Error('Doctor already exists with given email / mobile / emiratesId / licenseNumber');
+      throw new Error(
+        'Doctor already exists with given email / mobile / emiratesId / licenseNumber'
+      );
     }
 
     // 2️⃣ Create doctor
     return prisma.doctor.create({
       data: {
         userId: data.userId,
-        hospitalId : data.hospitalId,
+        hospitalId: data.hospitalId,
         fullName: data.fullName,
         email: data.email,
         mobile: data.mobile,
@@ -81,7 +82,6 @@ class DoctorService {
     });
   }
 
-  
   /**
    * Build where clause for filtering
    */
@@ -169,7 +169,6 @@ class DoctorService {
       maxFee: filters.maxFee,
       workingDay: filters.workingDay
     });
-
 
     return prisma.doctor.findMany({
       where,

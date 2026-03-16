@@ -12,7 +12,7 @@ const {
   getDoctorsByBulkIds,
   getDocByHospitalId
 } = require('../controllers/doctor.controller');
-const { updateDoctorSchema, createDoctorSchema } = require('../validations/doctor.validation');
+const { createDoctorSchema } = require('../validations/doctor.validation');
 const validate = require('../middleware/validation');
 
 /**
@@ -192,7 +192,7 @@ router.get('/:id', getDoctorById);
  *       404:
  *         description: Doctor not found
  */
-router.patch('/:id', validate(updateDoctorSchema), updateDoctor);
+router.patch('/:id', updateDoctor);
 
 /**
  * @swagger
