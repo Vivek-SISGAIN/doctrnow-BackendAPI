@@ -46,7 +46,7 @@ class DoctorService {
 
         try {
             const authResponse = await axios.post(
-                'http://localhost:8080/api/v1/auth/register',
+                `${process.env.API_BASE_URL}/auth/register`,
                 {
                     email: profilePayload.email,
                     password,
@@ -58,7 +58,7 @@ class DoctorService {
             createdUserId = authResponse.data.userId;
 
             const doctorResponse = await axios.post(
-                'http://localhost:8080/api/v1/profiles/doctors',
+                `${process.env.API_BASE_URL}/profiles/doctors`,
                 {
                     ...profilePayload,
                     schedule,
@@ -104,7 +104,7 @@ async updateStatus(doctorProfileId: string, status: 'ACTIVE' | 'INACTIVE', authH
 
     // Step 1: Fetch doctor profile to get linked userId
     const profileRes = await axios.get(
-        `http://localhost:8080/api/v1/profiles/doctors/${doctorProfileId}`,
+        `${process.env.API_BASE_URL}/profiles/doctors/${doctorProfileId}`,
         { headers: forwardHeaders }
     );
 
@@ -118,14 +118,14 @@ async updateStatus(doctorProfileId: string, status: 'ACTIVE' | 'INACTIVE', authH
 
     // Step 2: Update profile-service
     const profileUpdateRes = await axios.patch(
-        `http://localhost:8080/api/v1/profiles/doctors/${doctorProfileId}`,
+        `${process.env.API_BASE_URL}/profiles/doctors/${doctorProfileId}`,
         { status },
         { headers: forwardHeaders }
     );
 
     // Step 3: Update auth-service
     const authUpdateRes = await axios.patch(
-        `http://localhost:8080/api/v1/auth/users/${userId}/status`,
+        `${process.env.API_BASE_URL}/auth/users/${userId}/status`,
         { status },
         { headers: forwardHeaders }
     );

@@ -10,7 +10,8 @@ const {
   getAvailability,
   setAvailability,
   getDoctorsByBulkIds,
-  getDocByHospitalId
+  getDocByHospitalId,
+  assignDoctorToHospital
 } = require('../controllers/doctor.controller');
 const { createDoctorSchema } = require('../validations/doctor.validation');
 const validate = require('../middleware/validation');
@@ -249,5 +250,7 @@ router.post('/', validate(createDoctorSchema), createDoctor);
 router.post('/bulk', getDoctorsByBulkIds);
 
 router.get('/hospital/:hospitalId', getDocByHospitalId);
+
+router.patch('/:id/assign-hospital', assignDoctorToHospital);
 
 module.exports = router;
