@@ -9,7 +9,9 @@ const getAllDoctors = asyncHandler(async (req, res) => {
   let specialtyName = specialty;
   if (specialtyId && !specialtyName) {
     const spec = await specialtyService.findById(specialtyId);
-    if (spec) {specialtyName = spec.name};
+    if (spec) {
+      specialtyName = spec.name;
+    }
   }
 
   const filters = {
@@ -46,7 +48,7 @@ const getDoctorById = asyncHandler(async (req, res) => {
 
 const getDocByHospitalId = asyncHandler(async (req, res) => {
   const { hospitalId } = req.params;
-  const doctors = await doctorService.findDocByHospital({ hospitalId });;
+  const doctors = await doctorService.findDocByHospital({ hospitalId });
 
   res.status(200).json({
     success: true,
@@ -187,7 +189,7 @@ const createDoctor = asyncHandler(async (req, res) => {
 
     professionalBio,
 
-    schedule,   
+    schedule,
     hospitalId,
     videoConsultationFee,
     phoneConsultationFee,
@@ -226,7 +228,7 @@ const createDoctor = asyncHandler(async (req, res) => {
 
     professionalBio,
 
-    schedule,   
+    schedule,
 
     videoConsultationFee,
     phoneConsultationFee,
@@ -247,13 +249,13 @@ const getDoctorsByBulkIds = asyncHandler(async (req, res) => {
   const { ids } = req.body;
 
   if (!ids || !Array.isArray(ids) || ids.length === 0) {
-    throw ApiError.badRequest("ids must be a non-empty array");
+    throw ApiError.badRequest('ids must be a non-empty array');
   }
 
   const uniqueIds = [...new Set(ids)];
 
   if (uniqueIds.length > 100) {
-    throw ApiError.badRequest("Maximum 100 ids allowed per request");
+    throw ApiError.badRequest('Maximum 100 ids allowed per request');
   }
 
   const doctors = await doctorService.findByIdsOrUserIds(uniqueIds);
@@ -267,7 +269,29 @@ const getDoctorsByBulkIds = asyncHandler(async (req, res) => {
   res.status(200).json({
     success: true,
     data: doctorMap,
-    count: doctors.length,
+    count: doctors.length
+  });
+});
+
+const assignDoctorToHospital = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const { hospitalId } = req.body;
+
+  if (!hospitalId) {
+    throw ApiError.badRequest('hospitalId is required');
+  }
+
+  const doctor = await doctorService.findById(id);
+  if (!doctor) {
+    throw ApiError.notFound('Doctor not found');
+  }
+
+  const updatedDoctor = await doctorService.update(id, { hospitalId });
+
+  res.status(200).json({
+    success: true,
+    message: 'Doctor assigned to hospital successfully',
+    data: updatedDoctor
   });
 });
 
@@ -281,5 +305,6 @@ module.exports = {
   getAvailability,
   setAvailability,
   getDoctorsByBulkIds,
-  getDocByHospitalId
+  getDocByHospitalId,
+  assignDoctorToHospital
 };

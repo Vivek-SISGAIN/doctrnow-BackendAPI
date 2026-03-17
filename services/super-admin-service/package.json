@@ -5,7 +5,9 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "dev": "nodemon src/server.js"
+    "dev": "nodemon src/server.js",
+    "build": "rimraf dist && mkdir dist && copyfiles -u 1 src/**/* dist",
+    "start:prod": "node dist/server.js"
   },
   "keywords": [],
   "author": "",
@@ -26,7 +28,9 @@
     "swagger-ui-express": "^5.0.1"
   },
   "devDependencies": {
+    "copyfiles": "^2.4.1",
     "eslint": "^10.0.3",
-    "nodemon": "^3.1.14"
+    "nodemon": "^3.1.14",
+    "rimraf": "^6.1.3"
   }
 }

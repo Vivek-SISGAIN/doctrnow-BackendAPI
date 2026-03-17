@@ -23,7 +23,9 @@
     "prisma:format": "npx prisma format",
     "db:setup": "npm run prisma:generate && npm run prisma:migrate",
     "seed": "node src/seed.js",
-    "db:seed": "npm run seed"
+    "db:seed": "npm run seed",
+    "build": "rimraf dist && mkdir dist && copyfiles -u 1 src/**/* dist",
+    "start:prod": "node dist/server.js"
   },
   "keywords": [],
   "author": "",
@@ -51,9 +53,11 @@
     "swagger-ui-express": "^5.0.1"
   },
   "devDependencies": {
+    "copyfiles": "^2.4.1",
     "eslint": "^8.57.0",
     "eslint-config-prettier": "^9.1.0",
     "nodemon": "^3.1.14",
-    "prettier": "^3.2.5"
+    "prettier": "^3.2.5",
+    "rimraf": "^6.1.3"
   }
 }

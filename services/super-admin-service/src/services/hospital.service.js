@@ -33,7 +33,6 @@ class HospitalService {
         insuranceDocuments: data.insuranceDocuments || [],
         establishmentCard: data.establishmentCard,
         accreditationCertificates: data.accreditationCertificates || [],
-        tenantId: data.tenantId
       },
       include: {
         finance: true

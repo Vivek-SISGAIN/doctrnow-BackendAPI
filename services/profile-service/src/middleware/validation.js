@@ -8,7 +8,7 @@ const validate = (schema) => (req, res, next) => {
       field: detail.path.join('.'),
       message: detail.message
     }));
-
+    console.log(errors);
     return res.status(400).json({
       success: false,
       message: 'Validation error',
