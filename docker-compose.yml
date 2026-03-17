@@ -1,15 +1,16 @@
 version: '3.8'
 
 services:
-  # Infrastructure Services
+
+  # --- INFRASTRUCTURE --------------------------------------------
+
   postgres-auth:
     image: postgres:14-alpine
+    restart: always
     environment:
       POSTGRES_DB: auth_db
       POSTGRES_USER: doctornow
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
-    ports:
-      - "5432:5432"
     volumes:
       - postgres-auth-data:/var/lib/postgresql/data
     healthcheck:
@@ -20,19 +21,67 @@ services:
 
   postgres-profile:
     image: postgres:14-alpine
+    restart: always
     environment:
       POSTGRES_DB: profile_db
       POSTGRES_USER: doctornow
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
-    ports:
-      - "5433:5432"
     volumes:
       - postgres-profile-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U doctornow"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  postgres-appointments:
+    image: postgres:14-alpine
+    restart: always
+    environment:
+      POSTGRES_DB: appointments_db
+      POSTGRES_USER: doctornow
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+    volumes:
+      - postgres-appointments-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U doctornow"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  postgres-payments:
+    image: postgres:14-alpine
+    restart: always
+    environment:
+      POSTGRES_DB: payments_db
+      POSTGRES_USER: doctornow
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+    volumes:
+      - postgres-payments-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U doctornow"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  postgres-audit:
+    image: postgres:14-alpine
+    restart: always
+    environment:
+      POSTGRES_DB: audit_db
+      POSTGRES_USER: doctornow
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+    volumes:
+      - postgres-audit-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U doctornow"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   mongodb:
     image: mongo:6.0
-    ports:
-      - "27017:27017"
+    restart: always
     environment:
       MONGO_INITDB_ROOT_USERNAME: doctornow
       MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD:-changeme}
@@ -41,37 +90,158 @@ services:
 
   redis:
     image: redis:7-alpine
-    ports:
-      - "6379:6379"
+    restart: always
+    command: redis-server --requirepass ${REDIS_PASSWORD:-changeme}
     volumes:
       - redis-data:/data
 
   zookeeper:
     image: confluentinc/cp-zookeeper:7.5.0
+    restart: always
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
       ZOOKEEPER_TICK_TIME: 2000
-    ports:
-      - "2181:2181"
 
   kafka:
     image: confluentinc/cp-kafka:7.5.0
+    restart: always
     depends_on:
       - zookeeper
-    ports:
-      - "9092:9092"
     environment:
       KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
     volumes:
       - kafka-data:/var/lib/kafka/data
 
+  # --- APPLICATION SERVICES --------------------------------------
+
+  api-gateway:
+    build: ./api-gateway
+    restart: always
+    ports:
+      - "3000:3000"
+    env_file: ./api-gateway/.env
+    depends_on:
+      - auth-service
+      - profile-service
+      - appointment-service
+      - consultation-service
+      - redis
+
+  auth-service:
+    build: ./services/auth-service
+    restart: always
+    env_file: ./services/auth-service/.env
+    depends_on:
+      postgres-auth:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      kafka:
+        condition: service_started
+
+  profile-service:
+    build: ./services/profile-service
+    restart: always
+    env_file: ./services/profile-service/.env
+    depends_on:
+      postgres-profile:
+        condition: service_healthy
+
+  appointment-service:
+    build: ./services/appointment-service
+    restart: always
+    env_file: ./services/appointment-service/.env
+    depends_on:
+      postgres-appointments:
+        condition: service_healthy
+      kafka:
+        condition: service_started
+
+  consultation-service:
+    build: ./services/consultation-service
+    restart: always
+    env_file: ./services/consultation-service/.env
+    depends_on:
+      mongodb:
+        condition: service_started
+      kafka:
+        condition: service_started
+
+  hospital-admin-service:
+    build: ./services/hospital-admin-service
+    restart: always
+    env_file: ./services/hospital-admin-service/.env
+    depends_on:
+      postgres-profile:
+        condition: service_healthy
+
+  medical-records-service:
+    build: ./services/medical-records-service
+    restart: always
+    env_file: ./services/medical-records-service/.env
+    depends_on:
+      mongodb:
+        condition: service_started
+
+  super-admin-service:
+    build: ./services/super-admin-service
+    restart: always
+    env_file: ./services/super-admin-service/.env
+    depends_on:
+      postgres-audit:
+        condition: service_healthy
+      redis:
+        condition: service_started
+
+  audit-compliance-service:
+    build: ./services/audit-compliance-service
+    restart: always
+    env_file: ./services/audit-compliance-service/.env
+    depends_on:
+      postgres-audit:
+        condition: service_healthy
+      kafka:
+        condition: service_started
+
+  notification-service:
+    build: ./services/notification-service
+    restart: always
+    env_file: ./services/notification-service/.env
+    depends_on:
+      mongodb:
+        condition: service_started
+      kafka:
+        condition: service_started
+
+  payment-insurance-service:
+    build: ./services/payment-insurance-service
+    restart: always
+    env_file: ./services/payment-insurance-service/.env
+    depends_on:
+      postgres-payments:
+        condition: service_healthy
+
+  video-chat-service:
+    build: ./services/video-chat-service
+    restart: always
+    env_file: ./services/video-chat-service/.env
+    depends_on:
+      mongodb:
+        condition: service_started
+      redis:
+        condition: service_started
+
+# --- VOLUMES -----------------------------------------------------
+
 volumes:
   postgres-auth-data:
   postgres-profile-data:
+  postgres-appointments-data:
+  postgres-payments-data:
+  postgres-audit-data:
   mongodb-data:
   redis-data:
   kafka-data:
-

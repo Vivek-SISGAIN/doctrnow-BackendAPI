@@ -1,0 +1,326 @@
+version: '3.8'
+
+services:
+
+  # --- INFRASTRUCTURE --------------------------------------------
+
+  postgres-auth:
+    image: postgres:14-alpine
+    restart: always
+    environment:
+      POSTGRES_DB: auth_db
+      POSTGRES_USER: doctornow
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres-auth-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U doctornow"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  postgres-profile:
+    image: postgres:14-alpine
+    restart: always
+    environment:
+      POSTGRES_DB: profile_db
+      POSTGRES_USER: doctornow
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres-profile-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U doctornow"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  postgres-appointments:
+    image: postgres:14-alpine
+    restart: always
+    environment:
+      POSTGRES_DB: appointments_db
+      POSTGRES_USER: doctornow
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres-appointments-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U doctornow"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  postgres-payments:
+    image: postgres:14-alpine
+    restart: always
+    environment:
+      POSTGRES_DB: payments_db
+      POSTGRES_USER: doctornow
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres-payments-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U doctornow"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  postgres-audit:
+    image: postgres:14-alpine
+    restart: always
+    environment:
+      POSTGRES_DB: audit_db
+      POSTGRES_USER: doctornow
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres-audit-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U doctornow"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  mongodb:
+    image: mongo:6.0
+    restart: always
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: doctornow
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD}
+    volumes:
+      - mongodb-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    restart: always
+    command: redis-server --requirepass ${REDIS_PASSWORD}
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    restart: always
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    restart: always
+    depends_on:
+      - zookeeper
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+    volumes:
+      - kafka-data:/var/lib/kafka/data
+
+  # --- APPLICATION SERVICES --------------------------------------
+
+  auth-service:
+    image: 506094870510.dkr.ecr.ap-south-1.amazonaws.com/doctornow/auth-service:latest
+    restart: always
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      DATABASE_URL: postgresql://doctornow:${POSTGRES_PASSWORD}@postgres-auth:5432/auth_db
+      KAFKA_BROKERS: kafka:9092
+      KAFKA_CLIENT_ID: auth-service
+      KAFKA_GROUP_ID: auth-service-group
+      JWT_ISSUER: doctornow-platform
+      JWT_AUDIENCE: doctornow-api
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      TRUST_PROXY: "true"
+      CORS_ORIGINS: http://13.232.250.65
+    depends_on:
+      postgres-auth:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_started
+
+  profile-service:
+    image: 506094870510.dkr.ecr.ap-south-1.amazonaws.com/doctornow/profile-service:latest
+    restart: always
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://doctornow:${POSTGRES_PASSWORD}@postgres-profile:5432/profile_db
+    depends_on:
+      postgres-profile:
+        condition: service_healthy
+
+  appointment-service:
+    image: 506094870510.dkr.ecr.ap-south-1.amazonaws.com/doctornow/appointment-service:latest
+    restart: always
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://doctornow:${POSTGRES_PASSWORD}@postgres-appointments:5432/appointments_db
+      KAFKA_BROKERS: kafka:9092
+    depends_on:
+      postgres-appointments:
+        condition: service_healthy
+      kafka:
+        condition: service_started
+
+  consultation-service:
+    image: 506094870510.dkr.ecr.ap-south-1.amazonaws.com/doctornow/consultation-service:latest
+    restart: always
+    environment:
+      NODE_ENV: production
+      MONGO_URL: mongodb://doctornow:${MONGO_PASSWORD}@mongodb:27017
+      KAFKA_BROKERS: kafka:9092
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      kafka:
+        condition: service_started
+
+  hospital-admin-service:
+    image: 506094870510.dkr.ecr.ap-south-1.amazonaws.com/doctornow/hospital-admin-service:latest
+    restart: always
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://doctornow:${POSTGRES_PASSWORD}@postgres-profile:5432/profile_db
+    depends_on:
+      postgres-profile:
+        condition: service_healthy
+
+  medical-records-service:
+    image: 506094870510.dkr.ecr.ap-south-1.amazonaws.com/doctornow/medical-records-service:latest
+    restart: always
+    environment:
+      NODE_ENV: production
+      MONGO_URL: mongodb://doctornow:${MONGO_PASSWORD}@mongodb:27017
+    depends_on:
+      mongodb:
+        condition: service_healthy
+
+  super-admin-service:
+    image: 506094870510.dkr.ecr.ap-south-1.amazonaws.com/doctornow/super-admin-service:latest
+    restart: always
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://doctornow:${POSTGRES_PASSWORD}@postgres-audit:5432/audit_db
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+    depends_on:
+      postgres-audit:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  audit-compliance-service:
+    image: 506094870510.dkr.ecr.ap-south-1.amazonaws.com/doctornow/audit-compliance-service:latest
+    restart: always
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://doctornow:${POSTGRES_PASSWORD}@postgres-audit:5432/audit_db
+      KAFKA_BROKERS: kafka:9092
+    depends_on:
+      postgres-audit:
+        condition: service_healthy
+      kafka:
+        condition: service_started
+
+  notification-service:
+    image: 506094870510.dkr.ecr.ap-south-1.amazonaws.com/doctornow/notification-service:latest
+    restart: always
+    environment:
+      NODE_ENV: production
+      MONGO_URL: mongodb://doctornow:${MONGO_PASSWORD}@mongodb:27017
+      KAFKA_BROKERS: kafka:9092
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      kafka:
+        condition: service_started
+
+  payment-insurance-service:
+    image: 506094870510.dkr.ecr.ap-south-1.amazonaws.com/doctornow/payment-insurance-service:latest
+    restart: always
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://doctornow:${POSTGRES_PASSWORD}@postgres-payments:5432/payments_db
+    depends_on:
+      postgres-payments:
+        condition: service_healthy
+
+  video-chat-service:
+    image: 506094870510.dkr.ecr.ap-south-1.amazonaws.com/doctornow/video-chat-service:latest
+    restart: always
+    environment:
+      NODE_ENV: production
+      MONGO_URL: mongodb://doctornow:${MONGO_PASSWORD}@mongodb:27017
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      AGORA_APP_ID: ${AGORA_APP_ID}
+      AGORA_APP_CERTIFICATE: ${AGORA_APP_CERTIFICATE}
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  api-gateway:
+    image: 506094870510.dkr.ecr.ap-south-1.amazonaws.com/doctornow/api-gateway:latest
+    restart: always
+    ports:
+      - "3000:8080"
+    environment:
+      NODE_ENV: production
+      PORT: 8080
+      JWT_JWKS_URI: http://auth-service:3001/auth/v1/.well-known/jwks.json
+      JWT_ISSUER: doctornow-platform
+      JWT_AUDIENCE: doctornow-api
+      JWT_ALGORITHM: RS256
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      CIRCUIT_BREAKER_ENABLED: "true"
+      AUTH_SERVICE_URL: http://auth-service:3001
+      PROFILE_SERVICE_URL: http://profile-service:5000
+      APPOINTMENT_SERVICE_URL: http://appointment-service:3003
+      CONSULTATION_SERVICE_URL: http://consultation-service:3005
+      VIDEO_CHAT_SERVICE_URL: http://video-chat-service:3005
+      PAYMENT_SERVICE_URL: http://payment-insurance-service:3006
+      MEDICAL_RECORDS_SERVICE_URL: http://medical-records-service:3004
+      NOTIFICATION_SERVICE_URL: http://notification-service:3008
+      HOSPITAL_ADMIN_SERVICE_URL: http://hospital-admin-service:3009
+      SUPER_ADMIN_SERVICE_URL: http://super-admin-service:3010
+      AUDIT_SERVICE_URL: http://audit-compliance-service:3011
+      CORS_ORIGINS: http://13.232.250.65
+      AGORA_APP_ID: ${AGORA_APP_ID}
+      AGORA_APP_CERTIFICATE: ${AGORA_APP_CERTIFICATE}
+    depends_on:
+      - auth-service
+      - profile-service
+      - appointment-service
+      - redis
+
+# --- VOLUMES -----------------------------------------------------
+
+volumes:
+  postgres-auth-data:
+  postgres-profile-data:
+  postgres-appointments-data:
+  postgres-payments-data:
+  postgres-audit-data:
+  mongodb-data:
+  redis-data:
+  kafka-data:
