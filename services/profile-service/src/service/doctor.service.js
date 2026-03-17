@@ -133,19 +133,25 @@ class DoctorService {
    */
   async findByIdOrUserId(id) {
     const byId = await prisma.doctor.findUnique({ where: { id } });
-    if (byId) return byId;
+    if (byId) {
+      return byId;
+    }
     return prisma.doctor.findUnique({ where: { userId: id } });
   }
 
   async getAvailability(id) {
     const doctor = await this.findByIdOrUserId(id);
-    if (!doctor) return null;
+    if (!doctor) {
+      return null;
+    }
     return { status: doctor.availabilityStatus };
   }
 
   async setAvailability(id, status) {
     const doctor = await this.findByIdOrUserId(id);
-    if (!doctor) return null;
+    if (!doctor) {
+      return null;
+    }
     return prisma.doctor.update({
       where: { id: doctor.id },
       data: { availabilityStatus: status }
