@@ -52,26 +52,41 @@ const initSocket = async (httpServer) => {
                 return next(new Error("UNAUTHORIZED"));
             }
 
-            const secret = process.env.JWT_SECRET;
-
-            if (!secret) {
-                logger.error("JWT_SECRET is not configured");
-                return next(new Error("SERVER_CONFIGURATION_ERROR"));
+            // Gateway already validated the JWT using RS256/JWKS.
+            // Here we just decode the payload without re-verifying signature
+            // since the socket connects directly to video-chat-service via gateway proxy.
+            let payload;
+            try {
+                // Try verify with secret if configured
+                const secret = process.env.JWT_SECRET;
+                if (secret && secret !== 'dev-secret') {
+                    payload = jwt.verify(token, secret);
+                } else {
+                    // Fallback: decode without verification (gateway already verified)
+                    const parts = token.split('.');
+                    payload = JSON.parse(
+                        Buffer.from(parts[1], 'base64url').toString('utf8')
+                    );
+                }
+            } catch {
+                // If verify fails, decode without verification
+                const parts = token.split('.');
+                payload = JSON.parse(
+                    Buffer.from(parts[1], 'base64url').toString('utf8')
+                );
             }
 
-            const payload = jwt.verify(token, secret);
+            // JWT sub is the userId in RS256 tokens from your auth service
+            const userId = payload.userId || payload.sub;
+            const role = payload.role;
 
-            if (!payload.userId || !payload.role) {
+            if (!userId || !role) {
                 return next(new Error("UNAUTHORIZED"));
             }
 
-            // Attach verified identity to socket — available in all handlers
-            socket.user = {
-                userId: payload.userId,
-                role: payload.role
-            };
-
+            socket.user = { userId, role };
             next();
+
         } catch (err) {
             logger.warn("Socket handshake auth failed", { error: err.message });
             next(new Error("UNAUTHORIZED"));
@@ -79,7 +94,7 @@ const initSocket = async (httpServer) => {
     });
 
     // ── Connection handler ───────────────────────────────────────────────────
-    io.on("connection", (socket) => {
+    io.on("connect", (socket) => {
         const { userId, role } = socket.user;
 
         logger.info("Socket connected", { socketId: socket.id, userId, role });

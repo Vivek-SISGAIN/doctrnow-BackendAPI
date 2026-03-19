@@ -36,15 +36,54 @@ async function bootstrap(): Promise<void> {
   const consultationUrl =
     configService.get<string>('CONSULTATION_SERVICE_URL') ?? 'http://localhost:3005';
 
-  app.use(
-    '/consultation-events',
-    createProxyMiddleware({
-      target: consultationUrl,
-      changeOrigin: true,
-      ws: true,
-      logLevel: 'warn',
-    }),
-  );
+  const consultationProxy = createProxyMiddleware({
+    target: consultationUrl,
+    changeOrigin: true,
+    ws: true,
+    logLevel: 'warn',
+  });
+
+  app.use('/consultation-events', consultationProxy);
+
+  // ─── WebSocket proxy for video-chat-service (Socket.IO) ───────────────────
+  const videoChatUrl =
+    configService.get<string>('VIDEO_CHAT_SERVICE_URL') ?? 'http://localhost:3007';
+
+  // /socket.io — default Socket.IO path (used internally)
+  const socketIoProxy = createProxyMiddleware({
+    target: videoChatUrl,
+    changeOrigin: true,
+    ws: true,
+    logLevel: 'warn',
+  });
+
+  app.use('/socket.io', socketIoProxy);
+
+  // /chat-events — the path the patient/doctor frontend socket managers use
+  const chatEventsProxy = createProxyMiddleware({
+    target: videoChatUrl,
+    changeOrigin: true,
+    ws: true,
+    logLevel: 'warn',
+    pathRewrite: { '^/chat-events': '/socket.io' }, // rewrite to actual socket.io path
+  });
+
+  app.use('/chat-events', chatEventsProxy);
+
+  // ─── Manual WebSocket Upgrade Handling ─────────────────────────────────────
+  // In NestJS + http-proxy-middleware v3, we must manually bind the 'upgrade' event
+  // to the server to ensure WebSocket connections are correctly proxied.
+  const httpServer = app.getHttpServer();
+  httpServer.on('upgrade', (req, socket, head) => {
+    const url = req.url || '';
+    if (url.startsWith('/chat-events')) {
+      chatEventsProxy.upgrade(req, socket, head);
+    } else if (url.startsWith('/socket.io')) {
+      socketIoProxy.upgrade(req, socket, head);
+    } else if (url.startsWith('/consultation-events')) {
+      consultationProxy.upgrade(req, socket, head);
+    }
+  });
 
   // ─── Trust proxy ─────────────────────────────────────────────────────────────
   // Required for correct IP detection behind Nginx / load balancers.

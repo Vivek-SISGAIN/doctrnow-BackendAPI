@@ -12,19 +12,16 @@ import { HttpProxyService } from '../http-proxy/http-proxy.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
 /**
- * Consultation Controller
- * Routes: /api/v1/consultations/*
- * Target: consultation-service
- * Emits WebSocket events for real-time notifications (patient joined, consent, call ended)
+ * Chat Controller
+ * Routes: /api/v1/chat/*
+ * Target: video-chat-service
  */
-@ApiTags('consultations')
+@ApiTags('chat')
 @ApiBearerAuth('JWT-auth')
-@Controller('consultations')
+@Controller('chat')
 @UseGuards(JwtAuthGuard)
-export class ConsultationController {
-  constructor(
-    private readonly httpProxyService: HttpProxyService,
-  ) { }
+export class ChatController {
+  constructor(private readonly httpProxyService: HttpProxyService) { }
 
   @All()
   async proxyBase(@Req() req: Request, @Res() res: Response): Promise<void> {
@@ -35,12 +32,13 @@ export class ConsultationController {
   async proxyRequest(@Req() req: Request, @Res() res: Response): Promise<void> {
     const correlationId = req.headers['x-correlation-id'] as string;
     const rawUrl = (req as any).originalUrl || req.url || '';
-    const pathSuffix = rawUrl.split('?')[0].replace(/^\/api\/v1\/consultations/, '') || '';
-    const path = `/api/consultations${pathSuffix}`.replace('//', '/') || '/api/consultations';
+    // Before — fragile, breaks if prefix changes
+    const strippedPath = rawUrl.split('?')[0].replace(/^\/api\/v\d+\/chat/, '');
+    const path = `/api/chat${strippedPath}`.replace('//', '/');
     const user = (req as any).user;
 
     try {
-      const response = await this.httpProxyService.proxyRequest('CONSULTATION', {
+      const response = await this.httpProxyService.proxyRequest('VIDEO_CHAT', {
         method: req.method,
         url: path,
         headers: this.extractHeaders(req),
@@ -61,6 +59,7 @@ export class ConsultationController {
         downstream?.error?.message ??
         error.message ??
         'Internal server error';
+
       res.status(status).json({
         error: {
           code: downstream?.error?.code ?? 'PROXY_ERROR',
@@ -74,7 +73,7 @@ export class ConsultationController {
 
   private extractHeaders(req: Request): Record<string, string> {
     const headers: Record<string, string> = {};
-    const allowedHeaders = ['content-type', 'accept', 'x-tenant-id', 'authorization', 'x-user-id', 'x-user-role'];
+    const allowedHeaders = ['content-type', 'accept', 'x-tenant-id', 'authorization'];
 
     for (const [key, value] of Object.entries(req.headers)) {
       if (allowedHeaders.includes(key.toLowerCase())) {
@@ -86,4 +85,3 @@ export class ConsultationController {
     return headers;
   }
 }
-

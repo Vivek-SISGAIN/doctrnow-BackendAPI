@@ -147,8 +147,15 @@ const getSessionInfo = async (req, res, next) => {
  */
 const createSession = async (req, res, next) => {
     try {
-        const { consultationId, conversationId } = req.body;
-        const session = await sessionService.createSessionForConsultation(consultationId, conversationId);
+        const { consultationId, conversationId, patientId, doctorId, patientName, patientAvatar } = req.body;
+        const session = await sessionService.createSessionForConsultation(
+            consultationId,
+            conversationId,
+            patientId,
+            doctorId,
+            patientName,
+            patientAvatar
+        );
         res.status(200).json({ success: true, data: session });
     } catch (err) {
         next(err);
@@ -316,6 +323,21 @@ const pinConversation = (req, res, next) =>
 const unpinConversation = (req, res, next) =>
     handleStateAction(conversationStateService.unpinConversation, "unpinned", req, res, next);
 
+/**
+ * POST /api/chat/session/update-participant
+ *
+ * Internal endpoint for consultation-service to update participant userId.
+ */
+const updateParticipant = async (req, res, next) => {
+    try {
+        const { consultationId, oldUserId, newUserId } = req.body;
+        await conversationService.updateParticipantUserId(consultationId, oldUserId, newUserId);
+        res.status(200).json({ success: true });
+    } catch (err) {
+        next(err);
+    }
+};
+
 // ─── Exports ──────────────────────────────────────────────────────────────────
 
 module.exports = {
@@ -333,5 +355,6 @@ module.exports = {
     archiveConversation,
     unarchiveConversation,
     pinConversation,
-    unpinConversation
+    unpinConversation,
+    updateParticipant
 };

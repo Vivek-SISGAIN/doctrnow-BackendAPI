@@ -1,3 +1,4 @@
+const mongoose = require("mongoose");
 const Conversation = require("../models/conversation.model");
 const ApiError = require("../utils/ApiError");
 const logger = require("../utils/logger");
@@ -14,18 +15,19 @@ const DUPLICATE_KEY_ERROR_CODE = 11000;
  * @param {string} consultationId
  * @param {string} doctorId
  * @param {string} patientId
+ * @param {string} [patientName]
+ * @param {string} [patientAvatar]
  * @returns {Promise<Object>} conversation document (plain object)
  */
-const createConversationForConsultation = async (consultationId, doctorId, patientId) => {
+const createConversationForConsultation = async (consultationId, doctorId, patientId, patientName, patientAvatar) => {
     // Input validation
     if (!consultationId) {
         throw ApiError.badRequest("consultationId is required");
     }
-    if (!doctorId) {
-        throw ApiError.badRequest("doctorId is required");
-    }
-    if (!patientId) {
-        throw ApiError.badRequest("patientId is required");
+    if (!patientId || !doctorId) {
+        throw ApiError.badRequest(
+            `Cannot create conversation without both patientId and doctorId. Got: patientId=${patientId}, doctorId=${doctorId}`
+        );
     }
 
     // 1. Check if conversation already exists
@@ -48,6 +50,8 @@ const createConversationForConsultation = async (consultationId, doctorId, patie
                 { userId: doctorId, role: "DOCTOR" },
                 { userId: patientId, role: "PATIENT" }
             ],
+            patientName,
+            patientAvatar,
             chatState: "SCHEDULED",
             // Part 1: Set lastMessageAt = createdAt so new conversations sort
             // correctly in the inbox cursor pagination (lastMessageAt DESC).
@@ -108,6 +112,10 @@ const getConversationByConsultationId = async (consultationId) => {
  * @returns {Promise<Object>} conversation document with projected fields
  */
 const validateParticipantAccess = async (conversationId, userId) => {
+    if (!mongoose.Types.ObjectId.isValid(conversationId)) {
+        throw ApiError.badRequest(`Invalid conversationId: ${conversationId}`);
+    }
+
     const conversation = await Conversation.findOne({
         _id: conversationId,
         participants: {
@@ -132,8 +140,46 @@ const validateParticipantAccess = async (conversationId, userId) => {
     return conversation;
 };
 
+/**
+ * Updates a participant's userId within a conversation.
+ * Idempotent: skips update if oldUserId and newUserId are the same.
+ *
+ * @param {string} consultationId
+ * @param {string} oldUserId
+ * @param {string} newUserId
+ */
+const updateParticipantUserId = async (consultationId, oldUserId, newUserId) => {
+    if (!oldUserId || !newUserId || oldUserId === newUserId) {
+        logger.info("Skipping participant userId update (idempotent or missing IDs)", {
+            consultationId,
+            oldUserId,
+            newUserId
+        });
+        return;
+    }
+
+    const result = await Conversation.updateOne(
+        { consultationId, "participants.userId": oldUserId },
+        { $set: { "participants.$.userId": newUserId } }
+    );
+
+    if (result.modifiedCount > 0) {
+        logger.info("Updated participant userId in conversation", {
+            consultationId,
+            oldUserId,
+            newUserId
+        });
+    } else {
+        logger.warn("No participant updated (oldUserId not found in conversation?)", {
+            consultationId,
+            oldUserId
+        });
+    }
+};
+
 module.exports = {
     createConversationForConsultation,
     getConversationByConsultationId,
-    validateParticipantAccess
+    validateParticipantAccess,
+    updateParticipantUserId
 };

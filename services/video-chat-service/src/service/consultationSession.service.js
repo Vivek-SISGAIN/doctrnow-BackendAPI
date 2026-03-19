@@ -22,18 +22,35 @@ const TERMINAL_STATUSES = ["COMPLETED", "PATIENT_NO_SHOW", "DOCTOR_NO_SHOW", "CA
  * Idempotent: exactly one session per consultationId.
  *
  * @param {string} consultationId
- * @param {string} conversationId
+ * @param {string} conversationId (optional)
+ * @param {string} patientId      (required if conversationId is missing)
+ * @param {string} doctorId       (required if conversationId is missing)
+ * @param {string} [patientName]
+ * @param {string} [patientAvatar]
  * @returns {Promise<Object>} session document (plain object)
  */
-const createSessionForConsultation = async (consultationId, conversationId) => {
+const createSessionForConsultation = async (consultationId, conversationId, patientId, doctorId, patientName, patientAvatar) => {
     if (!consultationId) {
         throw ApiError.badRequest("consultationId is required");
     }
-    if (!conversationId) {
-        throw ApiError.badRequest("conversationId is required");
+
+    // 1. If conversationId is missing, ensure one exists for this consultation
+    let actualConversationId = conversationId;
+    if (!actualConversationId) {
+        if (!patientId || !doctorId) {
+            throw ApiError.badRequest("conversationId or (patientId AND doctorId) is required");
+        }
+        const conversation = await conversationService.createConversationForConsultation(
+            consultationId,
+            doctorId,
+            patientId,
+            patientName,
+            patientAvatar
+        );
+        actualConversationId = conversation._id;
     }
 
-    // 1. Check if session already exists
+    // 2. Check if session already exists
     const existing = await ConsultationChatSession.findOne({ consultationId }).lean();
 
     if (existing) {
@@ -44,11 +61,11 @@ const createSessionForConsultation = async (consultationId, conversationId) => {
         return existing;
     }
 
-    // 2. Attempt to create new session
+    // 3. Attempt to create new session
     try {
         const session = await ConsultationChatSession.create({
             consultationId,
-            conversationId,
+            conversationId: actualConversationId,
             status: "NOT_STARTED"
         });
 

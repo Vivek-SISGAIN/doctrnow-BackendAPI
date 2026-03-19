@@ -107,6 +107,16 @@ const conversationSchema = new mongoose.Schema(
         lastSystemEvent: {
             type: String,
             default: null
+        },
+
+        // ── Part 2: Added for Inbox enrichment ──────────────────────────────
+        patientName: {
+            type: String,
+            default: null
+        },
+        patientAvatar: {
+            type: String,
+            default: null
         }
     },
     { timestamps: true }

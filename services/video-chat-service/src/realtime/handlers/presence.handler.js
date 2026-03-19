@@ -28,11 +28,11 @@ const registerPresenceHandler = (io, socket) => {
     // ── join_conversation ────────────────────────────────────────────────────
     socket.on("join_conversation", async ({ conversationId, consultationId } = {}) => {
         try {
-            // 1. Input validation
-            if (!conversationId || !consultationId) {
+            // 1. Input validation — consultationId is optional
+            if (!conversationId) {
                 socket.emit("error", {
                     code: "INVALID_INPUT",
-                    message: "conversationId and consultationId are required"
+                    message: "conversationId is required"
                 });
                 return;
             }
@@ -46,15 +46,25 @@ const registerPresenceHandler = (io, socket) => {
                 return;
             }
 
-            // 3. Session visibility gate — only allow join when history is viewable
-            const session = await consultationSessionService.getSessionByConsultationId(consultationId);
-
-            if (JOIN_BLOCKED_STATUSES.includes(session.status)) {
-                socket.emit("error", {
-                    code: "CHAT_NOT_ACCESSIBLE",
-                    message: `Chat is not accessible in session status: ${session.status}`
-                });
-                return;
+            // 3. Session visibility gate (only if consultationId provided)
+            if (consultationId) {
+                try {
+                    const session = await consultationSessionService.getSessionByConsultationId(consultationId);
+                    if (JOIN_BLOCKED_STATUSES.includes(session.status)) {
+                        socket.emit("error", {
+                            code: "CHAT_NOT_ACCESSIBLE",
+                            message: `Chat is not accessible in session status: ${session.status}`
+                        });
+                        return;
+                    }
+                } catch (sessionErr) {
+                    // If session not found, log warning but don't block the join
+                    // The session may not exist yet if createSession hasn't been called
+                    logger.warn("Session lookup failed during join_conversation — proceeding without session gate", {
+                        consultationId,
+                        error: sessionErr.message
+                    });
+                }
             }
 
             // 4. Participant access validation
@@ -63,6 +73,14 @@ const registerPresenceHandler = (io, socket) => {
             // 5. Join room + track on socket
             socket.join(conversationId);
             socket.joinedConversations.add(conversationId);
+
+            // Debug log — confirms room was joined successfully
+            console.log("JOIN CONVERSATION RECEIVED", {
+                conversationId,
+                consultationId: consultationId ?? "not provided",
+                socketId: socket.id,
+                userId: socket.user?.userId
+            });
 
             // 6. Update Redis presence
             await addPresence(conversationId, userId);
@@ -78,7 +96,12 @@ const registerPresenceHandler = (io, socket) => {
             const onlineUserIds = await getPresence(conversationId);
             socket.emit("presence_snapshot", { conversationId, onlineUserIds });
 
-            logger.info("Socket joined conversation", { userId, role, conversationId });
+            logger.info("Socket joined conversation room", {
+                socketId: socket.id,
+                userId: socket.user?.userId,
+                conversationId,
+                consultationId: consultationId ?? "not provided"
+            });
         } catch (err) {
             logger.error("join_conversation error", { userId, error: err.message });
             socket.emit("error", {

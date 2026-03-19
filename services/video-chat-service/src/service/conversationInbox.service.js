@@ -277,6 +277,8 @@ const getConversationInbox = async ({
                 sessionStatus:   "$chatState",
                 lastMessageAt:   1,
                 participants:    1,
+                patientName:     1,
+                patientAvatar:   1,
 
                 unreadCount: {
                     $ifNull: [

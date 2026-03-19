@@ -45,7 +45,7 @@ export default () => ({
   PROFILE_SERVICE_URL: process.env.PROFILE_SERVICE_URL || 'http://localhost:5000',
   APPOINTMENT_SERVICE_URL: process.env.APPOINTMENT_SERVICE_URL || 'http://localhost:3003',
   CONSULTATION_SERVICE_URL: process.env.CONSULTATION_SERVICE_URL || 'http://localhost:3005',
-  VIDEO_CHAT_SERVICE_URL: process.env.VIDEO_CHAT_SERVICE_URL || 'http://localhost:3005',
+  VIDEO_CHAT_SERVICE_URL: process.env.VIDEO_CHAT_SERVICE_URL || 'http://localhost:3007',
   PAYMENT_SERVICE_URL: process.env.PAYMENT_SERVICE_URL || 'http://localhost:3006',
   MEDICAL_RECORDS_SERVICE_URL: process.env.MEDICAL_RECORDS_SERVICE_URL || 'http://localhost:3004',
   NOTIFICATION_SERVICE_URL: process.env.NOTIFICATION_SERVICE_URL || 'http://localhost:3008',

@@ -15,6 +15,23 @@ app.get("/health", (req, res) => {
     res.json({ status: "ok", service: "video-chat-service" });
 });
 
+// ─── Gateway identity middleware ────────────────────────────────────────────
+// The API Gateway validates the JWT and forwards user identity as headers.
+// This middleware reconstructs req.user so controllers can access it.
+app.use((req, res, next) => {
+    const userId = req.headers['x-user-id'];
+    const role   = req.headers['x-user-role'];
+    if (userId && role) {
+        req.user = {
+            userId,
+            role,
+            tenantId: req.headers['x-tenant-id'] || null
+        };
+        console.log(`[VideoChatService] Incoming request: ${req.method} ${req.url} | User: ${JSON.stringify(req.user)}`);
+    }
+    next();
+});
+
 // ─── Routes ──────────────────────────────────────────────────────────────────
 app.use("/api/chat", chatRoutes);
 

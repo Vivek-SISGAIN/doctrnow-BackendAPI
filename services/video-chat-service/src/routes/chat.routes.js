@@ -15,8 +15,11 @@ const {
     archiveConversation,
     unarchiveConversation,
     pinConversation,
-    unpinConversation
+    unpinConversation,
+    updateParticipant
 } = require("../controllers/chat.controller");
+
+const { validateInternalSecret } = require("../middleware/internal-auth");
 
 // ─── Messages ─────────────────────────────────────────────────────────────────
 router.post("/messages", sendMessage);
@@ -45,5 +48,6 @@ router.get("/session-info", getSessionInfo);
 router.post("/session/create", createSession);
 router.post("/session/start",  startSession);
 router.post("/session/end",    endSession);
+router.post("/session/update-participant", validateInternalSecret, updateParticipant);
 
 module.exports = router;
