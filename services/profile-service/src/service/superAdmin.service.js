@@ -97,6 +97,57 @@ class SuperAdminService {
       where: { id }
     });
   }
+
+  /**
+   * Create super admin — registers user in auth-service, then creates profile
+   */
+  async createSuperAdmin({ fullName, email, phoneNumber, gender, nationality, emiratesId, profileImage, password }) {
+    const axios = require('axios');
+
+    let createdUserId = null;
+
+    try {
+      // 1. Create user account in auth-service
+      const authResponse = await axios.post(
+        'http://localhost:8080/api/v1/auth/register',
+        {
+          email,
+          password,
+          role: 'SUPER_ADMIN',
+          tenantId : '00000000-0000-0000-0000-000000000001'
+        }
+      );
+
+      createdUserId = authResponse.data.userId;
+
+      // 2. Create super admin profile
+      const superAdmin = await prisma.superAdmin.create({
+        data: {
+          userId: createdUserId,
+          fullName,
+          email,
+          phoneNumber,
+          gender,
+          nationality,
+          emiratesId,
+          profileImage: profileImage || ''
+        }
+      });
+
+      return superAdmin;
+
+    } catch (error) {
+      // 3. Rollback: delete user from auth-service if profile creation failed
+      if (createdUserId) {
+        try {
+          await axios.delete(`http://localhost:3001/auth/v1/users/${createdUserId}`);
+        } catch (cleanupError) {
+          console.error('Failed to rollback user creation:', cleanupError.message);
+        }
+      }
+      throw error;
+    }
+  }
 }
 
 module.exports = new SuperAdminService();
