@@ -4,9 +4,10 @@ const {
   getSuperAdminById,
   updateSuperAdmin,
   deleteSuperAdmin,
-  createSuperAdmin
+  createSuperAdmin,
+  getSuperAdmins
 } = require('../controllers/superAdmin.controller');
-const { updateSuperAdminSchema, createSuperAdminSchema } = require('../validations/superAdmin.validation');
+const { updateSuperAdminSchema } = require('../validations/superAdmin.validation');
 const validate = require('../middleware/validation');
 
 /**
@@ -111,5 +112,7 @@ router.patch('/:id', validate(updateSuperAdminSchema), updateSuperAdmin);
 router.delete('/:id', deleteSuperAdmin);
 
 router.post('/', createSuperAdmin);
+
+router.get('/', getSuperAdmins);
 
 module.exports = router;

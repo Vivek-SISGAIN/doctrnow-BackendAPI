@@ -171,9 +171,10 @@ export class AuthController {
   @ApiResponse({ status: 200, description: 'User fetched successfully' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   async getCurrentUser(@Req() req: Request) {
-    const user = req.user as { sub?: string; userId?: string };
+    const decodedUser = decodeJwtPayloadUnsafe(req.headers.authorization?.split(' ')[1] || '');
+    
 
-    const userId = user?.sub || user?.userId;
+    const userId = decodedUser?.sub || decodedUser?.userId;
 
     if (!userId) {
       throw new UnauthorizedException('Invalid authentication token');

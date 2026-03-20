@@ -6,7 +6,8 @@ const {
   getHospitalAdminsByHospital,
   updateHospitalAdmin,
   deleteHospitalAdmin,
-  createHospitalAdmin
+  createHospitalAdmin,
+  getAllHospitalAdmins
 } = require('../controllers/hospitalAdmin.controller');
 const {  updateHospitalAdminSchema, createHospitalAdminSchema } = require('../validations/hospitalAdmin.validation');
 const validate = require('../middleware/validation');
@@ -148,5 +149,8 @@ router.patch('/:id', validate(updateHospitalAdminSchema), updateHospitalAdmin);
 router.delete('/:id', deleteHospitalAdmin);
 
 router.post('/',  createHospitalAdmin);
+
+router.get('/', getAllHospitalAdmins);
+
 
 module.exports = router;

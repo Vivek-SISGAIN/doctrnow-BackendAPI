@@ -108,6 +108,40 @@ class HospitalAdminService {
       }
     });
   }
+
+  /**
+   * Find all hospital admins with filters & pagination
+   */
+  async findAll(filters = {}, pagination = { page: 1, limit: 20 }) {
+    const { page = 1, limit = 20 } = pagination;
+
+    const skip = (page - 1) * limit;
+
+    // Build where clause using existing helper
+    const where = this.buildWhereClause(filters);
+
+    const [admins, total] = await Promise.all([
+      prisma.hospitalAdmin.findMany({
+        where,
+        skip,
+        take: parseInt(limit, 10),
+        orderBy: {
+          createdAt: 'desc'
+        }
+      }),
+      prisma.hospitalAdmin.count({ where })
+    ]);
+
+    return {
+      data: admins,
+      pagination: {
+        page: parseInt(page, 10),
+        limit: parseInt(limit, 10),
+        total,
+        totalPages: Math.ceil(total / limit)
+      }
+    };
+  }
   /**
    * Check for conflicts when updating unique fields
    */

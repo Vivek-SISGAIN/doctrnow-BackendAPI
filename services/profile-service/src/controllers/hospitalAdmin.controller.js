@@ -61,8 +61,33 @@ const createHospitalAdmin = asyncHandler(async (req, res) => {
 
   res.status(201).json({
     success: true,
-    message: "Hospital admin created successfully",
+    message: 'Hospital admin created successfully',
     data: hospitalAdmin
+  });
+});
+
+const getAllHospitalAdmins = asyncHandler(async (req, res) => {
+  const { search, gender, page = 1, limit = 20 } = req.query;
+
+  // Build filters
+  const filters = {
+    search,
+    gender
+  };
+
+  // Pagination setup
+  const pagination = {
+    page: parseInt(page, 10),
+    limit: parseInt(limit, 10)
+  };
+
+  // Call service
+  const result = await hospitalAdminService.findAll(filters, pagination);
+
+  res.status(200).json({
+    success: true,
+    data: result.data,
+    pagination: result.pagination
   });
 });
 
@@ -106,6 +131,6 @@ module.exports = {
   getHospitalAdminsByHospital,
   updateHospitalAdmin,
   deleteHospitalAdmin,
-  createHospitalAdmin
-
+  createHospitalAdmin,
+  getAllHospitalAdmins
 };
