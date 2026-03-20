@@ -19,7 +19,15 @@ class PatientService {
   /**
    * Build where clause for filtering
    */
-  buildWhereClause({ search, gender, bloodGroup, maritalStatus, riskCategory, patientType, followUpStatus }) {
+  buildWhereClause({
+    search,
+    gender,
+    bloodGroup,
+    maritalStatus,
+    riskCategory,
+    patientType,
+    followUpStatus
+  }) {
     const where = {};
 
     if (search) {
@@ -28,8 +36,8 @@ class PatientService {
         { lastName: { contains: search, mode: 'insensitive' } },
         { email: { contains: search, mode: 'insensitive' } },
         { mobileNumber: { contains: search } },
-         { mrn: { contains: search, mode: 'insensitive' } },
-         { insuranceId: { contains: search, mode: 'insensitive' } }
+        { mrn: { contains: search, mode: 'insensitive' } },
+        { insuranceId: { contains: search, mode: 'insensitive' } }
       ];
     }
 
@@ -81,18 +89,12 @@ class PatientService {
       case 'risk-high':
         // Sort by risk category: HIGH, MEDIUM, LOW
         // Note: Enum sorting is alphabetical, so we use desc to get HIGH first
-        orderBy = [
-          { riskCategory: 'desc' },
-          { createdAt: 'desc' }
-        ];
+        orderBy = [{ riskCategory: 'desc' }, { createdAt: 'desc' }];
         break;
       case 'risk-low':
         // Sort by risk category: LOW, MEDIUM, HIGH
         // Note: Enum sorting is alphabetical, so we use asc to get LOW first
-        orderBy = [
-          { riskCategory: 'asc' },
-          { createdAt: 'desc' }
-        ];
+        orderBy = [{ riskCategory: 'asc' }, { createdAt: 'desc' }];
         break;
       default:
         orderBy = { createdAt: 'desc' };
@@ -194,7 +196,7 @@ class PatientService {
         id: true,
         mobileNumber: true,
         email: true,
-        emiratesId: true,
+        emiratesId: true
       }
     });
   }
@@ -207,7 +209,7 @@ class PatientService {
       where: { id },
       data: {
         ...data,
-        dateOfBirth : new Date(data.dateOfBirth),
+        dateOfBirth: new Date(data.dateOfBirth)
       }
     });
   }

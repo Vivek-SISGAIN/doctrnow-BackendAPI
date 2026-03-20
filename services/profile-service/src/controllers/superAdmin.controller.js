@@ -17,6 +17,25 @@ const getSuperAdminById = asyncHandler(async (req, res) => {
   });
 });
 
+const getSuperAdmins = asyncHandler(async (req, res) => {
+  const { search, gender, page = 1, limit = 20, sortBy = 'recent' } = req.query;
+
+  const filters = { search, gender };
+
+  const pagination = {
+    page: parseInt(page, 10),
+    limit: parseInt(limit, 10)
+  };
+
+  const result = await superAdminService.findAllAdmins(filters, pagination, sortBy);
+
+  res.status(200).json({
+    success: true,
+    data: result.admins,
+    pagination: result.pagination
+  });
+});
+
 const updateSuperAdmin = asyncHandler(async (req, res) => {
   const { id } = req.params;
   const { email, phoneNumber, emiratesId } = req.body;
@@ -78,8 +97,57 @@ const deleteSuperAdmin = asyncHandler(async (req, res) => {
   });
 });
 
+const createSuperAdmin = asyncHandler(async (req, res) => {
+  const { fullName, email, phoneNumber, gender, nationality, emiratesId, profileImage, password } =
+    req.body;
+
+  // Basic required field checks
+  if (!fullName || !email || !phoneNumber || !gender || !nationality || !emiratesId || !password) {
+    throw ApiError.badRequest(
+      'All fields (fullName, email, phoneNumber, gender, nationality, emiratesId, password) are required'
+    );
+  }
+
+  if (password.length < 6) {
+    throw ApiError.badRequest('Password must be at least 6 characters');
+  }
+
+  // Check uniqueness conflicts
+  const existing = await superAdminService.findByUniqueFields({ email, phoneNumber, emiratesId });
+  if (existing) {
+    if (existing.email === email) {
+      throw ApiError.conflict('Email already in use');
+    }
+    if (existing.phoneNumber === phoneNumber) {
+      throw ApiError.conflict('Phone number already in use');
+    }
+    if (existing.emiratesId === emiratesId) {
+      throw ApiError.conflict('Emirates ID already in use');
+    }
+  }
+
+  const superAdmin = await superAdminService.createSuperAdmin({
+    fullName,
+    email,
+    phoneNumber,
+    gender,
+    nationality,
+    emiratesId,
+    profileImage,
+    password
+  });
+
+  res.status(201).json({
+    success: true,
+    message: 'Super admin created successfully',
+    data: superAdmin
+  });
+});
+
 module.exports = {
   getSuperAdminById,
   updateSuperAdmin,
-  deleteSuperAdmin
+  deleteSuperAdmin,
+  createSuperAdmin,
+  getSuperAdmins
 };

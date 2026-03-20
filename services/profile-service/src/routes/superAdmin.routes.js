@@ -3,7 +3,9 @@ const router = express.Router();
 const {
   getSuperAdminById,
   updateSuperAdmin,
-  deleteSuperAdmin
+  deleteSuperAdmin,
+  createSuperAdmin,
+  getSuperAdmins
 } = require('../controllers/superAdmin.controller');
 const { updateSuperAdminSchema } = require('../validations/superAdmin.validation');
 const validate = require('../middleware/validation');
@@ -109,5 +111,8 @@ router.patch('/:id', validate(updateSuperAdminSchema), updateSuperAdmin);
  */
 router.delete('/:id', deleteSuperAdmin);
 
+router.post('/', createSuperAdmin);
+
+router.get('/', getSuperAdmins);
 
 module.exports = router;

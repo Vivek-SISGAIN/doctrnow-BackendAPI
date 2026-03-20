@@ -92,7 +92,7 @@ export class AuthService {
         email: dto.email,
         mobile: dto.mobile,
         passwordHash,
-        role: dto.role,
+        role: dto.role, 
         tenantId: dto.tenantId,
         status: UserStatus.ACTIVE,
       },
