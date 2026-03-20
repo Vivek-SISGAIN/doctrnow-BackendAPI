@@ -122,7 +122,8 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
       path.includes('/consultations'),
       path.includes('/lab-reports'),
       path.includes('/hospital'),
-      path.includes('/profiles')
+      path.includes('/profiles'),
+      path.includes('/super-admins'),
     ];
     if (doctorPortalPaths.some(Boolean)) {
       const authHeader = request?.headers?.authorization;
@@ -201,7 +202,7 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
         path.includes('/consultation-notes') ||
         path.includes('/lab-reports') ||
         path.includes('/hospital') ||
-        path.includes('/profiles')
+        path.includes('/profiles') || path.includes('/super-admins')
       ) {
         const authHeader = request?.headers?.authorization;
         console.log("Auth Header" , authHeader)

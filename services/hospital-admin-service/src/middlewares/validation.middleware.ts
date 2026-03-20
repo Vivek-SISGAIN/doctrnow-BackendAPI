@@ -13,7 +13,7 @@ const validate =
                     field: detail.path.join('.'),
                     message: detail.message
                 }));
-
+                console.log(errors)
                 res.status(400).json({
                     success: false,
                     message: 'Validation error',
