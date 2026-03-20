@@ -4,7 +4,20 @@ const ApiError = require('../utils/ApiError');
 const asyncHandler = require('../utils/asyncHandler');
 
 const getAllDoctors = asyncHandler(async (req, res) => {
-  const { specialty, specialtyId, search, gender, minExperience, maxFee, workingDay } = req.query;
+  const {
+    specialty,
+    specialtyId,
+    search,
+    gender,
+    minExperience,
+    maxFee,
+    workingDay,
+    status,
+    availabilityStatus,
+    page = 1,
+    limit = 20,
+    sortBy = 'experience'
+  } = req.query;
 
   let specialtyName = specialty;
   if (specialtyId && !specialtyName) {
@@ -20,14 +33,22 @@ const getAllDoctors = asyncHandler(async (req, res) => {
     gender,
     minExperience,
     maxFee,
-    workingDay
+    workingDay,
+    status,
+    availabilityStatus
   };
 
-  const doctors = await doctorService.findAllWithFilters(filters);
+  const pagination = {
+    page: parseInt(page, 10),
+    limit: parseInt(limit, 10)
+  };
+
+  const result = await doctorService.findAllWithFilters(filters, pagination, sortBy);
 
   res.status(200).json({
     success: true,
-    data: doctors
+    data: result.doctors,
+    pagination: result.pagination
   });
 });
 
@@ -48,11 +69,42 @@ const getDoctorById = asyncHandler(async (req, res) => {
 
 const getDocByHospitalId = asyncHandler(async (req, res) => {
   const { hospitalId } = req.params;
-  const doctors = await doctorService.findDocByHospital({ hospitalId });
+  const {
+    search,
+    gender,
+    specialization,
+    minExperience,
+    maxFee,
+    workingDay,
+    status,
+    availabilityStatus,
+    page = 1,
+    limit = 20,
+    sortBy = 'name'
+  } = req.query;
+
+  const filters = {
+    search,
+    gender,
+    specialization,
+    minExperience,
+    maxFee,
+    workingDay,
+    status,
+    availabilityStatus
+  };
+
+  const pagination = {
+    page: parseInt(page, 10),
+    limit: parseInt(limit, 10)
+  };
+
+  const result = await doctorService.findDocByHospital({ hospitalId }, filters, pagination, sortBy);
 
   res.status(200).json({
     success: true,
-    data: doctors
+    data: result.doctors,
+    pagination: result.pagination
   });
 });
 

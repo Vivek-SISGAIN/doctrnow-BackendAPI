@@ -1,6 +1,6 @@
-const prisma = require('../prisma/prisma');
-const slotService = require('./slot.service');
-const ApiError = require('../utils/ApiError');
+const prisma = require("../prisma/prisma");
+const slotService = require("./slot.service");
+const ApiError = require("../utils/ApiError");
 
 class AppointmentService {
   /**
@@ -16,15 +16,15 @@ class AppointmentService {
       prisma.appointment.findMany({
         where,
         include: {
-          slot: true
+          slot: true,
         },
         skip,
         take: parseInt(limit, 10),
         orderBy: {
-          createdAt: 'desc'
-        }
+          createdAt: "desc",
+        },
       }),
-      prisma.appointment.count({ where })
+      prisma.appointment.count({ where }),
     ]);
 
     return {
@@ -33,15 +33,23 @@ class AppointmentService {
         page: parseInt(page, 10),
         limit: parseInt(limit, 10),
         total,
-        totalPages: Math.ceil(total / limit)
-      }
+        totalPages: Math.ceil(total / limit),
+      },
     };
   }
 
   /**
    * Build where clause for filtering
    */
-  buildWhereClause({ patientId, doctorId, status, paymentStatus, consultationType, startDate, endDate }) {
+  buildWhereClause({
+    patientId,
+    doctorId,
+    status,
+    paymentStatus,
+    consultationType,
+    startDate,
+    endDate,
+  }) {
     const where = {};
 
     if (patientId) {
@@ -66,7 +74,7 @@ class AppointmentService {
 
     if (startDate || endDate) {
       where.slot = {
-        startTime: {}
+        startTime: {},
       };
       if (startDate) {
         where.slot.startTime.gte = new Date(startDate);
@@ -86,8 +94,8 @@ class AppointmentService {
     return prisma.appointment.findUnique({
       where: { id },
       include: {
-        slot: true
-      }
+        slot: true,
+      },
     });
   }
 
@@ -98,27 +106,27 @@ class AppointmentService {
     // Check if slot exists and is available
     const slot = await slotService.findById(data.slotId);
     if (!slot) {
-      throw ApiError.notFound('Slot not found');
+      throw ApiError.notFound("Slot not found");
     }
 
-    if (slot.status !== 'AVAILABLE') {
-      throw ApiError.conflict('Slot is not available');
+    if (slot.status !== "AVAILABLE") {
+      throw ApiError.conflict("Slot is not available");
     }
 
     // Check if slot is locked by someone else
     if (slot.slotLock && slot.slotLock.expiresAt > new Date()) {
       if (slot.slotLock.lockedBy !== data.patientId) {
-        throw ApiError.conflict('Slot is currently locked by another user');
+        throw ApiError.conflict("Slot is currently locked by another user");
       }
     }
 
     // Check if slot already has an appointment
     const existingAppointment = await prisma.appointment.findUnique({
-      where: { slotId: data.slotId }
+      where: { slotId: data.slotId },
     });
 
     if (existingAppointment) {
-      throw ApiError.conflict('Slot is already booked');
+      throw ApiError.conflict("Slot is already booked");
     }
 
     // Create appointment and update slot status in a transaction
@@ -129,22 +137,22 @@ class AppointmentService {
           doctorId: data.doctorId,
           slotId: data.slotId,
           hospitalId: data.hospitalId,
-          status: data.status || 'PENDING',
-          paymentStatus: data.paymentStatus || 'PENDING',
-          consultationType: data.consultationType || 'VIDEO',
+          status: data.status || "PENDING",
+          paymentStatus: data.paymentStatus || "PENDING",
+          consultationType: data.consultationType || "VIDEO",
           reason: data.reason,
           notes: data.notes,
-          familyMemberId: data.familyMemberId
+          familyMemberId: data.familyMemberId,
         },
         include: {
-          slot: true
-        }
+          slot: true,
+        },
       });
 
       // Update slot status to BOOKED
       await tx.slot.update({
         where: { id: data.slotId },
-        data: { status: 'BOOKED' }
+        data: { status: "BOOKED" },
       });
 
       // Remove slot lock if exists
@@ -162,7 +170,7 @@ class AppointmentService {
   async update(id, data) {
     const appointment = await this.findById(id);
     if (!appointment) {
-      throw new Error('Appointment not found');
+      throw new Error("Appointment not found");
     }
 
     return prisma.appointment.update({
@@ -170,13 +178,15 @@ class AppointmentService {
       data: {
         ...(data.status && { status: data.status }),
         ...(data.paymentStatus && { paymentStatus: data.paymentStatus }),
-        ...(data.consultationType && { consultationType: data.consultationType }),
+        ...(data.consultationType && {
+          consultationType: data.consultationType,
+        }),
         ...(data.reason !== undefined && { reason: data.reason }),
-        ...(data.notes !== undefined && { notes: data.notes })
+        ...(data.notes !== undefined && { notes: data.notes }),
       },
       include: {
-        slot: true
-      }
+        slot: true,
+      },
     });
   }
 
@@ -186,15 +196,15 @@ class AppointmentService {
   async cancel(id, reason) {
     const appointment = await this.findById(id);
     if (!appointment) {
-      throw new Error('Appointment not found');
+      throw new Error("Appointment not found");
     }
 
-    if (appointment.status === 'CANCELLED') {
-      throw new Error('Appointment is already cancelled');
+    if (appointment.status === "CANCELLED") {
+      throw new Error("Appointment is already cancelled");
     }
 
-    if (appointment.status === 'COMPLETED') {
-      throw new Error('Cannot cancel a completed appointment');
+    if (appointment.status === "COMPLETED") {
+      throw new Error("Cannot cancel a completed appointment");
     }
 
     return prisma.$transaction(async (tx) => {
@@ -202,18 +212,20 @@ class AppointmentService {
       const updatedAppointment = await tx.appointment.update({
         where: { id },
         data: {
-          status: 'CANCELLED',
-          notes: reason ? `${appointment.notes || ''}\nCancellation reason: ${reason}`.trim() : appointment.notes
+          status: "CANCELLED",
+          notes: reason
+            ? `${appointment.notes || ""}\nCancellation reason: ${reason}`.trim()
+            : appointment.notes,
         },
         include: {
-          slot: true
-        }
+          slot: true,
+        },
       });
 
       // Update slot status back to AVAILABLE
       await tx.slot.update({
         where: { id: appointment.slotId },
-        data: { status: 'AVAILABLE' }
+        data: { status: "AVAILABLE" },
       });
 
       return updatedAppointment;
@@ -226,25 +238,25 @@ class AppointmentService {
   async reschedule(appointmentId, newSlotId) {
     const appointment = await this.findById(appointmentId);
     if (!appointment) {
-      throw new Error('Appointment not found');
+      throw new Error("Appointment not found");
     }
 
-    if (appointment.status === 'COMPLETED') {
-      throw new Error('Cannot reschedule a completed appointment');
+    if (appointment.status === "COMPLETED") {
+      throw new Error("Cannot reschedule a completed appointment");
     }
 
-    if (appointment.status === 'CANCELLED') {
-      throw new Error('Cannot reschedule a cancelled appointment');
+    if (appointment.status === "CANCELLED") {
+      throw new Error("Cannot reschedule a cancelled appointment");
     }
 
     // Check new slot availability
     const newSlot = await slotService.findById(newSlotId);
     if (!newSlot) {
-      throw new Error('New slot not found');
+      throw new Error("New slot not found");
     }
 
-    if (newSlot.status !== 'AVAILABLE') {
-      throw new Error('New slot is not available');
+    if (newSlot.status !== "AVAILABLE") {
+      throw new Error("New slot is not available");
     }
 
     return prisma.$transaction(async (tx) => {
@@ -252,14 +264,14 @@ class AppointmentService {
       await tx.appointment.update({
         where: { id: appointmentId },
         data: {
-          status: 'CANCELLED',
-          notes: `${appointment.notes || ''}\nRescheduled to new slot`.trim()
-        }
+          status: "CANCELLED",
+          notes: `${appointment.notes || ""}\nRescheduled to new slot`.trim(),
+        },
       });
 
       await tx.slot.update({
         where: { id: appointment.slotId },
-        data: { status: 'AVAILABLE' }
+        data: { status: "AVAILABLE" },
       });
 
       // Create new appointment
@@ -269,22 +281,23 @@ class AppointmentService {
           doctorId: appointment.doctorId,
           hospitalId: appointment.hospitalId,
           slotId: newSlotId,
-          status: appointment.paymentStatus === 'PAID' ? 'CONFIRMED' : 'PENDING',
+          status:
+            appointment.paymentStatus === "PAID" ? "CONFIRMED" : "PENDING",
           paymentStatus: appointment.paymentStatus,
           consultationType: appointment.consultationType,
           reason: appointment.reason,
           familyMemberId: appointment.familyMemberId,
-          notes: `Rescheduled from appointment ${appointmentId}`
+          notes: `Rescheduled from appointment ${appointmentId}`,
         },
         include: {
-          slot: true
-        }
+          slot: true,
+        },
       });
 
       // Update new slot status
       await tx.slot.update({
         where: { id: newSlotId },
-        data: { status: 'BOOKED' }
+        data: { status: "BOOKED" },
       });
 
       return newAppointment;
@@ -297,25 +310,25 @@ class AppointmentService {
   async confirm(id) {
     const appointment = await this.findById(id);
     if (!appointment) {
-      throw new Error('Appointment not found');
+      throw new Error("Appointment not found");
     }
 
-    if (appointment.status === 'CONFIRMED') {
+    if (appointment.status === "CONFIRMED") {
       return appointment;
     }
 
-    if (appointment.status === 'CANCELLED') {
-      throw new Error('Cannot confirm a cancelled appointment');
+    if (appointment.status === "CANCELLED") {
+      throw new Error("Cannot confirm a cancelled appointment");
     }
 
     return prisma.appointment.update({
       where: { id },
       data: {
-        status: 'CONFIRMED'
+        status: "CONFIRMED",
       },
       include: {
-        slot: true
-      }
+        slot: true,
+      },
     });
   }
 
@@ -325,25 +338,25 @@ class AppointmentService {
   async complete(id) {
     const appointment = await this.findById(id);
     if (!appointment) {
-      throw new Error('Appointment not found');
+      throw new Error("Appointment not found");
     }
 
-    if (appointment.status === 'COMPLETED') {
+    if (appointment.status === "COMPLETED") {
       return appointment;
     }
 
-    if (appointment.status === 'CANCELLED') {
-      throw new Error('Cannot complete a cancelled appointment');
+    if (appointment.status === "CANCELLED") {
+      throw new Error("Cannot complete a cancelled appointment");
     }
 
     return prisma.appointment.update({
       where: { id },
       data: {
-        status: 'COMPLETED'
+        status: "COMPLETED",
       },
       include: {
-        slot: true
-      }
+        slot: true,
+      },
     });
   }
 
@@ -356,22 +369,22 @@ class AppointmentService {
   async markMissedAsNoShow(doctorId) {
     const now = new Date();
     const where = {
-      status: { in: ['CONFIRMED', 'PENDING'] },
+      status: { in: ["CONFIRMED", "PENDING"] },
       slot: {
-        endTime: { lt: now }
-      }
+        endTime: { lt: now },
+      },
     };
     if (doctorId) where.doctorId = doctorId;
 
     const missed = await prisma.appointment.findMany({
       where,
-      select: { id: true }
+      select: { id: true },
     });
 
     for (const apt of missed) {
       await prisma.appointment.update({
         where: { id: apt.id },
-        data: { status: 'NO_SHOW' }
+        data: { status: "NO_SHOW" },
       });
     }
 
@@ -384,22 +397,70 @@ class AppointmentService {
   async markNoShow(id) {
     const appointment = await this.findById(id);
     if (!appointment) {
-      throw new Error('Appointment not found');
+      throw new Error("Appointment not found");
     }
 
-    if (appointment.status === 'COMPLETED') {
-      throw new Error('Cannot mark a completed appointment as no-show');
+    if (appointment.status === "COMPLETED") {
+      throw new Error("Cannot mark a completed appointment as no-show");
     }
 
     return prisma.appointment.update({
       where: { id },
       data: {
-        status: 'NO_SHOW'
+        status: "NO_SHOW",
       },
       include: {
-        slot: true
-      }
+        slot: true,
+      },
     });
+  }
+  async getHospitalPatients(hospitalId, pagination = { page: 1, limit: 20 }) {
+    const { page = 1, limit = 20 } = pagination;
+    const skip = (page - 1) * limit;
+
+    console.log(hospitalId, "Service Hospital ID");
+
+    // 1. Get unique patient IDs from appointments for this hospital
+    // We use distinct to get unique patients who have visited this hospital
+    const [appointments, groups] = await Promise.all([
+      prisma.appointment.findMany({
+        where: { hospitalId },
+        distinct: ["patientId"],
+        select: {
+          patientId: true,
+          createdAt: true,
+        },
+        orderBy: {
+          createdAt: "desc",
+        },
+        skip,
+        take: parseInt(limit, 10),
+      }),
+      // For total count of unique patients
+      prisma.appointment.groupBy({
+        by: ["patientId"],
+        where: { hospitalId },
+      }),
+    ]);
+
+    const patients = appointments.map((apt) => ({
+      id: apt.patientId,
+      createdAt: apt.createdAt,
+    }));
+
+    const total = groups.length;
+
+    console.log("Patients Found (IDs only)------", patients.length);
+
+    return {
+      patients,
+      pagination: {
+        page: parseInt(page, 10),
+        limit: parseInt(limit, 10),
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
   }
 }
 
