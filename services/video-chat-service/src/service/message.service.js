@@ -10,6 +10,7 @@ const { buildPreview } = require("../utils/previewBuilder");
 const { checkRateLimit } = require("../utils/rateLimiter");
 const ApiError = require("../utils/ApiError");
 const logger = require("../utils/logger");
+const { getIO } = require("../realtime/socket");
 
 // MongoDB duplicate key error code
 const DUPLICATE_KEY_ERROR_CODE = 11000;
@@ -227,8 +228,9 @@ const sendMessage = async (input) => {
     }
 
     // ── 4. Atomic patient post-consultation limit ───────────────────────
+    let updatedSessionAfterLimit = null;
     if (requiresLimitCheck) {
-        await incrementPatientPostMessageCount(consultationId);
+        updatedSessionAfterLimit = await incrementPatientPostMessageCount(consultationId);
     }
 
     // ── 5. Persist message ──────────────────────────────────────────────
@@ -294,7 +296,35 @@ const sendMessage = async (input) => {
 
     const messageObj = message.toObject();
 
-    // ── 7. Publish unread increments to all OTHER participants ───────────
+    // ── 7a. Emit session_updated so patient's remaining count updates in real time ───
+    // Only relevant when patient just sent a post-consultation message.
+    if (updatedSessionAfterLimit) {
+        try {
+            const io = getIO();
+            const remaining = Math.max(
+                updatedSessionAfterLimit.postMessageLimit - updatedSessionAfterLimit.patientPostMessageCount,
+                0
+            );
+            io.to(conversationId.toString()).emit("session_updated", {
+                conversationId: conversationId.toString(),
+                consultationId: updatedSessionAfterLimit.consultationId,
+                sessionStatus: updatedSessionAfterLimit.status,
+                // Shared room event: keep doctor able to send even when the
+                // patient's post-consultation quota reaches zero.
+                chatEnabled: true,
+                messagingLimited: true,
+                remainingPatientMessages: remaining
+            });
+        } catch (emitErr) {
+            // Non-blocking — socket failure must not break message send
+            logger.warn("Failed to emit session_updated after patient message", {
+                conversationId,
+                error: emitErr.message
+            });
+        }
+    }
+
+    // ── 7b. Publish unread increments to all OTHER participants ─────────────
     // Fire-and-forget — uses the full conversation doc gained from access check
     try {
         const otherParticipants = (conversation.participants || []).filter(

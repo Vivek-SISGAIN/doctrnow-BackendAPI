@@ -54,12 +54,12 @@ import configuration from './config/configuration';
           transport:
             configService.get<string>('NODE_ENV') === 'development'
               ? {
-                  target: 'pino-pretty',
-                  options: {
-                    colorize: true,
-                    singleLine: true,
-                  },
-                }
+                target: 'pino-pretty',
+                options: {
+                  colorize: true,
+                  singleLine: true,
+                },
+              }
               : undefined,
           serializers: {
             req: (req: any) => ({
@@ -89,8 +89,22 @@ import configuration from './config/configuration';
       useFactory: (configService: ConfigService) => ({
         throttlers: [
           {
-            ttl: configService.get<number>('RATE_LIMIT_TTL', 900000), // 15 minutes
-            limit: configService.get<number>('RATE_LIMIT_MAX', 100),
+            // General API — generous limit for normal usage
+            name: 'default',
+            ttl: configService.get<number>('RATE_LIMIT_TTL', 60000),
+            limit: configService.get<number>('RATE_LIMIT_MAX', 300),
+          },
+          {
+            // Auth endpoints — strict limit to prevent brute force
+            name: 'auth',
+            ttl: configService.get<number>('RATE_LIMIT_AUTH_TTL', 900000),
+            limit: configService.get<number>('RATE_LIMIT_AUTH_MAX', 20),
+          },
+          {
+            // Short burst limit — prevents accidental request storms
+            name: 'burst',
+            ttl: 1000,    // 1 second window
+            limit: 30,    // max 30 requests per second per IP
           },
         ],
       }),
@@ -161,4 +175,4 @@ import configuration from './config/configuration';
     },
   ],
 })
-export class AppModule {}
+export class AppModule { }

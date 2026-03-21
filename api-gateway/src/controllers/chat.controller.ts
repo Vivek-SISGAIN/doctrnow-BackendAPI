@@ -10,7 +10,7 @@ import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { Request, Response } from 'express';
 import { HttpProxyService } from '../http-proxy/http-proxy.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-
+import { SkipThrottle } from '@nestjs/throttler';
 /**
  * Chat Controller
  * Routes: /api/v1/chat/*
@@ -19,6 +19,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 @ApiTags('chat')
 @ApiBearerAuth('JWT-auth')
 @Controller('chat')
+@SkipThrottle()
 @UseGuards(JwtAuthGuard)
 export class ChatController {
   constructor(private readonly httpProxyService: HttpProxyService) { }

@@ -11,15 +11,36 @@ class ChatClient {
    * Creates (or returns existing) chat session for a consultation.
    * Idempotent.
    */
-  async createSession(consultationId, patientId, doctorId, patientName, patientAvatar) {
+  async createSession({
+    consultationId,
+    patientId,
+    doctorId,
+    patientName,
+    patientAvatar,
+    appointmentId,
+    appointmentDate,
+    appointmentType
+  }) {
     try {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 3000);
 
       const response = await fetch(`${VIDEO_CHAT_SERVICE_URL}/api/chat/session/create`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ consultationId, patientId, doctorId, patientName, patientAvatar }),
+        headers: {
+          'Content-Type': 'application/json',
+          'x-internal-secret': process.env.INTERNAL_SECRET
+        },
+        body: JSON.stringify({
+          consultationId,
+          patientId,
+          doctorId,
+          patientName,
+          patientAvatar,
+          appointmentId,
+          appointmentDate,
+          appointmentType
+        }),
         signal: controller.signal
       });
 
@@ -65,12 +86,12 @@ class ChatClient {
   /**
    * Ends a chat session (transitions to COMPLETED).
    */
-  async endSession(consultationId, endStatus = 'COMPLETED') {
+  async endSession(consultationId, endStatus = 'COMPLETED', postMessageLimit = 5) {
     try {
       const response = await fetch(`${VIDEO_CHAT_SERVICE_URL}/api/chat/session/end`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ consultationId, endStatus }),
+        body: JSON.stringify({ consultationId, endStatus, postMessageLimit }),
       });
 
       if (!response.ok) {

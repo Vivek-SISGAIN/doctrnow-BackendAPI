@@ -10,7 +10,7 @@ import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { Request, Response } from 'express';
 import { HttpProxyService } from '../http-proxy/http-proxy.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-
+import { SkipThrottle } from '@nestjs/throttler';
 /**
  * Consultation Controller
  * Routes: /api/v1/consultations/*
@@ -20,6 +20,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 @ApiTags('consultations')
 @ApiBearerAuth('JWT-auth')
 @Controller('consultations')
+@SkipThrottle()
 @UseGuards(JwtAuthGuard)
 export class ConsultationController {
   constructor(

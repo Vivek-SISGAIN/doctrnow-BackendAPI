@@ -1,5 +1,6 @@
 const conversationService = require("../../service/conversation.service");
 const consultationSessionService = require("../../service/consultationSession.service");
+const Message = require("../../models/message.model");
 const { addPresence, removePresence, getPresence } = require("../presence");
 const logger = require("../../utils/logger");
 
@@ -71,8 +72,60 @@ const registerPresenceHandler = (io, socket) => {
             await conversationService.validateParticipantAccess(conversationId, userId);
 
             // 5. Join room + track on socket
-            socket.join(conversationId);
+            await Promise.resolve(socket.join(conversationId));
             socket.joinedConversations.add(conversationId);
+
+            const undeliveredMessages = await Message.find({
+                conversationId,
+                senderId: { $ne: userId },
+                status: { $in: ["SENT", "sent"] },
+                deliveredTo: {
+                    $not: {
+                        $elemMatch: { userId }
+                    }
+                }
+            })
+                .select("_id senderId")
+                .lean();
+
+            if (undeliveredMessages.length > 0) {
+                const now = new Date();
+                const messageIds = undeliveredMessages.map((message) => message._id);
+
+                await Message.updateMany(
+                    { _id: { $in: messageIds }, conversationId },
+                    {
+                        $addToSet: {
+                            deliveredTo: { userId, deliveredAt: now }
+                        },
+                        $set: { status: "DELIVERED" }
+                    }
+                );
+
+                const groupedBySender = undeliveredMessages.reduce((acc, message) => {
+                    if (!acc[message.senderId]) {
+                        acc[message.senderId] = [];
+                    }
+                    acc[message.senderId].push(message._id.toString());
+                    return acc;
+                }, Object.create(null));
+
+                Object.entries(groupedBySender).forEach(([senderId, senderMessageIds]) => {
+                    const room = `user:${senderId}`;
+                    const socketsInRoom = io.sockets.adapter.rooms.get(room);
+                    console.log('[DELIVERY] room:', room, 'sockets in room:', socketsInRoom ? [...socketsInRoom] : 'EMPTY - NO SOCKETS');
+                    io.to(room).emit("message_delivered", {
+                        conversationId,
+                        messageIds: senderMessageIds
+                    });
+                });
+
+                logger.info("Join-time delivery receipts emitted", {
+                    conversationId,
+                    recipientUserId: userId,
+                    deliveredCount: undeliveredMessages.length
+                });
+            }
 
             // Debug log — confirms room was joined successfully
             console.log("JOIN CONVERSATION RECEIVED", {

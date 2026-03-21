@@ -276,9 +276,30 @@ const getConversationInbox = async ({
                 consultationId:  1,
                 sessionStatus:   "$chatState",
                 lastMessageAt:   1,
-                participants:    1,
+                patientId: {
+                    $let: {
+                        vars: {
+                            patientParticipant: {
+                                $arrayElemAt: [
+                                    {
+                                        $filter: {
+                                            input: "$participants",
+                                            as: "participant",
+                                            cond: { $eq: ["$$participant.role", "PATIENT"] }
+                                        }
+                                    },
+                                    0
+                                ]
+                            }
+                        },
+                        in: "$$patientParticipant.userId"
+                    }
+                },
                 patientName:     1,
                 patientAvatar:   1,
+                appointmentId:   1,
+                appointmentDate: 1,
+                appointmentType: 1,
 
                 unreadCount: {
                     $ifNull: [

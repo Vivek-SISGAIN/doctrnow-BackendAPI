@@ -117,6 +117,18 @@ const conversationSchema = new mongoose.Schema(
         patientAvatar: {
             type: String,
             default: null
+        },
+        appointmentDate: {
+            type: Date,
+            default: null
+        },
+        appointmentId: {
+            type: String,
+            default: null
+        },
+        appointmentType: {
+            type: String,
+            default: null
         }
     },
     { timestamps: true }

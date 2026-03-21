@@ -147,14 +147,27 @@ const getSessionInfo = async (req, res, next) => {
  */
 const createSession = async (req, res, next) => {
     try {
-        const { consultationId, conversationId, patientId, doctorId, patientName, patientAvatar } = req.body;
+        const {
+            consultationId,
+            conversationId,
+            patientId,
+            doctorId,
+            patientName,
+            patientAvatar,
+            appointmentId,
+            appointmentDate,
+            appointmentType
+        } = req.body;
         const session = await sessionService.createSessionForConsultation(
             consultationId,
             conversationId,
             patientId,
             doctorId,
             patientName,
-            patientAvatar
+            patientAvatar,
+            appointmentId,
+            appointmentDate,
+            appointmentType
         );
         res.status(200).json({ success: true, data: session });
     } catch (err) {

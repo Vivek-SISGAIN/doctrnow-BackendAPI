@@ -145,4 +145,10 @@ messageSchema.index(
 // Part 5: Full-text search on message content
 messageSchema.index({ content: "text" });
 
+// Scale indexes: efficient delivery/read queries under high concurrency
+messageSchema.index({ conversationId: 1, status: 1 });
+messageSchema.index({ conversationId: 1, senderId: 1, status: 1 });
+messageSchema.index({ conversationId: 1, "deliveredTo.userId": 1 });
+messageSchema.index({ conversationId: 1, readBy: 1 });
+
 module.exports = mongoose.model("Message", messageSchema);

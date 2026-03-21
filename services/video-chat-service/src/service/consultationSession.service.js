@@ -3,6 +3,7 @@ const conversationService = require("./conversation.service");
 const systemMessageService = require("./systemMessage.service");
 const ApiError = require("../utils/ApiError");
 const logger = require("../utils/logger");
+const { getIO } = require("../realtime/socket");
 
 // MongoDB duplicate key error code
 const DUPLICATE_KEY_ERROR_CODE = 11000;
@@ -27,9 +28,22 @@ const TERMINAL_STATUSES = ["COMPLETED", "PATIENT_NO_SHOW", "DOCTOR_NO_SHOW", "CA
  * @param {string} doctorId       (required if conversationId is missing)
  * @param {string} [patientName]
  * @param {string} [patientAvatar]
+ * @param {string} [appointmentId]
+ * @param {string|Date} [appointmentDate]
+ * @param {string} [appointmentType]
  * @returns {Promise<Object>} session document (plain object)
  */
-const createSessionForConsultation = async (consultationId, conversationId, patientId, doctorId, patientName, patientAvatar) => {
+const createSessionForConsultation = async (
+    consultationId,
+    conversationId,
+    patientId,
+    doctorId,
+    patientName,
+    patientAvatar,
+    appointmentId,
+    appointmentDate,
+    appointmentType
+) => {
     if (!consultationId) {
         throw ApiError.badRequest("consultationId is required");
     }
@@ -45,7 +59,10 @@ const createSessionForConsultation = async (consultationId, conversationId, pati
             doctorId,
             patientId,
             patientName,
-            patientAvatar
+            patientAvatar,
+            appointmentId,
+            appointmentDate,
+            appointmentType
         );
         actualConversationId = conversation._id;
     }
@@ -136,6 +153,23 @@ const startChatSession = async (consultationId) => {
                 error: err.message
             })
         );
+
+        // Emit session_updated so frontends activate instantly — no polling required.
+        try {
+            const io = getIO();
+            io.to(updated.conversationId.toString()).emit("session_updated", {
+                conversationId: updated.conversationId.toString(),
+                consultationId: updated.consultationId,
+                sessionStatus: "ACTIVE",
+                chatEnabled: true,
+                messagingLimited: false,
+                remainingPatientMessages: null,
+                startedAt: updated.startedAt
+            });
+        } catch (err) {
+            // Non-blocking — socket failure must not break session start
+            logger.warn("Failed to emit session_updated on start", { consultationId, error: err.message });
+        }
 
         return updated;
     }
@@ -283,6 +317,30 @@ const endChatSession = async (consultationId, endStatus, postMessageLimit = 0) =
                 error: err.message
             })
         );
+    }
+
+    // Emit session_updated so frontends reflect terminal state instantly — no polling required.
+    try {
+        const io = getIO();
+        const remainingAfterEnd = PATIENT_LIMITED_STATUSES.includes(updated.status)
+            ? Math.max(updated.postMessageLimit - updated.patientPostMessageCount, 0)
+            : null;
+        io.to(updated.conversationId.toString()).emit("session_updated", {
+            conversationId: updated.conversationId.toString(),
+            consultationId: updated.consultationId,
+            sessionStatus: updated.status,
+            // This event is broadcast to both doctor and patient clients.
+            // Doctor messaging must remain available post-consultation, so
+            // the frontend should interpret limits role-wise instead of
+            // treating this shared flag as patient-only.
+            chatEnabled: updated.status !== "CANCELLED",
+            messagingLimited: PATIENT_LIMITED_STATUSES.includes(updated.status),
+            remainingPatientMessages: remainingAfterEnd,
+            endedAt: updated.endedAt
+        });
+    } catch (err) {
+        // Non-blocking — socket failure must not break session end
+        logger.warn("Failed to emit session_updated on end", { consultationId, error: err.message });
     }
 
     return updated;

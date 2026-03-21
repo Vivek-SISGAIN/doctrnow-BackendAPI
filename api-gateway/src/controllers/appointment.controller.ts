@@ -3,7 +3,7 @@ import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { Request, Response } from 'express';
 import { HttpProxyService } from '../http-proxy/http-proxy.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-
+import { SkipThrottle } from '@nestjs/throttler';
 /**
  * Appointment Controller
  * Routes: /api/v1/appointments/*
@@ -13,9 +13,10 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 @ApiTags('appointments')
 @ApiBearerAuth('JWT-auth')
 @Controller('appointments')
+@SkipThrottle()
 @UseGuards(JwtAuthGuard)
 export class AppointmentController {
-  constructor(private readonly httpProxyService: HttpProxyService) {}
+  constructor(private readonly httpProxyService: HttpProxyService) { }
 
   /** Base path: GET /api/v1/appointments (list), POST /api/v1/appointments (create), etc. */
   @All()

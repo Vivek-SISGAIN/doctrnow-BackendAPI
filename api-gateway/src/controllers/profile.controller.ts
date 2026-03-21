@@ -10,7 +10,7 @@ import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { Request, Response } from 'express';
 import { HttpProxyService } from '../http-proxy/http-proxy.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-
+import { SkipThrottle } from '@nestjs/throttler';
 /**
  * Profile Controller
  * Routes: /api/v1/profiles/*
@@ -20,9 +20,10 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 @ApiTags('profiles')
 @ApiBearerAuth('JWT-auth')
 @Controller('profiles')
+@SkipThrottle()
 @UseGuards(JwtAuthGuard)
 export class ProfileController {
-  constructor(private readonly httpProxyService: HttpProxyService) {}
+  constructor(private readonly httpProxyService: HttpProxyService) { }
 
   @All()
   async proxyBase(@Req() req: Request, @Res() res: Response): Promise<void> {

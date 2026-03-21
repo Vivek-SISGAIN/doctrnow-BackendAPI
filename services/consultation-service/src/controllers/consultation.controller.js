@@ -4,6 +4,30 @@ const asyncHandler = require('../utils/asyncHandler');
 const { emitToRoom, emitToDoctorRoom, CONSULTATION_EVENTS } = require('../utils/socket');
 const chatClient = require('../utils/chat-client');
 const profileClient = require('../utils/profile-client');
+const appointmentClient = require('../utils/appointment-client');
+
+const buildChatSessionPayload = async (consultation, patientId, doctorId) => {
+  const [patientProfile, appointment] = await Promise.all([
+    profileClient.getPatientProfile(consultation.patientId),
+    appointmentClient.getAppointmentById(consultation.appointmentId)
+  ]);
+
+  const patientName = [patientProfile?.firstName, patientProfile?.lastName]
+    .filter(Boolean)
+    .join(' ')
+    .trim();
+
+  return {
+    consultationId: consultation.id,
+    patientId,
+    doctorId,
+    patientName: patientName || null,
+    patientAvatar: patientProfile?.profileImage ?? null,
+    appointmentId: consultation.appointmentId ?? null,
+    appointmentDate: appointment?.slot?.startTime ?? null,
+    appointmentType: appointment?.consultationType ?? consultation.type ?? null
+  };
+};
 
 
 const createConsultation = asyncHandler(async (req, res) => {
@@ -77,12 +101,8 @@ const joinLobby = asyncHandler(async (req, res) => {
     const chatPatientId = consultation.patientAuthId || consultation.patientId;
     const chatDoctorId = consultation.doctorAuthId || consultation.doctorId;
 
-    // Fetch patient name/avatar for chat inbox enrichment
-    const patientProfile = await profileClient.getPatientProfile(consultation.patientId);
-    const patientName = patientProfile ? `${patientProfile.firstName} ${patientProfile.lastName}` : null;
-    const patientAvatar = patientProfile ? patientProfile.profileImage : null;
-
-    chatClient.createSession(consultation.id, chatPatientId, chatDoctorId, patientName, patientAvatar); // ← no await
+    const chatSessionPayload = await buildChatSessionPayload(consultation, chatPatientId, chatDoctorId);
+    chatClient.createSession(chatSessionPayload); // ← no await
   }
 
   if (doctorId) {
@@ -120,12 +140,8 @@ const startConsultation = asyncHandler(async (req, res) => {
       const chatPatientId = consultation.patientAuthId || consultation.patientId;
       const chatDoctorId = consultation.doctorAuthId || consultation.doctorId;
 
-      // Fetch patient name/avatar for chat inbox enrichment
-      const patientProfile = await profileClient.getPatientProfile(consultation.patientId);
-      const patientName = patientProfile ? `${patientProfile.firstName} ${patientProfile.lastName}` : null;
-      const patientAvatar = patientProfile ? patientProfile.profileImage : null;
-
-      chatClient.createSession(consultation.id, chatPatientId, chatDoctorId, patientName, patientAvatar); // ← no await
+      const chatSessionPayload = await buildChatSessionPayload(consultation, chatPatientId, chatDoctorId);
+      chatClient.createSession(chatSessionPayload); // ← no await
       await chatClient.startSession(consultation.id); // ← keep await, this one is needed
     }
 

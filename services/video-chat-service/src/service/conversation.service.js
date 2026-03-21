@@ -17,9 +17,21 @@ const DUPLICATE_KEY_ERROR_CODE = 11000;
  * @param {string} patientId
  * @param {string} [patientName]
  * @param {string} [patientAvatar]
+ * @param {string} [appointmentId]
+ * @param {string|Date} [appointmentDate]
+ * @param {string} [appointmentType]
  * @returns {Promise<Object>} conversation document (plain object)
  */
-const createConversationForConsultation = async (consultationId, doctorId, patientId, patientName, patientAvatar) => {
+const createConversationForConsultation = async (
+    consultationId,
+    doctorId,
+    patientId,
+    patientName,
+    patientAvatar,
+    appointmentId,
+    appointmentDate,
+    appointmentType
+) => {
     // Input validation
     if (!consultationId) {
         throw ApiError.badRequest("consultationId is required");
@@ -52,6 +64,9 @@ const createConversationForConsultation = async (consultationId, doctorId, patie
             ],
             patientName,
             patientAvatar,
+            appointmentId: appointmentId ?? null,
+            appointmentDate: appointmentDate ? new Date(appointmentDate) : null,
+            appointmentType: appointmentType ?? null,
             chatState: "SCHEDULED",
             // Part 1: Set lastMessageAt = createdAt so new conversations sort
             // correctly in the inbox cursor pagination (lastMessageAt DESC).
