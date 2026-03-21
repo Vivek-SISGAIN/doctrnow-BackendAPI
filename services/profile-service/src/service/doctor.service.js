@@ -4,7 +4,6 @@ class DoctorService {
   /**
    * Find doctor by unique fields
    */
-
   findByUniqueFields({ email, mobile, emiratesId, licenseNumber }) {
     return prisma.doctor.findFirst({
       where: {
@@ -18,10 +17,44 @@ class DoctorService {
     });
   }
 
-  async findDocByHospital({ hospitalId }) {
-    return prisma.doctor.findMany({
-      where: { hospitalId }
-    });
+  /**
+   * Find doctors by hospitalId with filters and pagination
+   */
+  async findDocByHospital(
+    { hospitalId },
+    filters = {},
+    pagination = { page: 1, limit: 20 },
+    sortBy = 'name'
+  ) {
+    const { page = 1, limit = 20 } = pagination;
+    const skip = (page - 1) * limit;
+
+    const where = {
+      hospitalId,
+      ...this.buildWhereClause(filters)
+    };
+
+    const orderBy = this.buildOrderBy(sortBy);
+
+    const [doctors, total] = await Promise.all([
+      prisma.doctor.findMany({
+        where,
+        skip,
+        take: parseInt(limit, 10),
+        orderBy
+      }),
+      prisma.doctor.count({ where })
+    ]);
+
+    return {
+      doctors,
+      pagination: {
+        page: parseInt(page, 10),
+        limit: parseInt(limit, 10),
+        total,
+        totalPages: Math.ceil(total / limit)
+      }
+    };
   }
 
   async createDoctor(data) {
@@ -85,7 +118,16 @@ class DoctorService {
   /**
    * Build where clause for filtering
    */
-  buildWhereClause({ search, specialization, gender, minExperience, maxFee, workingDay }) {
+  buildWhereClause({
+    search,
+    specialization,
+    gender,
+    minExperience,
+    maxFee,
+    workingDay,
+    status,
+    availabilityStatus
+  } = {}) {
     const where = {};
 
     if (search) {
@@ -116,7 +158,34 @@ class DoctorService {
       where.workingDays = { has: workingDay };
     }
 
+    if (status) {
+      where.status = status.toUpperCase();
+    }
+
+    if (availabilityStatus) {
+      where.availabilityStatus = availabilityStatus.toUpperCase();
+    }
+
     return where;
+  }
+
+  /**
+   * Build orderBy clause
+   */
+  buildOrderBy(sortBy = 'name') {
+    switch (sortBy) {
+      case 'experience':
+        return [{ yearsOfExperience: 'desc' }, { fullName: 'asc' }];
+      case 'fee-low':
+        return [{ videoConsultationFee: 'asc' }, { fullName: 'asc' }];
+      case 'fee-high':
+        return [{ videoConsultationFee: 'desc' }, { fullName: 'asc' }];
+      case 'recent':
+        return { createdAt: 'desc' };
+      case 'name':
+      default:
+        return { fullName: 'asc' };
+    }
   }
 
   /**
@@ -163,23 +232,48 @@ class DoctorService {
   }
 
   /**
-   * Find doctors with optional filters (for listing by specialty, search, etc.)
-   * specialtyName: filter by primarySpecialization (case-insensitive match)
+   * Find doctors with filters and pagination (global listing)
    */
-  async findAllWithFilters(filters = {}) {
+  async findAllWithFilters(
+    filters = {},
+    pagination = { page: 1, limit: 20 },
+    sortBy = 'experience'
+  ) {
+    const { page = 1, limit = 20 } = pagination;
+    const skip = (page - 1) * limit;
+
     const where = this.buildWhereClause({
       search: filters.search,
       specialization: filters.specialty || filters.specialtyName,
       gender: filters.gender,
       minExperience: filters.minExperience,
       maxFee: filters.maxFee,
-      workingDay: filters.workingDay
+      workingDay: filters.workingDay,
+      status: filters.status,
+      availabilityStatus: filters.availabilityStatus
     });
 
-    return prisma.doctor.findMany({
-      where,
-      orderBy: [{ yearsOfExperience: 'desc' }, { fullName: 'asc' }]
-    });
+    const orderBy = this.buildOrderBy(sortBy);
+
+    const [doctors, total] = await Promise.all([
+      prisma.doctor.findMany({
+        where,
+        skip,
+        take: parseInt(limit, 10),
+        orderBy
+      }),
+      prisma.doctor.count({ where })
+    ]);
+
+    return {
+      doctors,
+      pagination: {
+        page: parseInt(page, 10),
+        limit: parseInt(limit, 10),
+        total,
+        totalPages: Math.ceil(total / limit)
+      }
+    };
   }
 
   searchBySpecialization(query) {

@@ -1,23 +1,43 @@
-FROM node:18-alpine AS builder
-WORKDIR /app
-COPY package*.json ./
-COPY prisma ./prisma/
-RUN npm ci
-RUN npx prisma generate
-COPY . .
-RUN npm run build
+# ---------- BUILD STAGE ----------
+  FROM node:18-alpine AS builder
 
-FROM node:18-alpine
-WORKDIR /app
-RUN npm install -g prisma
-COPY package*.json ./
-RUN npm ci --only=production
-COPY prisma ./prisma/
-RUN npx prisma generate
-COPY --from=builder /app/dist ./dist
-RUN addgroup -g 1001 -S nodejs && adduser -S nodejs -u 1001
-RUN chown -R nodejs:nodejs /app
-USER nodejs
+  WORKDIR /app
+  
+  COPY package*.json ./
+  COPY prisma ./prisma/
+  
+  RUN npm ci
+  
+  RUN npx prisma generate
+  
+  COPY . .
+  
+  RUN npm run build
+  
+  
+  # ---------- PRODUCTION STAGE ----------
+  FROM node:18-alpine
+  
+  WORKDIR /app
+  
+  # install only production deps
+  COPY package*.json ./
+  RUN npm ci --omit=dev
+  
+  # copy prisma only (no need to regenerate again)
+  COPY prisma ./prisma/
+  
+  # copy build output
+  COPY --from=builder /app/dist ./dist
+  
+  # copy prisma client from builder (IMPORTANT)
+  COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
+  COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
+  
+  # create user
+  RUN addgroup -S nodejs && adduser -S nodejs -G nodejs
+  USER nodejs
+  
 EXPOSE 3010
 HEALTHCHECK --interval=30s --timeout=3s --start-period=40s --retries=3 \
   CMD node -e "require('http').get('http://localhost:3010/video/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})" || exit 1

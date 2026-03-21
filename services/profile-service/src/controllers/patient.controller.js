@@ -96,8 +96,10 @@ const createCurrentPatient = asyncHandler(async (req, res) => {
   });
   if (conflict) {
     if (conflict.email === req.body.email) throw ApiError.conflict('Email already in use');
-    if (conflict.mobileNumber === req.body.mobileNumber) throw ApiError.conflict('Mobile number already in use');
-    if (conflict.emiratesId === req.body.emiratesId) throw ApiError.conflict('Emirates ID already in use');
+    if (conflict.mobileNumber === req.body.mobileNumber)
+      throw ApiError.conflict('Mobile number already in use');
+    if (conflict.emiratesId === req.body.emiratesId)
+      throw ApiError.conflict('Emirates ID already in use');
   }
 
   const patient = await patientService.createForUser(userId, req.body);
@@ -167,7 +169,7 @@ const getPatientsByBulkIds = asyncHandler(async (req, res) => {
   const { ids } = req.body;
 
   if (!ids || !Array.isArray(ids) || ids.length === 0) {
-    throw ApiError.badRequest("ids must be a non-empty array");
+    throw ApiError.badRequest('ids must be a non-empty array');
   }
 
   const uniqueIds = [...new Set(ids)];
@@ -182,8 +184,8 @@ const getPatientsByBulkIds = asyncHandler(async (req, res) => {
 
   res.status(200).json({
     success: true,
-    data: patientMap, 
-    count: patients.length,
+    data: patientMap,
+    count: patients.length
   });
 });
 

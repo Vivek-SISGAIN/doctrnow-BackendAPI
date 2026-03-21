@@ -84,8 +84,9 @@ const getAllAppointments = asyncHandler(async (req, res) => {
   const doctorIds = [
     ...new Set(
       result.appointments
-        .map((appointment) => { 
-          return appointment.doctorId; })
+        .map((appointment) => {
+          return appointment.doctorId;
+        })
         .filter(Boolean),
     ),
   ];
@@ -370,14 +371,13 @@ const completeAppointment = asyncHandler(async (req, res) => {
   });
 });
 
-
 const markMissedAsNoShow = asyncHandler(async (req, res) => {
   const { doctorId } = req.query;
   const result = await appointmentService.markMissedAsNoShow(doctorId);
   res.status(200).json({
     success: true,
     message: `Marked ${result.count} missed appointment(s) as no-show`,
-    data: result
+    data: result,
   });
 });
 
@@ -399,6 +399,62 @@ const markNoShow = asyncHandler(async (req, res) => {
   });
 });
 
+const getHospitalPatients = asyncHandler(async (req, res) => {
+  const { hospitalId } = req.params;
+
+  console.log(hospitalId , "Hospital ID")
+  const { page = 1, limit = 20 } = req.query;
+
+  const pagination = {
+    page: parseInt(page, 10),
+    limit: parseInt(limit, 10),
+  };
+
+  // 🔥 Service call
+  const result = await appointmentService.getHospitalPatients(
+    hospitalId,
+    pagination,
+  );
+
+  if (!result || !result.patients) {
+    return res.status(200).json({
+      success: true,
+      data: [],
+      pagination: result?.pagination || {},
+    });
+  }
+
+  const patientIds = [
+    ...new Set(result.patients.map((p) => p.id).filter(Boolean)),
+  ];
+
+  let patientMap = {};
+  const authHeader = req.headers.authorization;
+
+  if (patientIds.length > 0) {
+    patientMap = await fetchProfilesByIds(
+      patientIds,
+      (id) => `${baseUrl}profiles/patients/${id}`,
+      authHeader,
+      "patient",
+    );
+  }
+
+  const transformedPatients = result.patients.map((patient) => ({
+    ...patient,
+    profile: patientMap[patient.id] || null,
+  }));
+
+  // -----------------------------
+  // Final Response
+  // -----------------------------
+  res.status(200).json({
+    success: true,
+    data: transformedPatients,
+    pagination: result.pagination,
+  });
+});
+
 module.exports = {
   getAllAppointments,
   getAppointmentById,
@@ -410,4 +466,5 @@ module.exports = {
   completeAppointment,
   markMissedAsNoShow,
   markNoShow,
+  getHospitalPatients
 };

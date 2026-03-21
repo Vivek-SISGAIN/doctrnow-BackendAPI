@@ -11,7 +11,8 @@ const {
   completeAppointment,
   markMissedAsNoShow,
   markNoShow,
-  getAllAppointmentsV1
+  getAllAppointmentsV1,
+  getHospitalPatients
 } = require('../controllers/appointment.controller');
 const {
   createAppointmentSchema,
@@ -335,5 +336,7 @@ router.post('/mark-missed-no-shows', markMissedAsNoShow);
  *         description: Appointment marked as no-show
  */
 router.post('/:id/no-show', markNoShow);
+
+router.get('/:hospitalId/hospitals', getHospitalPatients); 
 
 module.exports = router;
