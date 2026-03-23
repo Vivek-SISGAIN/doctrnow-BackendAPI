@@ -1,4 +1,4 @@
-const express = require('express');
+const express = require("express");
 const router = express.Router();
 const {
   getAvailableSlots,
@@ -9,14 +9,14 @@ const {
   updateSlot,
   deleteSlot,
   lockSlot,
-  unlockSlot
-} = require('../controllers/slot.controller');
+  unlockSlot,
+} = require("../controllers/slot.controller");
 const {
   createSlotSchema,
   createBulkSlotsSchema,
-  updateSlotSchema
-} = require('../validations/slot.validation');
-const validate = require('../middleware/validation');
+  updateSlotSchema,
+} = require("../validations/slot.validation");
+const validate = require("../middleware/validation");
 
 /**
  * @swagger
@@ -50,7 +50,7 @@ const validate = require('../middleware/validation');
  *       200:
  *         description: List of available slots
  */
-router.get('/available', getAvailableSlots);
+router.get("/available", getAvailableSlots);
 
 /**
  * @swagger
@@ -88,7 +88,7 @@ router.get('/available', getAvailableSlots);
  *       200:
  *         description: List of slots
  */
-router.get('/doctor/:doctorId', getSlotsByDoctor);
+router.get("/doctor/:doctorId", getSlotsByDoctor);
 
 /**
  * @swagger
@@ -110,7 +110,7 @@ router.get('/doctor/:doctorId', getSlotsByDoctor);
  *       404:
  *         description: Slot not found
  */
-router.get('/:id', getSlotById);
+router.get("/:id", getSlotById);
 
 /**
  * @swagger
@@ -147,7 +147,7 @@ router.get('/:id', getSlotById);
  *       400:
  *         description: Validation error
  */
-router.post('/', validate(createSlotSchema), createSlot);
+router.post("/", validate(createSlotSchema), createSlot);
 
 /**
  * @swagger
@@ -189,7 +189,7 @@ router.post('/', validate(createSlotSchema), createSlot);
  *       201:
  *         description: Slots created successfully
  */
-router.post('/bulk', validate(createBulkSlotsSchema), createBulkSlots);
+router.post("/bulk", createBulkSlots);
 
 /**
  * @swagger
@@ -224,7 +224,7 @@ router.post('/bulk', validate(createBulkSlotsSchema), createBulkSlots);
  *       200:
  *         description: Slot updated successfully
  */
-router.patch('/:id', validate(updateSlotSchema), updateSlot);
+router.patch("/:id", validate(updateSlotSchema), updateSlot);
 
 /**
  * @swagger
@@ -243,7 +243,7 @@ router.patch('/:id', validate(updateSlotSchema), updateSlot);
  *       200:
  *         description: Slot deleted successfully
  */
-router.delete('/:id', deleteSlot);
+router.delete("/:id", deleteSlot);
 
 /**
  * @swagger
@@ -273,7 +273,7 @@ router.delete('/:id', deleteSlot);
  *       200:
  *         description: Slot locked successfully
  */
-router.post('/:id/lock', lockSlot);
+router.post("/:id/lock", lockSlot);
 
 /**
  * @swagger
@@ -292,6 +292,6 @@ router.post('/:id/lock', lockSlot);
  *       200:
  *         description: Slot unlocked successfully
  */
-router.post('/:id/unlock', unlockSlot);
+router.post("/:id/unlock", unlockSlot);
 
 module.exports = router;

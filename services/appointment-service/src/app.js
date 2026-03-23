@@ -1,13 +1,13 @@
-const express = require('express');
-const cors = require('cors');
-const morgan = require('morgan');
-const helmet = require('helmet');
-const compression = require('compression');
-const cookieParser = require('cookie-parser');
-const rateLimit = require('express-rate-limit');
-const hpp = require('hpp');
-const swaggerUi = require('swagger-ui-express');
-const swaggerSpec = require('./config/swagger');
+const express = require("express");
+const cors = require("cors");
+const morgan = require("morgan");
+const helmet = require("helmet");
+const compression = require("compression");
+const cookieParser = require("cookie-parser");
+const rateLimit = require("express-rate-limit");
+const hpp = require("hpp");
+const swaggerUi = require("swagger-ui-express");
+const swaggerSpec = require("./config/swagger");
 
 const app = express();
 
@@ -15,30 +15,39 @@ app.use(helmet());
 app.use(hpp());
 
 const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // limit each IP to 100 requests per windowMs
-  message: 'Too many requests from this IP, please try again later.'
+  windowMs: 15 * 60 * 1000,
+  max: 100,
+  message: "Too many requests from this IP, please try again later.",
 });
-app.use('/api', limiter);
+app.use("/api", limiter);
 
 const corsOptions = {
-  origin: process.env.CORS_ORIGIN || 'http://localhost:8080',
+  origin: process.env.CORS_ORIGIN || "http://localhost:8080",
   credentials: true,
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-Id', 'X-Client', 'Accept', 'x-user-id', 'x-user-role', 'x-tenant-id']
+  allowedHeaders: [
+    "Content-Type",
+    "Authorization",
+    "X-Request-Id",
+    "X-Client",
+    "Accept",
+    "x-user-id",
+    "x-user-role",
+    "x-tenant-id",
+  ],
 };
 app.use(cors(corsOptions));
 
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use(express.json({ limit: "10mb" }));
+app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
 app.use(cookieParser());
 
 app.use(compression());
 
-if (process.env.NODE_ENV === 'development') {
-  app.use(morgan('dev'));
+if (process.env.NODE_ENV === "development") {
+  app.use(morgan("dev"));
 } else {
-  app.use(morgan('combined'));
+  app.use(morgan("combined"));
 }
 
 /**
@@ -65,11 +74,11 @@ if (process.env.NODE_ENV === 'development') {
  *                   type: string
  *                   format: date-time
  */
-app.get('/health', (req, res) => {
+app.get("/health", (req, res) => {
   res.status(200).json({
-    status: 'OK',
-    message: 'Server is running',
-    timestamp: new Date().toISOString()
+    status: "OK",
+    message: "Server is running",
+    timestamp: new Date().toISOString(),
   });
 });
 
@@ -83,59 +92,61 @@ app.get('/health', (req, res) => {
  *       200:
  *         description: Welcome message with available endpoints
  */
-app.get('/', (req, res) => {
+app.get("/", (req, res) => {
   res.json({
-    message: 'Welcome to DoctorNow Appointment Service API',
-    version: '1.0.0',
-    status: 'active',
+    message: "Welcome to DoctorNow Appointment Service API",
+    version: "1.0.0",
+    status: "active",
     endpoints: {
-      appointments: '/api/appointments',
-      slots: '/api/slots',
-      documentation: '/api-docs'
-    }
+      appointments: "/api/appointments",
+      slots: "/api/slots",
+      documentation: "/api-docs",
+    },
   });
 });
 
 // Swagger documentation
 app.use(
-  '/api-docs',
+  "/api-docs",
   swaggerUi.serve,
   swaggerUi.setup(swaggerSpec, {
-    customSiteTitle: 'DoctorNow Appointment API Documentation',
-    customCss: '.swagger-ui .topbar { display: none }',
+    customSiteTitle: "DoctorNow Appointment API Documentation",
+    customCss: ".swagger-ui .topbar { display: none }",
     swaggerOptions: {
-      persistAuthorization: true
-    }
-  })
+      persistAuthorization: true,
+    },
+  }),
 );
 
-// Import routes
-const appointmentRoutes = require('./routes/appointment.routes');
-const slotRoutes = require('./routes/slot.routes');
+// Routes
+const appointmentRoutes = require("./routes/appointment.routes");
+const slotRoutes = require("./routes/slot.routes");
 
-// Register routes
-app.use('/api/appointments', appointmentRoutes);
-app.use('/api/slots', slotRoutes);
+app.use("/api/appointments", appointmentRoutes);
+app.use("/api/slots", slotRoutes);
+
+if (process.env.NODE_ENV !== "test") {
+  require("./cron/slot-maintenance.cron");
+}
 
 // Error handling middleware
 app.use((err, req, res, next) => {
-  // eslint-disable-next-line no-console
   console.error(err);
 
   const statusCode = err.statusCode || 500;
-  const status = err.status || 'error';
+  const status = err.status || "error";
 
   const response = {
     success: false,
     status,
-    message: err.message || 'Something went wrong!'
+    message: err.message || "Something went wrong!",
   };
 
   if (err.errors) {
     response.errors = err.errors;
   }
 
-  if (process.env.NODE_ENV === 'development') {
+  if (process.env.NODE_ENV === "development") {
     response.stack = err.stack;
   }
 
@@ -145,7 +156,7 @@ app.use((err, req, res, next) => {
 app.use((req, res) => {
   res.status(404).json({
     success: false,
-    message: 'Route not found'
+    message: "Route not found",
   });
 });
 

@@ -69,18 +69,11 @@ const createSlot = asyncHandler(async (req, res) => {
 });
 
 const createBulkSlots = asyncHandler(async (req, res) => {
-  const { doctorId, slots } = req.body;
-
-  const slotsData = slots.map(slot => ({
-    doctorId,
-    ...slot
-  }));
-
-  const result = await slotService.createBulk(slotsData);
+  const result = await slotService.createBulk(req.body);
 
   res.status(201).json({
     success: true,
-    message: `${result.count} slots created successfully`,
+    message: `${result.count} slots created/updated successfully`,
     data: {
       count: result.count
     }
