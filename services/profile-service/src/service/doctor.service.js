@@ -1,4 +1,5 @@
 const prisma = require('../prisma/prisma');
+const axios = require('axios');
 
 class DoctorService {
   /**
@@ -73,7 +74,7 @@ class DoctorService {
     }
 
     // 2️⃣ Create doctor
-    return prisma.doctor.create({
+    const doctor = await prisma.doctor.create({
       data: {
         userId: data.userId,
         hospitalId: data.hospitalId,
@@ -113,6 +114,15 @@ class DoctorService {
         platformSharePercent: data.platformSharePercent
       }
     });
+
+    // 3️⃣ Trigger slot generation if schedule exists
+    if (data.schedule) {
+      this._triggerSlotRegeneration(doctor.id, doctor.hospitalId, data.schedule, false).catch(
+        (err) => console.error('[ProfileService] Slot activation failed:', err.message)
+      );
+    }
+
+    return doctor;
   }
 
   /**
@@ -318,11 +328,41 @@ class DoctorService {
     });
   }
 
-  update(id, data) {
-    return prisma.doctor.update({
+  async update(id, data) {
+    const doctor = await prisma.doctor.update({
       where: { id },
       data
     });
+
+    // If schedule is updated, trigger slot regeneration in appointment-service
+    if (data.schedule) {
+      this._triggerSlotRegeneration(doctor.id, doctor.hospitalId, data.schedule, true).catch(
+        (err) => console.error('[ProfileService] Slot regeneration failed:', err.message)
+      );
+    }
+
+    return doctor;
+  }
+
+  async _triggerSlotRegeneration(doctorId, hospitalId, schedule, isUpdate) {
+    // Determine the base URL for appointment service.
+    // In local development, we call via the Gateway.
+    const baseUrl = process.env.API_BASE_URL || 'http://localhost:8080/api/v1';
+
+    try {
+      await axios.post(`${baseUrl}/appointments/slots/bulk`, {
+        doctorId,
+        hospitalId,
+        schedule,
+        isUpdate
+      });
+      console.log(`[ProfileService] Success: Slot regeneration triggered for doctor ${doctorId}`);
+    } catch (error) {
+      console.error(
+        `[ProfileService] Failed to trigger slot sync:`,
+        error.response?.data?.message || error.message
+      );
+    }
   }
 
   /**
