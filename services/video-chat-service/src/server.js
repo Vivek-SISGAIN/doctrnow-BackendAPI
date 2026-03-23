@@ -1,10 +1,9 @@
-require("dotenv").config();
-
+require("dotenv").config({ path: require("path").resolve(__dirname, "../.env") });
 const http = require("http");
-const app = require("./src/app");
-const connectDB = require("./src/config/db");
-const { connectRedis } = require("./src/config/redis");
-const { initSocket } = require("./src/realtime/socket");
+const app = require("./app");
+const connectDB = require("./config/db");
+const { connectRedis } = require("./config/redis");
+const { initSocket } = require("./realtime/socket");
 
 const PORT = process.env.PORT || 3007;
 
