@@ -1,3 +1,4 @@
+const Conversation = require("../../models/conversation.model");
 const Message = require("../../models/message.model");
 const logger = require("../../utils/logger");
 
@@ -122,6 +123,14 @@ const registerMessageHandler = (io, socket) => {
                         readBy: { userId, readAt: now }
                     }
                 }
+            );
+
+            // FIX: Also update lastReadMessageAt on the conversation participant
+            //      This is what the unread count query uses
+            await Conversation.findOneAndUpdate(
+                { _id: conversationId, 'participants.userId': userId },
+                { $set: { 'participants.$[p].lastReadMessageAt': now } },
+                { arrayFilters: [{ 'p.userId': userId }], runValidators: false }
             );
 
             logger.info("Bulk read ACK persisted", {

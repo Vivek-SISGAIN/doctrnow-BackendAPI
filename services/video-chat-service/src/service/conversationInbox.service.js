@@ -228,12 +228,17 @@ const getConversationInbox = async ({
 
                                     // Only count messages NEWER than lastRead.
                                     // If lastRead is null the user has never read,
-                                    // so all messages count.
+                                    // only count messages from the last 7 days.
                                     {
                                         $cond: {
-                                            if:   { $gt: ["$$lastRead", null] },
+                                            if: { $gt: ["$$lastRead", null] },
                                             then: { $gt: ["$createdAt", "$$lastRead"] },
-                                            else: true
+                                            else: {
+                                                $gt: [
+                                                    "$createdAt",
+                                                    { $dateSubtract: { startDate: "$$NOW", unit: "day", amount: 7 } }
+                                                ]
+                                            }
                                         }
                                     },
 
