@@ -4,7 +4,10 @@
   "description": "Handles WebRTC based video consultations and real-time chat messaging\r between doctors, patients and admins.",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node src/server.js",
+    "build": "rimraf dist && mkdir dist && copyfiles -u 1 src/**/* dist",
+    "start:prod": "node dist/server.js"
   },
   "keywords": [],
   "author": "",
@@ -12,6 +15,7 @@
   "dependencies": {
     "@socket.io/redis-adapter": "^8.3.0",
     "compression": "^1.8.1",
+    "copyfiles": "^2.4.1",
     "cors": "^2.8.6",
     "dotenv": "^17.3.1",
     "express": "^5.2.1",
@@ -20,6 +24,7 @@
     "mongoose": "^8.23.0",
     "morgan": "^1.10.1",
     "redis": "^5.11.0",
+    "rimraf": "^6.1.3",
     "socket.io": "^4.8.3",
     "uuid": "^13.0.0"
   },
