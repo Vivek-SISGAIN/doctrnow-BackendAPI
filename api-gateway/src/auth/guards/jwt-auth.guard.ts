@@ -124,6 +124,7 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
       path.includes('/hospital'),
       path.includes('/profiles'),
       path.includes('/super-admins'),
+      path.includes('/chat'),
     ];
     if (doctorPortalPaths.some(Boolean)) {
       const authHeader = request?.headers?.authorization;
@@ -205,7 +206,7 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
         path.includes('/profiles') || path.includes('/super-admins')
       ) {
         const authHeader = request?.headers?.authorization;
-        console.log("Auth Header" , authHeader)
+        console.log("Auth Header", authHeader)
         const token =
           typeof authHeader === 'string' && authHeader.startsWith('Bearer ')
             ? authHeader.slice(7)
@@ -276,9 +277,12 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
     return super.canActivate(context);
   }
 
-  handleRequest(err: any, user: any, info: any) {
+  // src/auth/guards/jwt-auth.guard.ts
+  handleRequest(err, user, info) {
     if (err || !user) {
-      throw err || new UnauthorizedException('Invalid or expired token');
+      throw err || new UnauthorizedException(info?.message ?? 'Unauthorized');
+      //           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+      // Must throw UnauthorizedException — NOT a plain Error or nothing
     }
     return user;
   }

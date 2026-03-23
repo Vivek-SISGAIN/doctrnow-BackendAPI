@@ -11,6 +11,7 @@ import { Request, Response } from 'express';
 import { HttpProxyService } from '../http-proxy/http-proxy.service';
 import { Public } from '../common/decorators/public.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { Throttle } from '@nestjs/throttler';
 
 /**
  * Auth Controller
@@ -20,9 +21,10 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
  */
 @ApiTags('auth')
 @Controller('auth')
+@Throttle({ auth: { ttl: 900000, limit: 20 } })
 @Public() // Auth endpoints are public (login, register, etc.)
 export class AuthController {
-  constructor(private readonly httpProxyService: HttpProxyService) {}
+  constructor(private readonly httpProxyService: HttpProxyService) { }
 
   @All()
   async proxyBase(@Req() req: Request, @Res() res: Response): Promise<void> {
@@ -62,7 +64,7 @@ export class AuthController {
 
   private extractHeaders(req: Request): Record<string, string> {
     const headers: Record<string, string> = {};
-    const allowedHeaders = ['content-type', 'accept', 'x-tenant-id' , 'authorization', 'x-correlation-id'];
+    const allowedHeaders = ['content-type', 'accept', 'x-tenant-id', 'authorization', 'x-correlation-id'];
 
     for (const [key, value] of Object.entries(req.headers)) {
       if (allowedHeaders.includes(key.toLowerCase())) {

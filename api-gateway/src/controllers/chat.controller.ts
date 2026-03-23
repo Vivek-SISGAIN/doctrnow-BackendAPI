@@ -1,50 +1,47 @@
-import { Controller, All, Req, Res, HttpStatus, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  All,
+  Req,
+  Res,
+  HttpStatus,
+  UseGuards,
+} from '@nestjs/common';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { Request, Response } from 'express';
 import { HttpProxyService } from '../http-proxy/http-proxy.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { SkipThrottle } from '@nestjs/throttler';
 /**
- * Appointment Controller
- * Routes: /api/v1/appointments/*
- * Target: appointment-service
- * Access: Authenticated users only
+ * Chat Controller
+ * Routes: /api/v1/chat/*
+ * Target: video-chat-service
  */
-@ApiTags('appointments')
+@ApiTags('chat')
 @ApiBearerAuth('JWT-auth')
-@Controller('appointments')
+@Controller('chat')
 @SkipThrottle()
 @UseGuards(JwtAuthGuard)
-export class AppointmentController {
+export class ChatController {
   constructor(private readonly httpProxyService: HttpProxyService) { }
 
-  /** Base path: GET /api/v1/appointments (list), POST /api/v1/appointments (create), etc. */
   @All()
   async proxyBase(@Req() req: Request, @Res() res: Response): Promise<void> {
     return this.proxyRequest(req, res);
   }
 
-  /** Subpaths: /api/v1/appointments/:id, /api/v1/appointments/slots/..., etc. */
   @All('*')
   async proxyRequest(@Req() req: Request, @Res() res: Response): Promise<void> {
     const correlationId = req.headers['x-correlation-id'] as string;
-    // Use originalUrl (path only, no query) for correct path
     const rawUrl = (req as any).originalUrl || req.url || '';
-    const incomingPath = rawUrl.split('?')[0];
-    // Replace /api/v1/appointments with /api/appointments for service routes
-    // Handle slots routes: /api/v1/appointments/slots -> /api/slots
-    let path = incomingPath.replace(/^\/api\/v1\/appointments/, '') || '';
-    if (path.startsWith('/slots')) {
-      path = path.replace('/slots', '/api/slots');
-    } else {
-      path = `/api/appointments${path || ''}`;
-    }
+    // Before — fragile, breaks if prefix changes
+    const strippedPath = rawUrl.split('?')[0].replace(/^\/api\/v\d+\/chat/, '');
+    const path = `/api/chat${strippedPath}`.replace('//', '/');
     const user = (req as any).user;
 
     try {
-      const response = await this.httpProxyService.proxyRequest('APPOINTMENT', {
+      const response = await this.httpProxyService.proxyRequest('VIDEO_CHAT', {
         method: req.method,
-        url: path || '/',
+        url: path,
         headers: this.extractHeaders(req),
         body: req.body,
         query: req.query as Record<string, any>,
@@ -63,6 +60,7 @@ export class AppointmentController {
         downstream?.error?.message ??
         error.message ??
         'Internal server error';
+
       res.status(status).json({
         error: {
           code: downstream?.error?.code ?? 'PROXY_ERROR',

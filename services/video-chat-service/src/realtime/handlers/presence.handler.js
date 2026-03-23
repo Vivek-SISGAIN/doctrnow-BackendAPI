@@ -1,0 +1,213 @@
+const conversationService = require("../../service/conversation.service");
+const consultationSessionService = require("../../service/consultationSession.service");
+const Message = require("../../models/message.model");
+const { addPresence, removePresence, getPresence } = require("../presence");
+const logger = require("../../utils/logger");
+
+// Statuses where the chat history is NOT viewable — join is rejected
+const JOIN_BLOCKED_STATUSES = ["NOT_STARTED", "CANCELLED"];
+
+// Maximum number of conversations a single socket may join
+const MAX_ROOMS_PER_SOCKET = 10;
+
+/**
+ * Registers presence-related socket event handlers.
+ *
+ * Handles: join_conversation, leave_conversation, disconnect.
+ *
+ * Maintains socket.joinedConversations (Set) as the authoritative
+ * record of rooms this socket has joined. Disconnect cleanup iterates
+ * this Set exclusively — never socket.rooms — so behaviour is predictable
+ * regardless of Socket.IO internals.
+ *
+ * @param {import("socket.io").Server} io
+ * @param {import("socket.io").Socket} socket
+ */
+const registerPresenceHandler = (io, socket) => {
+    const { userId, role } = socket.user;
+
+    // ── join_conversation ────────────────────────────────────────────────────
+    socket.on("join_conversation", async ({ conversationId, consultationId } = {}) => {
+        try {
+            // 1. Input validation — consultationId is optional
+            if (!conversationId) {
+                socket.emit("error", {
+                    code: "INVALID_INPUT",
+                    message: "conversationId is required"
+                });
+                return;
+            }
+
+            // 2. Max-rooms safeguard
+            if (socket.joinedConversations.size >= MAX_ROOMS_PER_SOCKET) {
+                socket.emit("error", {
+                    code: "MAX_ROOMS_EXCEEDED",
+                    message: `Cannot join more than ${MAX_ROOMS_PER_SOCKET} conversations per connection`
+                });
+                return;
+            }
+
+            // 3. Session visibility gate (only if consultationId provided)
+            if (consultationId) {
+                try {
+                    const session = await consultationSessionService.getSessionByConsultationId(consultationId);
+                    if (JOIN_BLOCKED_STATUSES.includes(session.status)) {
+                        socket.emit("error", {
+                            code: "CHAT_NOT_ACCESSIBLE",
+                            message: `Chat is not accessible in session status: ${session.status}`
+                        });
+                        return;
+                    }
+                } catch (sessionErr) {
+                    // If session not found, log warning but don't block the join
+                    // The session may not exist yet if createSession hasn't been called
+                    logger.warn("Session lookup failed during join_conversation — proceeding without session gate", {
+                        consultationId,
+                        error: sessionErr.message
+                    });
+                }
+            }
+
+            // 4. Participant access validation
+            await conversationService.validateParticipantAccess(conversationId, userId);
+
+            // 5. Join room + track on socket
+            await Promise.resolve(socket.join(conversationId));
+            socket.joinedConversations.add(conversationId);
+
+            const undeliveredMessages = await Message.find({
+                conversationId,
+                senderId: { $ne: userId },
+                status: { $in: ["SENT", "sent"] },
+                deliveredTo: {
+                    $not: {
+                        $elemMatch: { userId }
+                    }
+                }
+            })
+                .select("_id senderId")
+                .lean();
+
+            if (undeliveredMessages.length > 0) {
+                const now = new Date();
+                const messageIds = undeliveredMessages.map((message) => message._id);
+
+                await Message.updateMany(
+                    { _id: { $in: messageIds }, conversationId },
+                    {
+                        $addToSet: {
+                            deliveredTo: { userId, deliveredAt: now }
+                        },
+                        $set: { status: "DELIVERED" }
+                    }
+                );
+
+                const groupedBySender = undeliveredMessages.reduce((acc, message) => {
+                    if (!acc[message.senderId]) {
+                        acc[message.senderId] = [];
+                    }
+                    acc[message.senderId].push(message._id.toString());
+                    return acc;
+                }, Object.create(null));
+
+                Object.entries(groupedBySender).forEach(([senderId, senderMessageIds]) => {
+                    const room = `user:${senderId}`;
+                    const socketsInRoom = io.sockets.adapter.rooms.get(room);
+                    console.log('[DELIVERY] room:', room, 'sockets in room:', socketsInRoom ? [...socketsInRoom] : 'EMPTY - NO SOCKETS');
+                    io.to(room).emit("message_delivered", {
+                        conversationId,
+                        messageIds: senderMessageIds
+                    });
+                });
+
+                logger.info("Join-time delivery receipts emitted", {
+                    conversationId,
+                    recipientUserId: userId,
+                    deliveredCount: undeliveredMessages.length
+                });
+            }
+
+            // Debug log — confirms room was joined successfully
+            console.log("JOIN CONVERSATION RECEIVED", {
+                conversationId,
+                consultationId: consultationId ?? "not provided",
+                socketId: socket.id,
+                userId: socket.user?.userId
+            });
+
+            // 6. Update Redis presence
+            await addPresence(conversationId, userId);
+
+            // 7. Notify the whole room about this user coming online
+            io.to(conversationId).emit("presence_update", {
+                conversationId,
+                userId,
+                status: "online"
+            });
+
+            // 8. Send full presence snapshot ONLY to the joining socket
+            const onlineUserIds = await getPresence(conversationId);
+            socket.emit("presence_snapshot", { conversationId, onlineUserIds });
+
+            logger.info("Socket joined conversation room", {
+                socketId: socket.id,
+                userId: socket.user?.userId,
+                conversationId,
+                consultationId: consultationId ?? "not provided"
+            });
+        } catch (err) {
+            logger.error("join_conversation error", { userId, error: err.message });
+            socket.emit("error", {
+                code: "JOIN_FAILED",
+                message: err.message
+            });
+        }
+    });
+
+    // ── leave_conversation ───────────────────────────────────────────────────
+    socket.on("leave_conversation", async ({ conversationId } = {}) => {
+        try {
+            if (!conversationId) return;
+
+            socket.leave(conversationId);
+            socket.joinedConversations.delete(conversationId);
+
+            await removePresence(conversationId, userId);
+
+            io.to(conversationId).emit("presence_update", {
+                conversationId,
+                userId,
+                status: "offline"
+            });
+
+            logger.info("Socket left conversation", { userId, conversationId });
+        } catch (err) {
+            logger.error("leave_conversation error", { userId, error: err.message });
+        }
+    });
+
+    // ── disconnect ───────────────────────────────────────────────────────────
+    // Iterate the explicit joinedConversations Set only — never socket.rooms.
+    socket.on("disconnect", async () => {
+        try {
+            for (const conversationId of socket.joinedConversations) {
+                await removePresence(conversationId, userId);
+
+                io.to(conversationId).emit("presence_update", {
+                    conversationId,
+                    userId,
+                    status: "offline"
+                });
+            }
+
+            logger.info("Socket disconnected — presence cleaned up", {
+                userId,
+                roomCount: socket.joinedConversations.size
+            });
+        } catch (err) {
+            logger.error("disconnect presence cleanup error", { userId, error: err.message });
+        }
+    });
+};
+
+module.exports = { registerPresenceHandler };

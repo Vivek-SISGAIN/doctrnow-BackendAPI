@@ -2,6 +2,32 @@ const consultationService = require('../service/consultation.service');
 const ApiError = require('../utils/ApiError');
 const asyncHandler = require('../utils/asyncHandler');
 const { emitToRoom, emitToDoctorRoom, CONSULTATION_EVENTS } = require('../utils/socket');
+const chatClient = require('../utils/chat-client');
+const profileClient = require('../utils/profile-client');
+const appointmentClient = require('../utils/appointment-client');
+
+const buildChatSessionPayload = async (consultation, patientId, doctorId) => {
+  const [patientProfile, appointment] = await Promise.all([
+    profileClient.getPatientProfile(consultation.patientId),
+    appointmentClient.getAppointmentById(consultation.appointmentId)
+  ]);
+
+  const patientName = [patientProfile?.firstName, patientProfile?.lastName]
+    .filter(Boolean)
+    .join(' ')
+    .trim();
+
+  return {
+    consultationId: consultation.id,
+    patientId,
+    doctorId,
+    patientName: patientName || null,
+    patientAvatar: patientProfile?.profileImage ?? null,
+    appointmentId: consultation.appointmentId ?? null,
+    appointmentDate: appointment?.slot?.startTime ?? null,
+    appointmentType: appointment?.consultationType ?? consultation.type ?? null
+  };
+};
 
 
 const createConsultation = asyncHandler(async (req, res) => {
@@ -55,13 +81,30 @@ const joinLobby = asyncHandler(async (req, res) => {
   const { appointmentId } = req.params;
   const { patientId, doctorId, hospitalId } = req.body;
 
-  // Note: x-user-id from gateway (JWT) may be auth user id; appointment patientId is profile id.
-  // They often differ, so we do not block join when they mismatch. Rely on auth + knowing appointment ids.
   let { consultation, channelName } = await consultationService.joinLobby(appointmentId, patientId, doctorId);
   if (hospitalId && consultation?.id && consultation.hospitalId !== hospitalId) {
     consultation = await consultationService.update(consultation.id, { hospitalId });
   }
-  
+
+  // Fire-and-forget — never block the lobby join on chat session creation
+  const jwtUserId = req.headers['x-user-id'];
+  const jwtRole = req.headers['x-user-role'];
+
+  if (consultation?.id) {
+    // Save the Clerk userId into the consultation record if it's the patient joining
+    if (jwtRole === 'PATIENT' && jwtUserId) {
+      await consultationService.update(consultation.id, { patientAuthId: jwtUserId });
+      // Update the local object so we use the correct ID for session creation
+      consultation.patientAuthId = jwtUserId;
+    }
+
+    const chatPatientId = consultation.patientAuthId || consultation.patientId;
+    const chatDoctorId = consultation.doctorAuthId || consultation.doctorId;
+
+    const chatSessionPayload = await buildChatSessionPayload(consultation, chatPatientId, chatDoctorId);
+    chatClient.createSession(chatSessionPayload); // ← no await
+  }
+
   if (doctorId) {
     emitToDoctorRoom(doctorId, CONSULTATION_EVENTS.PATIENT_JOINED_LOBBY, { appointmentId, consultationId: consultation?.id });
   } else {
@@ -75,11 +118,44 @@ const joinLobby = asyncHandler(async (req, res) => {
   });
 });
 
+const startConsultation = asyncHandler(async (req, res) => {
+  const { appointmentId } = req.params;
+
+  try {
+    const consultation = await consultationService.start(appointmentId);
+
+    const jwtUserId = req.headers['x-user-id'];
+    const jwtRole = req.headers['x-user-role'];
+
+    if (consultation?.id) {
+      // Save the Clerk userId into the consultation record (Doctor is starting the call)
+      const oldDoctorId = consultation.doctorAuthId || consultation.doctorId;
+      if (jwtRole === 'DOCTOR' && jwtUserId && consultation.doctorAuthId !== jwtUserId) {
+        await consultationService.update(consultation.id, { doctorAuthId: jwtUserId });
+        // Trigger participant ID update in MongoDB to replace placeholder UUID with Clerk userId
+        chatClient.updateParticipantUserId(consultation.id, oldDoctorId, jwtUserId); // Fire-and-forget
+        consultation.doctorAuthId = jwtUserId;
+      }
+
+      const chatPatientId = consultation.patientAuthId || consultation.patientId;
+      const chatDoctorId = consultation.doctorAuthId || consultation.doctorId;
+
+      const chatSessionPayload = await buildChatSessionPayload(consultation, chatPatientId, chatDoctorId);
+      chatClient.createSession(chatSessionPayload); // ← no await
+      await chatClient.startSession(consultation.id); // ← keep await, this one is needed
+    }
+
+    res.status(200).json({ success: true, message: 'Consultation started', data: consultation });
+  } catch (error) {
+    throw ApiError.badRequest(error.message);
+  }
+});
+
 const requestConsent = asyncHandler(async (req, res) => {
   const { appointmentId } = req.params;
 
   const consultation = await consultationService.requestConsent(appointmentId);
-  
+
   emitToRoom(appointmentId, CONSULTATION_EVENTS.CONSENT_REQUESTED, { appointmentId, consultationId: consultation?.id });
 
   res.status(200).json({
@@ -93,7 +169,7 @@ const acceptConsent = asyncHandler(async (req, res) => {
   const { appointmentId } = req.params;
 
   const consultation = await consultationService.acceptConsent(appointmentId);
-  
+
   emitToRoom(appointmentId, CONSULTATION_EVENTS.CONSENT_ACCEPTED, { appointmentId, consultationId: consultation?.id });
 
   res.status(200).json({
@@ -103,26 +179,18 @@ const acceptConsent = asyncHandler(async (req, res) => {
   });
 });
 
-const startConsultation = asyncHandler(async (req, res) => {
-  const { appointmentId } = req.params;
-
-  try {
-    const consultation = await consultationService.start(appointmentId);
-    res.status(200).json({
-      success: true,
-      message: 'Consultation started',
-      data: consultation
-    });
-  } catch (error) {
-    throw ApiError.badRequest(error.message);
-  }
-});
 
 const endConsultation = asyncHandler(async (req, res) => {
   const { id } = req.params;
 
   try {
     const consultation = await consultationService.end(id);
+
+    // End chat session
+    if (consultation?.id) {
+      chatClient.endSession(consultation.id);
+    }
+
     res.status(200).json({
       success: true,
       message: 'Consultation ended',
@@ -140,7 +208,12 @@ const endByAppointment = asyncHandler(async (req, res) => {
 
   try {
     const { consultation } = await consultationService.endByAppointment(appointmentId, who);
-    
+
+    // End chat session
+    if (consultation?.id) {
+      chatClient.endSession(consultation.id);
+    }
+
     emitToRoom(appointmentId, CONSULTATION_EVENTS.CALL_ENDED, { appointmentId, consultationId: consultation?.id, endedBy: who, reason });
 
     res.status(200).json({

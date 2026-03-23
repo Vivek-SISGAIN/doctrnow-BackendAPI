@@ -15,7 +15,9 @@ class ConsultationService {
         status: data.status || 'PENDING',
         type: data.type || 'VIDEO',
         diagnosis: data.diagnosis,
-        followUp: data.followUp
+        followUp: data.followUp,
+        patientAuthId: data.patientAuthId,
+        doctorAuthId: data.doctorAuthId
       },
       create: {
         appointmentId: data.appointmentId,
@@ -25,7 +27,9 @@ class ConsultationService {
         status: data.status || 'PENDING',
         type: data.type || 'VIDEO',
         diagnosis: data.diagnosis,
-        followUp: data.followUp
+        followUp: data.followUp,
+        patientAuthId: data.patientAuthId,
+        doctorAuthId: data.doctorAuthId
       },
       include: {
         notes: {
@@ -437,6 +441,8 @@ class ConsultationService {
     if (data.followUp !== undefined) updateData.followUp = data.followUp;
     if (data.type !== undefined) updateData.type = data.type;
     if (data.hospitalId !== undefined) updateData.hospitalId = data.hospitalId;
+    if (data.patientAuthId !== undefined) updateData.patientAuthId = data.patientAuthId;
+    if (data.doctorAuthId !== undefined) updateData.doctorAuthId = data.doctorAuthId;
 
     const updated = await prisma.consultation.update({
       where: { id },

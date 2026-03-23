@@ -10,7 +10,7 @@ import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { Request, Response } from 'express';
 import { HttpProxyService } from '../http-proxy/http-proxy.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-
+import { SkipThrottle } from '@nestjs/throttler';
 /**
  * Consultation Controller
  * Routes: /api/v1/consultations/*
@@ -20,11 +20,12 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 @ApiTags('consultations')
 @ApiBearerAuth('JWT-auth')
 @Controller('consultations')
+@SkipThrottle()
 @UseGuards(JwtAuthGuard)
 export class ConsultationController {
   constructor(
     private readonly httpProxyService: HttpProxyService,
-  ) {}
+  ) { }
 
   @All()
   async proxyBase(@Req() req: Request, @Res() res: Response): Promise<void> {
@@ -74,7 +75,7 @@ export class ConsultationController {
 
   private extractHeaders(req: Request): Record<string, string> {
     const headers: Record<string, string> = {};
-    const allowedHeaders = ['content-type', 'accept', 'x-tenant-id', 'authorization'];
+    const allowedHeaders = ['content-type', 'accept', 'x-tenant-id', 'authorization', 'x-user-id', 'x-user-role'];
 
     for (const [key, value] of Object.entries(req.headers)) {
       if (allowedHeaders.includes(key.toLowerCase())) {

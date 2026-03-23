@@ -12,7 +12,7 @@ import { Request } from 'express';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { RtcTokenBuilder, RtcRole } = require('agora-access-token');
-
+import { SkipThrottle } from '@nestjs/throttler';
 /**
  * Agora RTC token generation.
  * GET /api/v1/agora/token?channel=CHANNEL_NAME&uid=OPTIONAL_UID
@@ -22,9 +22,10 @@ const { RtcTokenBuilder, RtcRole } = require('agora-access-token');
 @ApiTags('agora')
 @ApiBearerAuth('JWT-auth')
 @Controller('agora')
+@SkipThrottle()
 @UseGuards(JwtAuthGuard)
 export class AgoraController {
-  constructor(private readonly configService: ConfigService) {}
+  constructor(private readonly configService: ConfigService) { }
 
   @Get('token')
   @ApiQuery({ name: 'channel', required: true, description: 'Agora channel name (e.g. appointment id or consult-xxx)' })
