@@ -33,7 +33,7 @@ export class JwtService {
   constructor(
     private readonly jwtKeyService: JwtKeyService,
     private readonly configService: ConfigService,
-  ) {}
+  ) { }
 
   /**
    * Generate access token (short-lived, RS256)
@@ -47,7 +47,9 @@ export class JwtService {
     const keyPair = await this.jwtKeyService.getCurrentKeyPair();
     const issuer = this.configService.get<string>('JWT_ISSUER', 'doctornow-platform');
     const audience = this.configService.get<string>('JWT_AUDIENCE', 'doctornow-api');
-    const ttl = this.configService.get<number>('JWT_ACCESS_TOKEN_TTL', 900); // 15 minutes
+    // const ttl = this.configService.get<number>('JWT_ACCESS_TOKEN_TTL', 900); // 15 minutes
+    const ttl = Number(this.configService.get<number>('JWT_ACCESS_TOKEN_TTL', 900));
+    const issuedAt = Math.floor(Date.now() / 1000);
 
     const payload: JwtPayload = {
       sub: userId,
@@ -56,12 +58,13 @@ export class JwtService {
       sessionId,
       iss: issuer,
       aud: audience,
+      iat: issuedAt,
+      exp: issuedAt + ttl,
     };
 
     const token = jwt.sign(payload, keyPair.privateKey, {
       algorithm: 'RS256',
       keyid: keyPair.keyId,
-      expiresIn: ttl,
     });
 
     return token;

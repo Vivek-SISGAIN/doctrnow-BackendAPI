@@ -1,7 +1,8 @@
-import { Injectable, Logger, BadRequestException, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, BadRequestException, NotFoundException, Inject, forwardRef } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { EventsService } from '../events/events.service';
+import { SessionService } from '../auth/session.service';
 import { createHash, randomBytes } from 'crypto';
 import { OtpPurpose } from '@prisma/client';
 
@@ -32,6 +33,8 @@ export class OtpService {
     private readonly prisma: PrismaService,
     private readonly configService: ConfigService,
     private readonly eventsService: EventsService,
+    @Inject(forwardRef(() => SessionService))
+    private readonly sessionService: SessionService,
   ) {}
 
   /**
@@ -106,6 +109,8 @@ export class OtpService {
       userId: user?.id,
       email: dto.email,
       mobile: dto.mobile,
+      otp,
+      channel: dto.email ? 'EMAIL' : 'SMS',
       purpose: dto.purpose,
       tenantId: dto.tenantId,
     });
@@ -121,7 +126,7 @@ export class OtpService {
    * - REGISTRATION: returns verified, userId undefined.
    * - LOGIN: looks up user by mobile/email and returns userId so login/otp can issue tokens.
    */
-  async verifyOtp(dto: VerifyOtpDto): Promise<{ verified: boolean; userId?: string }> {
+  async verifyOtp(dto: VerifyOtpDto): Promise<{ verified: boolean; userId?: string; accessToken?: string; refreshToken?: string; expiresIn?: number; sessionId?: string; user?: any }> {
     if (!dto.email && !dto.mobile) {
       throw new BadRequestException('Either email or mobile must be provided');
     }
@@ -140,7 +145,27 @@ export class OtpService {
           user = await this.prisma.user.findUnique({ where: { email: dto.email } });
         }
         this.logger.warn(`Accepting test OTP 111111 for LOGIN (ACCEPT_TEST_OTP=true), userId=${user?.id ?? 'none'}`);
-        return { verified: true, userId: user?.id ?? undefined };
+        
+        if (user) {
+          if (user.status !== 'ACTIVE') {
+            throw new BadRequestException('User account is not active');
+          }
+          const session = await this.sessionService.createSession({
+            userId: user.id,
+            tenantId: user.tenantId,
+          });
+          return {
+            verified: true,
+            ...session,
+            user: {
+              id: user.id,
+              email: user.email,
+              role: user.role,
+              tenantId: user.tenantId,
+            }
+          };
+        }
+        return { verified: true, userId: undefined };
       }
     }
 
@@ -157,8 +182,6 @@ export class OtpService {
           gt: new Date(),
         },
         OR: [
-          ...(dto.email ? [{ user: { email: dto.email } }] : []),
-          ...(dto.mobile ? [{ user: { mobile: dto.mobile } }] : []),
           ...(dto.email ? [{ identifierEmail: dto.email }] : []),
           ...(dto.mobile ? [{ identifierMobile: dto.mobile }] : []),
         ].filter(Boolean),
@@ -197,6 +220,27 @@ export class OtpService {
       purpose: dto.purpose,
       tenantId: dto.tenantId,
     });
+
+    if (dto.purpose === 'LOGIN' && otpRequest.userId && otpRequest.user) {
+      const user = otpRequest.user;
+      if (user.status !== 'ACTIVE') {
+        throw new BadRequestException('User account is not active');
+      }
+      const session = await this.sessionService.createSession({
+        userId: user.id,
+        tenantId: user.tenantId,
+      });
+      return {
+        verified: true,
+        ...session,
+        user: {
+          id: user.id,
+          email: user.email,
+          role: user.role,
+          tenantId: user.tenantId,
+        }
+      };
+    }
 
     return {
       verified: true,
