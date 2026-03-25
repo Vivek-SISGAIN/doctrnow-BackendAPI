@@ -359,7 +359,7 @@ class DoctorService {
       console.log(`[ProfileService] Success: Slot regeneration triggered for doctor ${doctorId}`);
     } catch (error) {
       console.error(
-        `[ProfileService] Failed to trigger slot sync:`,
+        '[ProfileService] Failed to trigger slot sync:',
         error.response?.data?.message || error.message
       );
     }
@@ -371,6 +371,25 @@ class DoctorService {
   delete(id) {
     return prisma.doctor.delete({
       where: { id }
+    });
+  }
+
+  findByIdsOrUserIds(ids) {
+    return prisma.doctor.findMany({
+      where: {
+        OR: [{ id: { in: ids } }, { userId: { in: ids } }]
+      }
+    });
+  }
+
+  /**
+   * Find multiple doctors strictly by their primary doctor ID.
+   */
+  findByIds(ids) {
+    return prisma.doctor.findMany({
+      where: {
+        id: { in: ids }
+      }
     });
   }
 }
