@@ -15,6 +15,7 @@ import { Request, Response } from 'express';
 import { HttpProxyService } from '../http-proxy/http-proxy.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { Roles, UserRole } from '../common/decorators/roles.decorator';
+import { SkipThrottle } from '@nestjs/throttler';
 
 /**
  * Hospital Admin Controller
@@ -25,6 +26,7 @@ import { Roles, UserRole } from '../common/decorators/roles.decorator';
 @ApiTags('hospital-admin')
 @ApiBearerAuth('JWT-auth')
 @Controller('hospital')
+@SkipThrottle() // We handle rate limiting at the service level, so skip global throttling here
 @UseGuards(JwtAuthGuard)
 export class HospitalAdminController {
   constructor(private readonly httpProxyService: HttpProxyService) {}

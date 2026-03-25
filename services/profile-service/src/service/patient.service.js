@@ -222,6 +222,26 @@ class PatientService {
       where: { id }
     });
   }
+
+  findByIds(ids) {
+    return prisma.patient.findMany({
+      where: {
+        id: { in: ids }
+      }
+    });
+  }
+
+  /**
+   * Find multiple patients by their primary IDs or their linked userId.
+   * Mirrors the doctor version for consistency.
+   */
+  findByIdsOrUserIds(ids) {
+    return prisma.patient.findMany({
+      where: {
+        OR: [{ id: { in: ids } }, { userId: { in: ids } }]
+      }
+    });
+  }
 }
 
 module.exports = new PatientService();

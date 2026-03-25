@@ -43,103 +43,6 @@ async function fetchProfilesByIds(ids, buildUrl, authHeader, entityName) {
   return profileMap;
 }
 
-const getAllAppointments = asyncHandler(async (req, res) => {
-  const {
-    patientId,
-    doctorId,
-    status,
-    paymentStatus,
-    consultationType,
-    startDate,
-    endDate,
-    page = 1,
-    limit = 20,
-  } = req.query;
-
-  const filters = {
-    patientId,
-    doctorId,
-    status,
-    paymentStatus,
-    consultationType,
-    startDate,
-    endDate,
-  };
-
-  const pagination = {
-    page: parseInt(page, 10),
-    limit: parseInt(limit, 10),
-  };
-
-  const result = await appointmentService.findAll(filters, pagination);
-
-  if (!result || !result.appointments) {
-    return res.status(200).json({
-      success: true,
-      data: [],
-      pagination: result?.pagination || {},
-    });
-  }
-
-  const doctorIds = [
-    ...new Set(
-      result.appointments
-        .map((appointment) => {
-          return appointment.doctorId;
-        })
-        .filter(Boolean),
-    ),
-  ];
-
-  const patientIds = [
-    ...new Set(
-      result.appointments
-        .map((appointment) => appointment.patientId)
-        .filter(Boolean),
-    ),
-  ];
-
-  let doctorMap = {};
-  let patientMap = {};
-  const authHeader = req.headers.authorization;
-
-  if (doctorIds.length > 0) {
-    doctorMap = await fetchProfilesByIds(
-      doctorIds,
-      (id) => `${baseUrl}profiles/doctors/${id}`,
-      authHeader,
-      "doctor",
-    );
-  }
-
-  if (patientIds.length > 0) {
-    patientMap = await fetchProfilesByIds(
-      patientIds,
-      (id) => `${baseUrl}profiles/patients/${id}`,
-      authHeader,
-      "patient",
-    );
-  }
-
-  // -----------------------------
-  // Merge Doctor Data Into Appointments
-  // -----------------------------
-  const transformedAppointments = result.appointments.map((appointment) => ({
-    ...appointment,
-    doctor: doctorMap[appointment.doctorId] || null,
-    patient: patientMap[appointment.patientId] || null,
-  }));
-
-  // -----------------------------
-  // Final Response
-  // -----------------------------
-  res.status(200).json({
-    success: true,
-    data: transformedAppointments,
-    pagination: result.pagination,
-  });
-});
-
 // const getAllAppointments = asyncHandler(async (req, res) => {
 //   const {
 //     patientId,
@@ -181,7 +84,9 @@ const getAllAppointments = asyncHandler(async (req, res) => {
 //   const doctorIds = [
 //     ...new Set(
 //       result.appointments
-//         .map((appointment) => appointment.doctorId)
+//         .map((appointment) => {
+//           return appointment.doctorId;
+//         })
 //         .filter(Boolean),
 //     ),
 //   ];
@@ -195,43 +100,27 @@ const getAllAppointments = asyncHandler(async (req, res) => {
 //   ];
 
 //   let doctorMap = {};
-// let patientMap = {};
+//   let patientMap = {};
+//   const authHeader = req.headers.authorization;
 
-// const authHeader = req.headers.authorization;
+//   if (doctorIds.length > 0) {
+//     doctorMap = await fetchProfilesByIds(
+//       doctorIds,
+//       (id) => `${baseUrl}profiles/doctors/${id}`,
+//       authHeader,
+//       "doctor",
+//     );
+//   }
 
-// //
-// // 🔹 BULK DOCTOR FETCH
-// //
-// if (doctorIds.length > 0) {
-//   const doctorResponse = await axios.post(
-//     `${baseUrl}profiles/doctors/bulk`,
-//     { ids: doctorIds },
-//     {
-//       headers: {
-//         Authorization: authHeader,
-//       },
-//     },
-//   );
+//   if (patientIds.length > 0) {
+//     patientMap = await fetchProfilesByIds(
+//       patientIds,
+//       (id) => `${baseUrl}profiles/patients/${id}`,
+//       authHeader,
+//       "patient",
+//     );
+//   }
 
-//   doctorMap = doctorResponse.data?.data || {};
-// }
-
-// //
-// // 🔹 BULK PATIENT FETCH
-// //
-// if (patientIds.length > 0) {
-//   const patientResponse = await axios.post(
-//     `${baseUrl}profiles/patients/bulk`,
-//     { ids: patientIds },
-//     {
-//       headers: {
-//         Authorization: authHeader,
-//       },
-//     },
-//   );
-
-//   patientMap = patientResponse.data?.data || {};
-// }
 //   // -----------------------------
 //   // Merge Doctor Data Into Appointments
 //   // -----------------------------
@@ -250,6 +139,102 @@ const getAllAppointments = asyncHandler(async (req, res) => {
 //     pagination: result.pagination,
 //   });
 // });
+
+const getAllAppointments = asyncHandler(async (req, res) => {
+  const {
+    patientId,
+    doctorId,
+    hospitalId,
+    status,
+    paymentStatus,
+    consultationType,
+    startDate,
+    endDate,
+    page = 1,
+    limit = 20,
+  } = req.query;
+ 
+  const filters = {
+    patientId,
+    doctorId,
+    hospitalId,
+    status,
+    paymentStatus,
+    consultationType,
+    startDate,
+    endDate,
+  };
+ 
+  const pagination = {
+    page: parseInt(page, 10),
+    limit: parseInt(limit, 10),
+  };
+ 
+  const result = await appointmentService.findAll(filters, pagination);
+ 
+  if (!result || !result.appointments) {
+    return res.status(200).json({
+      success: true,
+      data: [],
+      pagination: result?.pagination || {},
+    });
+  }
+ 
+  const doctorIds = [...new Set(
+    result.appointments.map((a) => a.doctorId).filter(Boolean)
+  )];
+ 
+  const patientIds = [...new Set(
+    result.appointments.map((a) => a.patientId).filter(Boolean)
+  )];
+ 
+  let doctorMap = {};
+  let patientMap = {};
+ 
+  await Promise.all([
+ 
+    // ── Bulk patient fetch ────────────────────────────────────────────────────
+    patientIds.length > 0
+      ? axios
+          .post(`${baseUrl}profiles/patients/bulk`, { ids: patientIds })
+          .then((r) => { patientMap = r.data?.data || {}; })
+          .catch((err) => {
+            console.error(
+              '[getAllAppointments] Bulk patient fetch failed:',
+              err.response?.status,
+              err.response?.data?.message || err.message,
+            );
+          })
+      : Promise.resolve(),
+ 
+    // ── Bulk doctor fetch ─────────────────────────────────────────────────────
+    doctorIds.length > 0
+      ? axios
+          .post(`${baseUrl}profiles/doctors/bulk`, { ids: doctorIds })
+          .then((r) => { doctorMap = r.data?.data || {}; })
+          .catch((err) => {
+            console.error(
+              '[getAllAppointments] Bulk doctor fetch failed:',
+              err.response?.status,
+              err.response?.data?.message || err.message,
+            );
+          })
+      : Promise.resolve(),
+ 
+  ]);
+ 
+  const transformedAppointments = result.appointments.map((appointment) => ({
+    ...appointment,
+    doctor: doctorMap[appointment.doctorId] || null,
+    patient: patientMap[appointment.patientId] || null,
+  }));
+ 
+  res.status(200).json({
+    success: true,
+    data: transformedAppointments,
+    pagination: result.pagination,
+  });
+});
 
 const getAppointmentById = asyncHandler(async (req, res) => {
   const { id } = req.params;
