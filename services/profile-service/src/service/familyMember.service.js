@@ -18,7 +18,11 @@ class FamilyMemberService {
       return null;
     }
     return prisma.familyMember.findFirst({
-      where: { emiratesId }
+      where: { emiratesId },
+      select: {
+        id: true,
+        emiratesId: true
+      }
     });
   }
 
@@ -74,6 +78,10 @@ class FamilyMemberService {
           { id: { not: id } },
           { emiratesId }
         ]
+      },
+      select: {
+        id: true,
+        emiratesId: true
       }
     });
   }

@@ -16,6 +16,23 @@ class PatientService {
       // Returns all fields by default
     });
   }
+
+  findByEmiratesId(emiratesId, excludeId = null) {
+    if (!emiratesId) {
+      return null;
+    }
+
+    return prisma.patient.findFirst({
+      where: {
+        emiratesId,
+        ...(excludeId ? { id: { not: excludeId } } : {})
+      },
+      select: {
+        id: true,
+        emiratesId: true
+      }
+    });
+  }
   /**
    * Build where clause for filtering
    */

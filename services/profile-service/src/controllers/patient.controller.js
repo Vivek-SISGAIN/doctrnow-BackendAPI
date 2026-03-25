@@ -1,4 +1,5 @@
 const patientService = require('../service/patient.service');
+const familyMemberService = require('../service/familyMember.service');
 const ApiError = require('../utils/ApiError');
 const asyncHandler = require('../utils/asyncHandler');
 
@@ -102,6 +103,11 @@ const createCurrentPatient = asyncHandler(async (req, res) => {
       throw ApiError.conflict('Emirates ID already in use');
   }
 
+  const familyConflict = await familyMemberService.findByEmiratesId(req.body.emiratesId);
+  if (familyConflict) {
+    throw ApiError.conflict('Emirates ID already in use');
+  }
+
   const patient = await patientService.createForUser(userId, req.body);
   res.status(201).json({
     success: true,
@@ -135,6 +141,13 @@ const updatePatient = asyncHandler(async (req, res) => {
       throw ApiError.conflict('Email already in use');
     }
     if (conflicts.emiratesId === emiratesId) {
+      throw ApiError.conflict('Emirates ID already in use');
+    }
+  }
+
+  if (emiratesId) {
+    const familyConflict = await familyMemberService.findByEmiratesId(emiratesId);
+    if (familyConflict) {
       throw ApiError.conflict('Emirates ID already in use');
     }
   }
