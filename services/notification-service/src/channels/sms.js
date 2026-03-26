@@ -14,6 +14,14 @@ if (accountSid && authToken) {
 }
 
 async function sendOtpSms(mobile, otp) {
+  // Explicit mock mode: set TWILIO_MOCK_MODE=true in .env to bypass Twilio entirely.
+  // To switch to live SMS: set TWILIO_MOCK_MODE=false and ensure Twilio credentials are set.
+  if (process.env.TWILIO_MOCK_MODE === 'true') {
+    const message = buildSmsMessage(otp);
+    console.log(`[SMS-MOCK] TWILIO_MOCK_MODE=true. Would send to ${mobile}: "${message}"`);
+    return;
+  }
+
   if (!twilioClient) {
     const message = buildSmsMessage(otp);
     console.log(`[SMS-MOCK] Twilio client not initialized. Would send to ${mobile}: "${message}"`);

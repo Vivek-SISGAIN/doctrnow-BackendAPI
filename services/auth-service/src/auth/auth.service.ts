@@ -117,6 +117,68 @@ export class AuthService {
   }
 
   /**
+   * Register new user and immediately issue tokens (for patient registration flow).
+   * Calls this.register() internally — no logic duplication.
+   * The caller has already verified identity (phone OTP) so 2FA is not re-triggered.
+   */
+  async registerAndLogin(dto: RegisterDto & {
+    deviceId?: string;
+    ipAddress?: string;
+    userAgent?: string;
+  }): Promise<{
+    accessToken: string;
+    refreshToken: string;
+    expiresIn: number;
+    sessionId: string;
+    user: {
+      id: string;
+      email: string;
+      role: string;
+      tenantId: string;
+    };
+  }> {
+    // Step 1: Reuse all registration logic (validation, duplicate check, hash, create user, publish event)
+    await this.register(dto);
+
+    // Step 2: Fetch the newly created user to obtain id and tenantId
+    const user = await this.prisma.user.findUnique({
+      where: { email: dto.email },
+    });
+
+    if (!user) {
+      throw new BadRequestException('User not found after registration');
+    }
+
+    // Step 3: Create session and issue tokens immediately (registration verified identity via OTP)
+    const session = await this.sessionService.createSession({
+      userId: user.id,
+      tenantId: user.tenantId,
+      deviceId: dto.deviceId,
+      ipAddress: dto.ipAddress,
+      userAgent: dto.userAgent,
+    });
+
+    await this.eventsService.publishLoginSucceeded({
+      userId: user.id,
+      email: user.email,
+      sessionId: session.sessionId,
+      tenantId: user.tenantId,
+    });
+
+    this.logger.log(`User registered and auto-logged in: ${user.id} (${user.email})`);
+
+    return {
+      ...session,
+      user: {
+        id: user.id,
+        email: user.email,
+        role: user.role,
+        tenantId: user.tenantId,
+      },
+    };
+  }
+
+  /**
    * Login user
    */
   async login(dto: LoginDto): Promise<{
