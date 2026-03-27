@@ -1,6 +1,31 @@
 const patientService = require('../service/patient.service');
 const ApiError = require('../utils/ApiError');
 const asyncHandler = require('../utils/asyncHandler');
+const axios = require('axios');
+
+const authServiceClient = {
+  async getUserStatusBulk(userIds) {
+    if (!userIds?.length) {
+      return {};
+    }
+    try {
+      const { data } = await axios.post(
+        `${process.env.BASE_URL}/api/v1/auth/users/status-bulk`,
+        { userIds },
+        {
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          timeout: 3000
+        }
+      );
+      return data;
+    } catch (err) {
+      console.error('Failed to fetch user statuses from auth service:', err.message);
+      return {}; // graceful degradation — return empty, status will be null
+    }
+  }
+};
 
 const getAllPatients = asyncHandler(async (req, res) => {
   const {
@@ -15,25 +40,27 @@ const getAllPatients = asyncHandler(async (req, res) => {
     sortBy = 'recent'
   } = req.query;
 
-  const filters = {
-    search,
-    gender,
-    bloodGroup,
-    riskCategory,
-    patientType,
-    followUpStatus
-  };
+  const result = await patientService.findAll(
+    { search, gender, bloodGroup, riskCategory, patientType, followUpStatus },
+    { page: parseInt(page, 10), limit: parseInt(limit, 10) },
+    sortBy
+  );
 
-  const pagination = {
-    page: parseInt(page, 10),
-    limit: parseInt(limit, 10)
-  };
+  // Extract all userIds from this page of patients
+  const userIds = result.patients.map((p) => p.userId).filter(Boolean);
 
-  const result = await patientService.findAll(filters, pagination, sortBy);
+  // Fetch statuses in one bulk call
+  const statusMap = await authServiceClient.getUserStatusBulk(userIds);
+
+  // Merge status into each patient
+  const patients = result.patients.map((p) => ({
+    ...p,
+    status: statusMap[p.userId] ?? null
+  }));
 
   res.status(200).json({
     success: true,
-    data: result.patients,
+    data: patients,
     pagination: {
       page: result.pagination.page,
       limit: result.pagination.limit,
@@ -95,11 +122,15 @@ const createCurrentPatient = asyncHandler(async (req, res) => {
     emiratesId: req.body.emiratesId
   });
   if (conflict) {
-    if (conflict.email === req.body.email) throw ApiError.conflict('Email already in use');
-    if (conflict.mobileNumber === req.body.mobileNumber)
+    if (conflict.email === req.body.email) {
+      throw ApiError.conflict('Email already in use');
+    }
+    if (conflict.mobileNumber === req.body.mobileNumber) {
       throw ApiError.conflict('Mobile number already in use');
-    if (conflict.emiratesId === req.body.emiratesId)
+    }
+    if (conflict.emiratesId === req.body.emiratesId) {
       throw ApiError.conflict('Emirates ID already in use');
+    }
   }
 
   const patient = await patientService.createForUser(userId, req.body);
