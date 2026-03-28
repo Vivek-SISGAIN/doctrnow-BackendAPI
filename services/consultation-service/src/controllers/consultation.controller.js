@@ -1,4 +1,5 @@
 const consultationService = require('../service/consultation.service');
+const prisma = require('../prisma/prisma');
 const ApiError = require('../utils/ApiError');
 const asyncHandler = require('../utils/asyncHandler');
 const { emitToRoom, emitToDoctorRoom, CONSULTATION_EVENTS } = require('../utils/socket');
@@ -86,23 +87,32 @@ const joinLobby = asyncHandler(async (req, res) => {
     consultation = await consultationService.update(consultation.id, { hospitalId });
   }
 
-  // Fire-and-forget — never block the lobby join on chat session creation
   const jwtUserId = req.headers['x-user-id'];
   const jwtRole = req.headers['x-user-role'];
 
+  // ✅ ADD HERE — before any update, shows what we have on lobby join
+  console.log('[LOBBY DEBUG] Before update:', {
+    patientAuthId: consultation.patientAuthId,
+    patientId: consultation.patientId,
+    doctorAuthId: consultation.doctorAuthId,  // should be NULL
+    doctorId: consultation.doctorId,
+    jwtUserId,
+    jwtRole
+  });
+
   if (consultation?.id) {
-    // Save the Clerk userId into the consultation record if it's the patient joining
     if (jwtRole === 'PATIENT' && jwtUserId) {
       await consultationService.update(consultation.id, { patientAuthId: jwtUserId });
-      // Update the local object so we use the correct ID for session creation
       consultation.patientAuthId = jwtUserId;
     }
 
-    const chatPatientId = consultation.patientAuthId || consultation.patientId;
-    const chatDoctorId = consultation.doctorAuthId || consultation.doctorId;
-
-    const chatSessionPayload = await buildChatSessionPayload(consultation, chatPatientId, chatDoctorId);
-    chatClient.createSession(chatSessionPayload); // ← no await
+    // ✅ ADD HERE — after update, shows final state leaving joinLobby
+    console.log('[LOBBY DEBUG] After update:', {
+      patientAuthId: consultation.patientAuthId,
+      patientId: consultation.patientId,
+      doctorAuthId: consultation.doctorAuthId,  // must still be NULL
+      doctorId: consultation.doctorId,
+    });
   }
 
   if (doctorId) {
@@ -129,20 +139,30 @@ const startConsultation = asyncHandler(async (req, res) => {
 
     if (consultation?.id) {
       // Save the Clerk userId into the consultation record (Doctor is starting the call)
-      const oldDoctorId = consultation.doctorAuthId || consultation.doctorId;
       if (jwtRole === 'DOCTOR' && jwtUserId && consultation.doctorAuthId !== jwtUserId) {
         await consultationService.update(consultation.id, { doctorAuthId: jwtUserId });
-        // Trigger participant ID update in MongoDB to replace placeholder UUID with Clerk userId
-        chatClient.updateParticipantUserId(consultation.id, oldDoctorId, jwtUserId); // Fire-and-forget
         consultation.doctorAuthId = jwtUserId;
       }
 
+      // ✅ Both authIds are now available — safe to create and start the chat session.
       const chatPatientId = consultation.patientAuthId || consultation.patientId;
       const chatDoctorId = consultation.doctorAuthId || consultation.doctorId;
 
       const chatSessionPayload = await buildChatSessionPayload(consultation, chatPatientId, chatDoctorId);
-      chatClient.createSession(chatSessionPayload); // ← no await
-      await chatClient.startSession(consultation.id); // ← keep await, this one is needed
+      // ✅ ADD HERE — right before createSession call
+      console.log('[START DEBUG] Creating session with:', {
+        patientAuthId: consultation.patientAuthId,
+        patientId: consultation.patientId,
+        doctorAuthId: consultation.doctorAuthId,  // should be Clerk ID, NOT null
+        doctorId: consultation.doctorId,
+        chatPatientId,
+        chatDoctorId,  // this is what goes into MongoDB as doctor participant
+        jwtUserId,
+        jwtRole
+      });
+
+      await chatClient.createSession(chatSessionPayload);
+      await chatClient.startSession(consultation.id);
     }
 
     res.status(200).json({ success: true, message: 'Consultation started', data: consultation });
@@ -313,7 +333,7 @@ const saveHealthDetails = asyncHandler(async (req, res) => {
     sugarLevel,
     consultationReason,
     allergies,
-    criticalConditions
+    criticalConditions,
   });
 
   res.status(200).json({
@@ -334,6 +354,149 @@ const getHealthDetails = asyncHandler(async (req, res) => {
   });
 });
 
+// ─── Review Methods ────────────────────────────────────────────────────────────
+
+const submitReview = asyncHandler(async (req, res) => {
+  const { id: consultationId } = req.params;
+  const userId = req.headers['x-user-id'];
+  const userRole = req.headers['x-user-role'];
+
+  // Auth: only patients
+  if (!userRole || userRole.toUpperCase() !== 'PATIENT') {
+    return res.status(403).json({ success: false, message: 'Only patients can submit reviews.' });
+  }
+
+  const consultation = await prisma.consultation.findUnique({ where: { id: consultationId } });
+
+  if (!consultation) {
+    return res.status(404).json({ success: false, message: 'Consultation not found.' });
+  }
+
+  // Authorization: patient must own this consultation
+  if (consultation.patientId !== userId && consultation.patientAuthId !== userId) {
+    return res.status(403).json({ success: false, message: 'You do not have permission to review this consultation.' });
+  }
+
+  // Must be COMPLETED
+  if (consultation.status !== 'COMPLETED') {
+    return res.status(400).json({ success: false, message: 'Can only review a completed consultation.' });
+  }
+
+  // Cannot review twice
+  if (consultation.reviewedAt !== null) {
+    return res.status(409).json({ success: false, message: 'This consultation has already been reviewed.' });
+  }
+
+  const { rating, comment, isAnonymous } = req.body || {};
+
+  // Validate rating if provided
+  if (rating !== undefined && rating !== null) {
+    const ratingNum = parseInt(rating, 10);
+    if (!Number.isInteger(ratingNum) || ratingNum < 1 || ratingNum > 5) {
+      return res.status(400).json({ success: false, message: 'Rating must be an integer between 1 and 5.' });
+    }
+  }
+
+  const updated = await prisma.consultation.update({
+    where: { id: consultationId },
+    data: {
+      rating: rating !== undefined && rating !== null ? parseInt(rating, 10) : null,
+      comment: comment ?? null,
+      isAnonymous: isAnonymous ?? false,
+      reviewedAt: new Date(),
+    }
+  });
+
+  res.status(200).json({ success: true, data: updated });
+});
+
+const getDoctorRating = asyncHandler(async (req, res) => {
+  const { doctorId } = req.params;
+
+  console.log(`[getDoctorRating] Querying rating for doctorId: ${doctorId}`);
+  const aggregate = await prisma.consultation.aggregate({
+    where: { doctorId, rating: { not: null } },
+    _avg: { rating: true },
+    _count: { rating: true },
+  });
+  console.log(`[getDoctorRating] Result for ${doctorId}:`, aggregate);
+
+  const breakdown = await prisma.consultation.groupBy({
+    by: ['rating'],
+    where: { doctorId, rating: { not: null } },
+    _count: { rating: true },
+  });
+
+  const ratingBreakdown = { '1': 0, '2': 0, '3': 0, '4': 0, '5': 0 };
+  for (const row of breakdown) {
+    if (row.rating !== null) {
+      ratingBreakdown[String(row.rating)] = row._count.rating;
+    }
+  }
+
+  const averageRating = aggregate._avg.rating
+    ? Math.round(aggregate._avg.rating * 10) / 10
+    : 0;
+
+  res.status(200).json({
+    success: true,
+    data: {
+      averageRating,
+      totalReviews: aggregate._count.rating,
+      ratingBreakdown,
+    }
+  });
+});
+
+const getConsultationReviews = asyncHandler(async (req, res) => {
+  const { doctorId } = req.params;
+  const page = parseInt(req.query.page || '1', 10);
+  const limit = parseInt(req.query.limit || '10', 10);
+  const skip = (page - 1) * limit;
+
+  const where = {
+    doctorId,
+    rating: { not: null },
+    reviewedAt: { not: null },
+  };
+
+  const [consultations, total] = await Promise.all([
+    prisma.consultation.findMany({
+      where,
+      select: {
+        id: true,
+        rating: true,
+        comment: true,
+        isAnonymous: true,
+        reviewedAt: true,
+      },
+      orderBy: { reviewedAt: 'desc' },
+      skip,
+      take: limit,
+    }),
+    prisma.consultation.count({ where }),
+  ]);
+
+  const reviews = consultations.map((c) => ({
+    id: c.id,
+    patientName: c.isAnonymous ? 'Anonymous' : 'Patient',
+    rating: c.rating,
+    comment: c.comment,
+    reviewedAt: c.reviewedAt,
+  }));
+
+  res.status(200).json({
+    success: true,
+    data: {
+      reviews,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    }
+  });
+});
+
 module.exports = {
   createConsultation,
   getConsultationById,
@@ -349,5 +512,8 @@ module.exports = {
   updateConsultation,
   markNoShow,
   saveHealthDetails,
-  getHealthDetails
+  getHealthDetails,
+  submitReview,
+  getDoctorRating,
+  getConsultationReviews,
 };
