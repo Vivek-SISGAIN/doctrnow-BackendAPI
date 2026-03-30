@@ -49,6 +49,54 @@ export class HealthPackageService {
     });
   }
 
+  async getAllPackagesPaged(
+    filters: { hospitalId?: string; search?: string } = {},
+    pagination: { page: number; limit: number } = { page: 1, limit: 20 }
+  ) {
+    const page = Number.isFinite(pagination.page) ? pagination.page : 1;
+    const limit = Number.isFinite(pagination.limit) ? pagination.limit : 20;
+    const skip = (Math.max(1, page) - 1) * Math.max(1, limit);
+
+    const where: any = {
+      ...(filters.hospitalId && { hospitalId: filters.hospitalId })
+    };
+
+    if (filters.search?.trim()) {
+      const q = filters.search.trim();
+      where.OR = [
+        { name: { contains: q, mode: 'insensitive' } },
+        { description: { contains: q, mode: 'insensitive' } }
+      ];
+    }
+
+    const [packages, total] = await Promise.all([
+      prisma.healthPackage.findMany({
+        where,
+        include: {
+          services: {
+            include: {
+              service: true
+            }
+          }
+        },
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: Math.max(1, limit)
+      }),
+      prisma.healthPackage.count({ where })
+    ]);
+
+    return {
+      packages,
+      pagination: {
+        page: Math.max(1, page),
+        limit: Math.max(1, limit),
+        total,
+        totalPages: Math.ceil(total / Math.max(1, limit))
+      }
+    };
+  }
+
   async getPackageById(id: string) {
     return await prisma.healthPackage.findUnique({
       where: { id },

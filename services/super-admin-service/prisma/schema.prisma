@@ -102,3 +102,21 @@ model Finance {
 
   @@map("finances")
 }
+
+
+model Banners {
+  id          String   @id @default(uuid())
+  icon        String
+  serviceDesc String
+  title       String
+  description String
+  portal      PORTAL
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+enum PORTAL {
+  PATIENT
+  DOCTOR
+  GENERAL
+}

@@ -144,6 +144,8 @@ class DoctorService {
       where.OR = [
         { fullName: { contains: search, mode: 'insensitive' } },
         { email: { contains: search, mode: 'insensitive' } },
+        { mobile: { contains: search, mode: 'insensitive' } },
+        { licenseNumber: { contains: search, mode: 'insensitive' } },
         { primarySpecialization: { contains: search, mode: 'insensitive' } }
       ];
     }

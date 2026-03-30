@@ -80,29 +80,56 @@ class HospitalService {
   }
 
  
-  async getHospitals(){
-  const hospitals = await prisma.hospital.findMany({
-    include: { finance: true },
-    orderBy: { createdAt: "desc" },
-  });
- 
-  // 2. For every hospital, fire both requests in parallel
-  const enriched = await Promise.all(
-    hospitals.map(async (hospital) => {
-      const [totalConsultations, doctors] = await Promise.all([
-        fetchConsultationCount(hospital.id),
-        fetchDoctorCount(hospital.id),
-      ]);
-      return {
-        ...hospital,
-        totalConsultations,
-        doctors,
-      } ;
-    }),
-  );
- 
-  return enriched;
-}
+  async getHospitals(filters = {}, pagination = {}) {
+    const { search } = filters;
+    const { page = 1, limit = 20 } = pagination;
+    const skip = (page - 1) * limit;
+
+    const where = {};
+    if (search) {
+      where.OR = [
+        { officialName: { contains: search, mode: "insensitive" } },
+        { shortName: { contains: search, mode: "insensitive" } },
+        { registrationNumber: { contains: search, mode: "insensitive" } },
+      ];
+    }
+
+    const [hospitals, total] = await Promise.all([
+      prisma.hospital.findMany({
+        where,
+        include: { finance: true },
+        orderBy: { createdAt: "desc" },
+        skip,
+        take: parseInt(limit, 10),
+      }),
+      prisma.hospital.count({ where }),
+    ]);
+
+    // For every hospital, fire both requests in parallel
+    const enriched = await Promise.all(
+      hospitals.map(async (hospital) => {
+        const [totalConsultations, doctors] = await Promise.all([
+          fetchConsultationCount(hospital.id),
+          fetchDoctorCount(hospital.id),
+        ]);
+        return {
+          ...hospital,
+          totalConsultations,
+          doctors,
+        };
+      })
+    );
+
+    return {
+      hospitals: enriched,
+      pagination: {
+        total,
+        page: parseInt(page, 10),
+        limit: parseInt(limit, 10),
+        totalPages: Math.ceil(total / limit),
+      },
+    };
+  }
 
 }
 
