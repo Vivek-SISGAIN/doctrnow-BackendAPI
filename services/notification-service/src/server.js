@@ -2,8 +2,10 @@ require('dotenv').config({ path: require('path').join(__dirname, '../.env') });
 
 const redisSubscriber = require('./config/redis');
 const { handleOtpSent } = require('./handlers/otp.handler');
+const http = require('http');
 
 const OTP_TOPIC = 'auth.otp.sent';
+const PORT = process.env.PORT || 3008;
 
 async function startServer() {
   try {
@@ -33,14 +35,30 @@ async function startServer() {
   }
 }
 
+const server = http.createServer((req, res) => {
+  if (req.url === '/health' || req.url === '/') {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ status: 'ok', service: 'notification-service' }));
+  } else {
+    res.writeHead(404);
+    res.end();
+  }
+});
+
+server.listen(PORT, () => {
+  console.log(`Notification service HTTP health check listening on port ${PORT}`);
+});
+
 process.on('SIGINT', () => {
   console.log('Notification service shutting down...');
+  server.close();
   redisSubscriber.quit();
   process.exit(0);
 });
 
 process.on('SIGTERM', () => {
   console.log('Notification service shutting down...');
+  server.close();
   redisSubscriber.quit();
   process.exit(0);
 });
