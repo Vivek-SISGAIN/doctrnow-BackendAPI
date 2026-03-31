@@ -47,6 +47,17 @@ export class AuthService {
     private readonly otpService: OtpService,
   ) { }
 
+  private normalizeMobile(mobile?: string): string | undefined {
+    if (!mobile) return undefined;
+    const trimmed = mobile.trim();
+    if (!trimmed) return undefined;
+
+    const digits = trimmed.replace(/\D/g, '');
+    if (!digits) return undefined;
+
+    return trimmed.startsWith('+') ? `+${digits}` : digits;
+  }
+
   /**
    * Register new user
    */
@@ -56,6 +67,8 @@ export class AuthService {
     role: string;
     status: string;
   }> {
+    const normalizedMobile = this.normalizeMobile(dto.mobile);
+
     // Validate password is a string
     if (!dto.password || typeof dto.password !== 'string') {
       throw new BadRequestException('Password must be a non-empty string');
@@ -73,7 +86,7 @@ export class AuthService {
     // Check if user already exists
     const existingUser = await this.prisma.user.findFirst({
       where: {
-        OR: [{ email: dto.email }, ...(dto.mobile ? [{ mobile: dto.mobile }] : [])],
+        OR: [{ email: dto.email }, ...(normalizedMobile ? [{ mobile: normalizedMobile }] : [])],
       },
     });
 
@@ -90,7 +103,7 @@ export class AuthService {
     const user = await this.prisma.user.create({
       data: {
         email: dto.email,
-        mobile: dto.mobile,
+        mobile: normalizedMobile,
         passwordHash,
         role: dto.role,
         tenantId: dto.tenantId,
@@ -211,9 +224,9 @@ export class AuthService {
     }
 
     // Check tenant match
-    if (user.tenantId !== dto.tenantId) {
-      throw new UnauthorizedException('Invalid tenant');
-    }
+    // if (user.tenantId !== dto.tenantId) {
+    //   throw new UnauthorizedException('Invalid tenant');
+    // }
 
     // Check account lockout
     const isLocked = await this.accountLockoutService.isAccountLocked(user.id);

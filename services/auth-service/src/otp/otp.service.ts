@@ -37,6 +37,40 @@ export class OtpService {
     private readonly sessionService: SessionService,
   ) {}
 
+  private normalizeMobile(mobile?: string): string | undefined {
+    if (!mobile) return undefined;
+    const trimmed = mobile.trim();
+    if (!trimmed) return undefined;
+
+    const digits = trimmed.replace(/\D/g, '');
+    if (!digits) return undefined;
+
+    return trimmed.startsWith('+') ? `+${digits}` : digits;
+  }
+
+  private buildMobileVariants(mobile?: string): string[] {
+    const normalized = this.normalizeMobile(mobile);
+    if (!normalized) return [];
+
+    const digits = normalized.replace(/\D/g, '');
+    return Array.from(new Set([normalized, digits, `+${digits}`]));
+  }
+
+  private async findUserByMobile(mobile?: string) {
+    const mobileVariants = this.buildMobileVariants(mobile);
+    if (mobileVariants.length === 0) {
+      return null;
+    }
+
+    return this.prisma.user.findFirst({
+      where: {
+        mobile: {
+          in: mobileVariants,
+        },
+      },
+    });
+  }
+
   /**
    * Generate OTP code
    */
@@ -63,7 +97,9 @@ export class OtpService {
    * Send OTP
    */
   async sendOtp(dto: SendOtpDto): Promise<{ message: string }> {
-    if (!dto.email && !dto.mobile) {
+    const normalizedMobile = this.normalizeMobile(dto.mobile);
+
+    if (!dto.email && !normalizedMobile) {
       throw new BadRequestException('Either email or mobile must be provided');
     }
 
@@ -73,10 +109,8 @@ export class OtpService {
       user = await this.prisma.user.findUnique({
         where: { email: dto.email },
       });
-    } else if (dto.mobile) {
-      user = await this.prisma.user.findFirst({
-        where: { mobile: dto.mobile },
-      });
+    } else if (normalizedMobile) {
+      user = await this.findUserByMobile(normalizedMobile);
     }
 
     // Generate OTP
@@ -96,19 +130,19 @@ export class OtpService {
         purpose: dto.purpose,
         expiresAt,
         identifierEmail: dto.email ?? undefined,
-        identifierMobile: dto.mobile ?? undefined,
+        identifierMobile: normalizedMobile ?? undefined,
       },
     });
 
     // TODO: Send OTP via SMS/Email service
     // For now, log it (REMOVE IN PRODUCTION - use notification service)
-    this.logger.warn(`OTP for ${dto.email || dto.mobile}: ${otp} (DO NOT LOG IN PRODUCTION)`);
+    this.logger.warn(`OTP for ${dto.email || normalizedMobile}: ${otp} (DO NOT LOG IN PRODUCTION)`);
 
     // Publish event
     await this.eventsService.publishOtpSent({
       userId: user?.id,
       email: dto.email,
-      mobile: dto.mobile,
+      mobile: normalizedMobile,
       otp,
       channel: dto.email ? 'EMAIL' : 'SMS',
       purpose: dto.purpose,
@@ -127,7 +161,9 @@ export class OtpService {
    * - LOGIN: looks up user by mobile/email and returns userId so login/otp can issue tokens.
    */
   async verifyOtp(dto: VerifyOtpDto): Promise<{ verified: boolean; userId?: string; accessToken?: string; refreshToken?: string; expiresIn?: number; sessionId?: string; user?: any }> {
-    if (!dto.email && !dto.mobile) {
+    const normalizedMobile = this.normalizeMobile(dto.mobile);
+
+    if (!dto.email && !normalizedMobile) {
       throw new BadRequestException('Either email or mobile must be provided');
     }
 
@@ -139,8 +175,8 @@ export class OtpService {
       }
       if (dto.purpose === 'LOGIN') {
         let user = null;
-        if (dto.mobile) {
-          user = await this.prisma.user.findFirst({ where: { mobile: dto.mobile } });
+        if (normalizedMobile) {
+          user = await this.findUserByMobile(normalizedMobile);
         } else if (dto.email) {
           user = await this.prisma.user.findUnique({ where: { email: dto.email } });
         }
@@ -165,7 +201,7 @@ export class OtpService {
             }
           };
         }
-        return { verified: true, userId: undefined };
+        throw new NotFoundException('No user found for this mobile number');
       }
     }
 
@@ -183,7 +219,7 @@ export class OtpService {
         },
         OR: [
           ...(dto.email ? [{ identifierEmail: dto.email }] : []),
-          ...(dto.mobile ? [{ identifierMobile: dto.mobile }] : []),
+          ...(normalizedMobile ? [{ identifierMobile: normalizedMobile }] : []),
         ].filter(Boolean),
       },
       include: {
@@ -216,7 +252,7 @@ export class OtpService {
     await this.eventsService.publishOtpVerified({
       userId: otpRequest.userId || undefined,
       email: dto.email,
-      mobile: dto.mobile,
+      mobile: normalizedMobile,
       purpose: dto.purpose,
       tenantId: dto.tenantId,
     });
@@ -240,6 +276,10 @@ export class OtpService {
           tenantId: user.tenantId,
         }
       };
+    }
+
+    if (dto.purpose === 'LOGIN') {
+      throw new NotFoundException('No user found for this mobile number');
     }
 
     return {
