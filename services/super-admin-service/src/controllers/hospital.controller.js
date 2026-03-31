@@ -16,13 +16,18 @@ class HospitalController {
   });
 
   getHospitals = asyncHandler(async (req, res) => {
+    const { search, page = 1, limit = 20 } = req.query;
 
-    const hospitals = await hospitalService.getHospitals();
+    const result = await hospitalService.getHospitals(
+      { search },
+      { page, limit }
+    );
 
     res.status(200).json({
       success: true,
-      count: hospitals.length,
-      data: hospitals
+      count: result.hospitals.length,
+      data: result.hospitals,
+      pagination: result.pagination
     });
 
   });

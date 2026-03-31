@@ -217,12 +217,7 @@ class DoctorService {
 
       const dayConfig = schedule[dayName];
 
-      // Skip if this weekday isn't in the schedule
       if (!dayConfig) continue;
-
-      // Extract time blocks — supports both schedule formats:
-      //   Format A: { slots: [{ startTime, endTime, consultationDuration }], enabled }
-      //   Format B: { from: '09:00', to: '17:00' }  → defaults to 30 min
       const timeBlocks = this._extractTimeBlocks(dayConfig);
 
       for (const block of timeBlocks) {
@@ -267,7 +262,7 @@ class DoctorService {
             'X-Tenant-Id': tenantId,
             'X-Service-Name': 'hospital-admin-service'
           },
-          timeout: 10000 // 10s — bulk insert can take a moment
+          timeout: 10000 
         }
       );
       console.log(

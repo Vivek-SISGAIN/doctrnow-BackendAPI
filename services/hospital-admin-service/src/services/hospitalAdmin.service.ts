@@ -27,12 +27,13 @@ export class HospitalAdminService {
     } = data;
 
     let createdUserId: string | null = null;
+    let createdProfileId: string | null = null;
 
     try {
 
         // 1️⃣ Create user in auth-service
         const authResponse = await axios.post(
-            "http://localhost:8080/api/v1/auth/register",
+            `${process.env.API_BASE_URL}/api/v1/auth/register`,
             {
                 email: profilePayload.email,
                 password,
@@ -42,10 +43,9 @@ export class HospitalAdminService {
         );
 
         createdUserId = authResponse.data.userId;
-        console.log("U are getting the user" ,createdUserId )
         // 2️⃣ Create hospital admin profile
         const hospitalAdminResponse = await axios.post(
-            "http://localhost:8080/api/v1/profiles/hospital-admins",
+            `${process.env.API_BASE_URL}/api/v1/profiles/hospital-admins`,
             {
                 ...profilePayload,
                 userId: createdUserId
@@ -57,23 +57,26 @@ export class HospitalAdminService {
                 }
             }
         );
+        createdProfileId = hospitalAdminResponse.data.id;
 
         return hospitalAdminResponse.data;
 
     } catch (error) {
 
-        // 3️⃣ Compensation rollback
-        if (createdUserId) {
             try {
                 await axios.delete(
-                    `http://localhost:3001/auth/v1/users/${createdUserId}`
+                    `${process.env.API_BASE_URL}/api/v1/auth/users/${createdUserId}`
+                );
+
+                 await axios.delete(
+                    `${process.env.API_BASE_URL}/api/v1/profiles/hospital-admins${createdProfileId}`
                 );
             } catch (cleanupError) {
                 console.error(
                     "Failed to rollback user creation",
                 );
             }
-        }
+        
 
         throw error;
     }
