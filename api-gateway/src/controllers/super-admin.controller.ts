@@ -29,11 +29,11 @@ import { SkipThrottle } from '@nestjs/throttler';
 @UseGuards(JwtAuthGuard)
 @SkipThrottle() // We handle rate limiting at the service level, so skip global throttling here
 export class SuperAdminController {
-  constructor(private readonly httpProxyService: HttpProxyService) {}
+  constructor(private readonly httpProxyService: HttpProxyService) { }
 
   /** Base path: /api/v1/super-admins */
   @Get()
-  @Roles(UserRole.SUPER_ADMIN)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.PATIENT)
   async proxyBaseGet(@Req() req: Request, @Res() res: Response): Promise<void> {
     return this.proxyRequest(req, res);
   }
@@ -64,7 +64,7 @@ export class SuperAdminController {
 
   /** Subpaths: /api/v1/super-admins/* */
   @Get('*')
-  @Roles(UserRole.SUPER_ADMIN)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.PATIENT)
   async proxyRequestGet(@Req() req: Request, @Res() res: Response): Promise<void> {
     return this.proxyRequest(req, res);
   }

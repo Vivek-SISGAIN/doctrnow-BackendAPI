@@ -31,7 +31,7 @@ export class OtpController {
   @ApiOperation({ summary: 'Verify OTP' })
   @ApiResponse({
     status: 200,
-    description: 'OTP verified successfully',
+    description: 'OTP verified successfully. Includes accessToken, refreshToken, expiresIn, sessionId and user if purpose is LOGIN.',
   })
   @ApiResponse({
     status: 400,

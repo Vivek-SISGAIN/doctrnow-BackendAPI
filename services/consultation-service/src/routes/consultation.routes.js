@@ -15,7 +15,10 @@ const {
   updateConsultation,
   markNoShow,
   saveHealthDetails,
-  getHealthDetails
+  getHealthDetails,
+  submitReview,
+  getDoctorRating,
+  getConsultationReviews,
 } = require('../controllers/consultation.controller');
 const {
   createConsultationSchema,
@@ -318,6 +321,40 @@ router.get('/:id', getConsultationById);
 
 /**
  * @swagger
+ * /api/consultations/{id}/review:
+ *   patch:
+ *     summary: Patient submits a review for a completed consultation
+ *     tags: [Consultations]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               rating: { type: integer, minimum: 1, maximum: 5 }
+ *               comment: { type: string }
+ *               isAnonymous: { type: boolean }
+ *     responses:
+ *       200:
+ *         description: Review submitted
+ *       400:
+ *         description: Validation error or not completed
+ *       403:
+ *         description: Not authorized
+ *       409:
+ *         description: Already reviewed
+ */
+router.patch('/:id/review', submitReview);
+
+/**
+ * @swagger
  * /api/consultations/{id}/end:
  *   post:
  *     summary: End a consultation
@@ -394,5 +431,53 @@ router.put('/:id', validate(updateConsultationSchema), updateConsultation);
  *         description: Consultation not found
  */
 router.post('/:id/no-show', markNoShow);
+
+/**
+ * @swagger
+ * /api/consultations/doctors/{doctorId}/rating:
+ *   get:
+ *     summary: Get doctor's average rating and breakdown
+ *     tags: [Consultations]
+ *     parameters:
+ *       - in: path
+ *         name: doctorId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     responses:
+ *       200:
+ *         description: Doctor rating stats retrieved successfully
+ */
+router.get('/doctors/:doctorId/rating', getDoctorRating);
+
+/**
+ * @swagger
+ * /api/consultations/doctors/{doctorId}/reviews:
+ *   get:
+ *     summary: Get paginated reviews for a doctor
+ *     tags: [Consultations]
+ *     parameters:
+ *       - in: path
+ *         name: doctorId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 10
+ *     responses:
+ *       200:
+ *         description: Doctor reviews retrieved successfully
+ */
+router.get('/doctors/:doctorId/reviews', getConsultationReviews);
 
 module.exports = router;

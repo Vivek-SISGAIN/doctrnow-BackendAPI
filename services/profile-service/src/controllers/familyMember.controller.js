@@ -1,4 +1,5 @@
 const familyMemberService = require('../service/familyMember.service');
+const patientService = require('../service/patient.service');
 const ApiError = require('../utils/ApiError');
 const asyncHandler = require('../utils/asyncHandler');
 
@@ -41,8 +42,11 @@ const createFamilyMember = asyncHandler(async (req, res) => {
     throw ApiError.notFound('Patient not found');
   }
   if (req.body.emiratesId) {
-    const conflict = await familyMemberService.findByEmiratesId(req.body.emiratesId);
-    if (conflict) {
+    const [familyConflict, patientConflict] = await Promise.all([
+      familyMemberService.findByEmiratesId(req.body.emiratesId),
+      patientService.findByEmiratesId(req.body.emiratesId)
+    ]);
+    if (familyConflict || patientConflict) {
       throw ApiError.conflict('Emirates ID already in use');
     }
   }
@@ -69,6 +73,13 @@ const updateFamilyMember = asyncHandler(async (req, res) => {
 
   if (conflict) {
     throw ApiError.conflict('Emirates ID already in use');
+  }
+
+  if (emiratesId) {
+    const patientConflict = await patientService.findByEmiratesId(emiratesId);
+    if (patientConflict) {
+      throw ApiError.conflict('Emirates ID already in use');
+    }
   }
 
   const updatedFamilyMember = await familyMemberService.update(id, req.body);

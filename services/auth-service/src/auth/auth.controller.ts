@@ -57,6 +57,24 @@ export class AuthController {
   }
 
   @Public()
+  @Post('register-and-login')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Register new user and immediately issue tokens (patient registration flow)' })
+  @ApiResponse({
+    status: 201,
+    description: 'User registered and logged in. Returns accessToken, refreshToken, expiresIn, sessionId, user.',
+  })
+  @ApiResponse({ status: 400, description: 'Invalid input or password policy violation' })
+  @ApiResponse({ status: 409, description: 'User already exists' })
+  async registerAndLogin(@Body() dto: RegisterDto, @Req() req: Request) {
+    return this.authService.registerAndLogin({
+      ...dto,
+      ipAddress: req.ip,
+      userAgent: req.get('user-agent'),
+    });
+  }
+
+  @Public()
   @Post('login')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'User login' })

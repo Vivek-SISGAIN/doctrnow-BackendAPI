@@ -1,11 +1,14 @@
 import {
   Controller,
-  All,
-  Req,
-  Res,
   HttpStatus,
   UseGuards,
+  Get,
+  Param,
+  Req,
+  Res,
+  All,
 } from '@nestjs/common';
+import { Public } from '../common/decorators/public.decorator';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { Request, Response } from 'express';
 import { HttpProxyService } from '../http-proxy/http-proxy.service';
@@ -26,6 +29,24 @@ export class ConsultationController {
   constructor(
     private readonly httpProxyService: HttpProxyService,
   ) { }
+
+  /**
+   * Public endpoint to get doctor rating
+   */
+  @Public()
+  @Get('doctors/:doctorId/rating')
+  async getRating(@Param('doctorId') doctorId: string, @Req() req: Request, @Res() res: Response): Promise<void> {
+    return this.proxyRequest(req, res);
+  }
+
+  /**
+   * Public endpoint to get doctor reviews
+   */
+  @Public()
+  @Get('doctors/:doctorId/reviews')
+  async getReviews(@Param('doctorId') doctorId: string, @Req() req: Request, @Res() res: Response): Promise<void> {
+    return this.proxyRequest(req, res);
+  }
 
   @All()
   async proxyBase(@Req() req: Request, @Res() res: Response): Promise<void> {

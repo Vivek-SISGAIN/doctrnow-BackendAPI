@@ -1,6 +1,7 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { Kafka } from 'kafkajs';
+import { ClientProxy, ClientProxyFactory, Transport } from '@nestjs/microservices';
+// import { Kafka } from 'kafkajs';
 
 export interface UserRegisteredEvent {
   userId: string;
@@ -30,6 +31,8 @@ export interface OtpSentEvent {
   userId?: string;
   email?: string;
   mobile?: string;
+  otp: string;
+  channel: 'EMAIL' | 'SMS';
   purpose: string;
   tenantId: string;
   timestamp?: Date;
@@ -73,17 +76,61 @@ export interface AccountLockedEvent {
 
 /**
  * Events Service
- * Publishes authentication events to Kafka for audit and compliance
+ * Publishes authentication events to Redis Pub/Sub
+ * (Legacy Kafka implementation retained but commented out below)
  */
 @Injectable()
-export class EventsService {
+export class EventsService implements OnModuleInit {
   private readonly logger = new Logger(EventsService.name);
-  private kafka: Kafka | null = null;
-  private producer: any = null;
+  
+  // --- REDIS IMPLEMENTATION (ACTIVE) ---
+  private client: ClientProxy;
 
   constructor(private readonly configService: ConfigService) {
-    this.initializeKafka();
+    const host = this.configService.get<string>('REDIS_HOST', 'localhost');
+    const port = this.configService.get<number>('REDIS_PORT', 6379);
+
+    this.client = ClientProxyFactory.create({
+      transport: Transport.REDIS,
+      options: {
+        host,
+        port,
+      },
+    });
+
+    // NOTE: Legacy Kafka init comment
+    // this.initializeKafka();
   }
+
+  async onModuleInit() {
+    try {
+      await this.client.connect();
+      this.logger.log('Connected to Redis for event publishing');
+    } catch (error) {
+      this.logger.error('Failed to connect to Redis for event publishing', error);
+    }
+  }
+
+  /**
+   * Publish event to Redis
+   */
+  private publishEvent(topic: string, event: any): void {
+    try {
+      const payload = {
+        ...event,
+        timestamp: event.timestamp || new Date().toISOString(),
+      };
+      // Send event
+      this.client.emit(topic, payload);
+    } catch (error) {
+      this.logger.error(`Failed to publish event to ${topic}:`, error);
+    }
+  }
+
+  /*
+  // --- KAFKA IMPLEMENTATION (LEGACY, COMMENTED OUT) ---
+  private kafka: Kafka | null = null;
+  private producer: any = null;
 
   private async initializeKafka(): Promise<void> {
     const enabled = this.configService.get<boolean>('KAFKA_ENABLED', false);
@@ -140,10 +187,7 @@ export class EventsService {
     }
   }
 
-  /**
-   * Publish event to Kafka
-   */
-  private async publishEvent(topic: string, event: any): Promise<void> {
+  private async publishEventKafka(topic: string, event: any): Promise<void> {
     if (!this.producer) {
       this.logger.warn(`Kafka not available, event not published: ${topic}`, event);
       return;
@@ -166,68 +210,42 @@ export class EventsService {
       this.logger.error(`Failed to publish event to ${topic}:`, error);
     }
   }
+  */
 
+  // --- EVENT HELPERS ---
   async publishUserRegistered(event: UserRegisteredEvent): Promise<void> {
-    await this.publishEvent('user.registered', {
-      eventType: 'UserRegistered',
-      ...event,
-    });
+    this.publishEvent('user.registered', { eventType: 'UserRegistered', ...event });
   }
 
   async publishLoginSucceeded(event: LoginSucceededEvent): Promise<void> {
-    await this.publishEvent('auth.login.succeeded', {
-      eventType: 'LoginSucceeded',
-      ...event,
-    });
+    this.publishEvent('auth.login.succeeded', { eventType: 'LoginSucceeded', ...event });
   }
 
   async publishLoginFailed(event: LoginFailedEvent): Promise<void> {
-    await this.publishEvent('auth.login.failed', {
-      eventType: 'LoginFailed',
-      ...event,
-    });
+    this.publishEvent('auth.login.failed', { eventType: 'LoginFailed', ...event });
   }
 
   async publishOtpSent(event: OtpSentEvent): Promise<void> {
-    await this.publishEvent('auth.otp.sent', {
-      eventType: 'OtpSent',
-      ...event,
-    });
+    this.publishEvent('auth.otp.sent', { eventType: 'OtpSent', ...event });
   }
 
   async publishOtpVerified(event: OtpVerifiedEvent): Promise<void> {
-    await this.publishEvent('auth.otp.verified', {
-      eventType: 'OtpVerified',
-      ...event,
-    });
+    this.publishEvent('auth.otp.verified', { eventType: 'OtpVerified', ...event });
   }
 
   async publishSessionRevoked(event: SessionRevokedEvent): Promise<void> {
-    await this.publishEvent('auth.session.revoked', {
-      eventType: 'SessionRevoked',
-      ...event,
-    });
+    this.publishEvent('auth.session.revoked', { eventType: 'SessionRevoked', ...event });
   }
 
   async publishPasswordResetRequested(event: PasswordResetRequestedEvent): Promise<void> {
-    await this.publishEvent('auth.password.reset.requested', {
-      eventType: 'PasswordResetRequested',
-      ...event,
-    });
+    this.publishEvent('auth.password.reset.requested', { eventType: 'PasswordResetRequested', ...event });
   }
 
   async publishPasswordResetCompleted(event: PasswordResetCompletedEvent): Promise<void> {
-    await this.publishEvent('auth.password.reset.completed', {
-      eventType: 'PasswordResetCompleted',
-      ...event,
-    });
+    this.publishEvent('auth.password.reset.completed', { eventType: 'PasswordResetCompleted', ...event });
   }
 
   async publishAccountLocked(event: AccountLockedEvent): Promise<void> {
-    await this.publishEvent('auth.account.locked', {
-      eventType: 'AccountLocked',
-      ...event,
-    });
+    this.publishEvent('auth.account.locked', { eventType: 'AccountLocked', ...event });
   }
 }
-

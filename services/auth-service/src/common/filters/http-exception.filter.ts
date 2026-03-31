@@ -20,7 +20,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
     const ctx = host.switchToHttp();
     const response = ctx.getResponse<Response>();
     const request = ctx.getRequest<Request>();
-    const correlationId = request.headers['x-correlation-id'] || request.id;
+    const correlationId = request.headers['x-correlation-id'] || (request as any).id;
 
     const status =
       exception instanceof HttpException
