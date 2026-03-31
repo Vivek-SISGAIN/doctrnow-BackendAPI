@@ -129,6 +129,11 @@ services:
     depends_on:
       - mongodb
       - kafka
+  notification-service:
+    build: ./services/notification-service
+    container_name: notification-service
+    restart: always
+    env_file: ./services/notification-service/.env
 
   hospital-admin-service:
     build: ./services/hospital-admin-service
