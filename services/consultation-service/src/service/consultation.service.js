@@ -17,7 +17,7 @@ class ConsultationService {
         diagnosis: data.diagnosis,
         followUp: data.followUp,
         patientAuthId: data.patientAuthId,
-        doctorAuthId: data.doctorAuthId
+        doctorAuthId: data.doctorAuthId,
       },
       create: {
         appointmentId: data.appointmentId,
@@ -29,7 +29,7 @@ class ConsultationService {
         diagnosis: data.diagnosis,
         followUp: data.followUp,
         patientAuthId: data.patientAuthId,
-        doctorAuthId: data.doctorAuthId
+        doctorAuthId: data.doctorAuthId,
       },
       include: {
         notes: {
@@ -104,7 +104,7 @@ class ConsultationService {
           hospitalId: null,
           status: 'PENDING',
           type: 'VIDEO',
-          patientJoinedAt: now
+          patientJoinedAt: now,
         },
         include: { notes: true, vitals: true }
       });
@@ -147,7 +147,7 @@ class ConsultationService {
           doctorId,
           hospitalId: vitalsData.hospitalId || null,
           status: 'PENDING',
-          type: 'VIDEO'
+          type: 'VIDEO',
         },
         include: { notes: true, vitals: true }
       });

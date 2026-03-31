@@ -113,11 +113,16 @@ app.use(
 const consultationRoutes = require('./routes/consultation.routes');
 const noteRoutes = require('./routes/consultation-note.routes');
 const vitalsRoutes = require('./routes/consultation-vitals.routes');
+const { getDoctorRating, getConsultationReviews } = require('./controllers/consultation.controller');
 
 // Register routes
 app.use('/api/consultations', consultationRoutes);
 app.use('/api/consultation-notes', noteRoutes);
 app.use('/api/consultation-vitals', vitalsRoutes);
+
+// Doctor-scoped review routes (public, no auth required)
+app.get('/api/doctors/:doctorId/rating', getDoctorRating);
+app.get('/api/doctors/:doctorId/reviews', getConsultationReviews);
 
 // Error handling middleware
 app.use((err, req, res, next) => {

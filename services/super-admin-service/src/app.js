@@ -96,6 +96,7 @@ import superAdminRoutes from "./routes/hospital.routes.js";
 
 app.use("/api/super-admins", superAdminRoutes);
 
+
 /**
  * Error Handler
  */

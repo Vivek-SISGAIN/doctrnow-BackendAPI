@@ -72,16 +72,28 @@ export class HealthPackageController {
 
   /**
    * Get all health packages
-   * GET /api/health-packages
+   * GET /api/health-packages?page=1&limit=20&search=...&hospitalId=...
    */
-  async getAllPackages(_req: Request, res: Response) {
-    const packages = await healthPackageService.getAllPackages();
+  async getAllPackages(req: Request, res: Response) {
+    const { page = '1', limit = '20', search, hospitalId } = req.query;
+
+    const filters: { hospitalId?: string; search?: string } = {};
+    if (hospitalId && typeof hospitalId === 'string') filters.hospitalId = hospitalId;
+    if (search && typeof search === 'string') filters.search = search;
+
+    const pagination = {
+      page: parseInt(String(page), 10) || 1,
+      limit: parseInt(String(limit), 10) || 20
+    };
+
+    const result = await healthPackageService.getAllPackagesPaged(filters, pagination);
 
     return res.status(200).json({
       success: true,
       message: 'Health packages retrieved successfully',
-      data: packages,
-      count: packages.length
+      data: result.packages,
+      count: result.pagination.total,
+      pagination: result.pagination
     });
   }
 

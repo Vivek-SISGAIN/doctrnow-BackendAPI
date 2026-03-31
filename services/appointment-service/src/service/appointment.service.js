@@ -44,11 +44,13 @@ class AppointmentService {
   buildWhereClause({
     patientId,
     doctorId,
+    hospitalId,
     status,
     paymentStatus,
     consultationType,
     startDate,
     endDate,
+    search,
   }) {
     const where = {};
 
@@ -58,6 +60,10 @@ class AppointmentService {
 
     if (doctorId) {
       where.doctorId = doctorId;
+    }
+
+    if (hospitalId) {
+      where.hospitalId = hospitalId;
     }
 
     if (status) {
@@ -82,6 +88,17 @@ class AppointmentService {
       if (endDate) {
         where.slot.startTime.lte = new Date(endDate);
       }
+    }
+
+    if (search) {
+      // Note: appointment ids are UUIDs stored as strings; avoid case-insensitive ops.
+      // This supports searching by appointmentId/patientId/doctorId/hospitalId.
+      where.OR = [
+        { id: { contains: String(search) } },
+        { patientId: { contains: String(search) } },
+        { doctorId: { contains: String(search) } },
+        { hospitalId: { contains: String(search) } },
+      ];
     }
 
     return where;
@@ -461,6 +478,26 @@ class AppointmentService {
         totalPages: Math.ceil(total / limit),
       },
     };
+  }
+
+  /**
+   * Get all unique patient ids for a hospital, ordered by most recent appointment.
+   * Used for server-side search over patient profiles (via profile-service bulk lookups).
+   */
+  async getAllHospitalPatientIds(hospitalId) {
+    const groups = await prisma.appointment.groupBy({
+      by: ["patientId"],
+      where: { hospitalId },
+      _max: { createdAt: true },
+      orderBy: { _max: { createdAt: "desc" } },
+    });
+
+    return groups
+      .map((g) => ({
+        id: g.patientId,
+        lastVisit: g._max?.createdAt || null,
+      }))
+      .filter((g) => Boolean(g.id));
   }
 }
 

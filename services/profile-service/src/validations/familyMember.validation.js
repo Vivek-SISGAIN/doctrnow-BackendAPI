@@ -1,4 +1,5 @@
 const Joi = require('joi');
+const { EMIRATES_ID_REGEX, validateEmiratesIdMatchesDobYear } = require('../utils/emiratesId');
 
 const createFamilyMemberSchema = Joi.object({
   patientId: Joi.string().uuid().required()
@@ -29,7 +30,11 @@ const createFamilyMemberSchema = Joi.object({
       'any.only': 'Gender must be MALE, FEMALE, or OTHER',
       'any.required': 'Gender is required'
     }),
-  emiratesId: Joi.string().pattern(/^784-[0-9]{4}-[0-9]{7}(-[0-9])?$/).optional().allow(null),
+  emiratesId: Joi.string().pattern(EMIRATES_ID_REGEX).custom(validateEmiratesIdMatchesDobYear).optional().allow(null)
+    .messages({
+      'string.pattern.base': 'Emirates ID must be in format 784-YYYY-XXXXXXX',
+      'emiratesId.dobYear': 'Emirates ID year must match the date of birth year'
+    }),
   nationality: Joi.string().min(2).max(50).required()
     .messages({
       'any.required': 'Nationality is required'
@@ -46,7 +51,11 @@ const updateFamilyMemberSchema = Joi.object({
   lastName: Joi.string().min(2).max(50).optional(),
   dateOfBirth: Joi.date().max('now').optional(),
   gender: Joi.string().valid('MALE', 'FEMALE', 'OTHER').optional(),
-  emiratesId: Joi.string().pattern(/^784-[0-9]{4}-[0-9]{7}(-[0-9])?$/).optional().allow(null),
+  emiratesId: Joi.string().pattern(EMIRATES_ID_REGEX).custom(validateEmiratesIdMatchesDobYear).optional().allow(null)
+    .messages({
+      'string.pattern.base': 'Emirates ID must be in format 784-YYYY-XXXXXXX',
+      'emiratesId.dobYear': 'Emirates ID year must match the date of birth year'
+    }),
   nationality: Joi.string().min(2).max(50).optional(),
   mobileNumber: Joi.string().pattern(/^[0-9]{10,15}$/).optional().allow(null),
   email: Joi.string().email().optional().allow(null),

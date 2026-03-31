@@ -1,6 +1,7 @@
 import { Router } from "express";
 import hospitalController from "../controllers/hospital.controller.js";
 import financeController from "../controllers/finance.controller.js";
+import bannerController from "../controllers/banner.controller.js";
 
 const router = Router();
 
@@ -10,12 +11,19 @@ router.get("/hospital/:id", hospitalController.getHospitalById);
 router.put("/hospital/:id", hospitalController.updateHospital);
 router.delete("/hospital/:id", hospitalController.deleteHospital);
 
-// Finance routes
 router.post("/finance", financeController.createFinance);
 router.get("/finance", financeController.getFinances);
 router.get("/finance/:id", financeController.getFinanceById);
 router.get("/finance/hospital/:hospitalId", financeController.getFinanceByHospitalId);
 router.put("/finance/:id", financeController.updateFinance);
 router.delete("/finance/:id", financeController.deleteFinance);
+
+
+router.post("/banner", bannerController.createBanner);
+router.get("/banner", bannerController.getBanners);
+router.get("/banner/:id", bannerController.getBannerById);
+router.put("/banner/:id", bannerController.updateBanner);
+router.delete("/banner/:id", bannerController.deleteBanner);
+
 
 export default router;

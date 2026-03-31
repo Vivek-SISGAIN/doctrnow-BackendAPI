@@ -26,6 +26,10 @@ model Consultation {
   channelName       String?           // Agora channel for this consultation (e.g. appointment-{appointmentId}); both patient and doctor join this
   patientAuthId     String?
   doctorAuthId      String?
+  rating            Int?              // 1-5, nullable until reviewed
+  comment           String?           // optional review comment
+  isAnonymous       Boolean           @default(false)
+  reviewedAt        DateTime?         // null if not yet reviewed
   createdAt         DateTime          @default(now())
   updatedAt         DateTime          @updatedAt
 

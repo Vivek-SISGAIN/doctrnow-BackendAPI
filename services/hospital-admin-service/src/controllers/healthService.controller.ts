@@ -52,14 +52,15 @@ export class HealthServiceController {
 
   /**
    * Get all health services with optional filters
-   * GET /api/health-services?type=LAB_TEST&status=ACTIVE
+   * GET /api/health-services?type=LAB_TEST&status=ACTIVE&page=1&limit=20&search=cbc&hospitalId=...
    */
   async getAllServices(req: Request, res: Response) {
-    const { type, status } = req.query;
-
+    const { type, status, search, hospitalId, page = '1', limit = '20' } = req.query;
     const filters: {
       type?: ServiceType;
       status?: ServiceStatus;
+      hospitalId?: string;
+      search?: string;
     } = {};
 
     if (type && Object.values(ServiceType).includes(type as ServiceType)) {
@@ -70,13 +71,27 @@ export class HealthServiceController {
       filters.status = status as ServiceStatus;
     }
 
-    const services = await healthServiceService.getAllServices(filters);
+    if (hospitalId && typeof hospitalId === 'string') {
+      filters.hospitalId = hospitalId;
+    }
+
+    if (search && typeof search === 'string') {
+      filters.search = search;
+    }
+
+    const pagination = {
+      page: parseInt(String(page), 10) || 1,
+      limit: parseInt(String(limit), 10) || 20
+    };
+
+    const result = await healthServiceService.getAllServicesPaged(filters, pagination);
 
     return res.status(200).json({
       success: true,
       message: 'Health services retrieved successfully',
-      data: services,
-      count: services.length
+      data: result.services,
+      count: result.pagination.total,
+      pagination: result.pagination
     });
   }
 
