@@ -154,7 +154,14 @@ services:
     depends_on:
       - postgres-audit
       - redis
-
+  video-chat-service:
+    build: ./services/video-chat-service
+    container_name: video-chat-service
+    restart: always
+    env_file: ./services/video-chat-service/.env
+    depends_on:
+      - postgres-audit
+      - redis
   api-gateway:
     build: ./api-gateway
     container_name: api-gateway
