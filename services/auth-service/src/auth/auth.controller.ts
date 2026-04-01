@@ -14,18 +14,30 @@ import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagg
 import { Request } from 'express';
 import { Public } from '../common/decorators/public.decorator';
 import { AuthService } from './auth.service';
-import { RegisterDto, LoginDto, LoginByOtpDto, UpdateUserStatusDto } from './dto/auth.dto';
+import {
+  RegisterDto,
+  LoginDto,
+  LoginByOtpDto,
+  UpdateUserStatusDto,
+  SendOtpRequestDto,
+  VerifyOtpRequestDto,
+} from './dto/auth.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { LogoutDto } from './dto/logout.dto';
 import { Get } from '@nestjs/common';
 
- function decodeJwtPayloadUnsafe(token: string): { sub?: string; userId?: string; role?: string; tenantId?: string } | null {
+function decodeJwtPayloadUnsafe(
+  token: string,
+): { sub?: string; userId?: string; role?: string; tenantId?: string } | null {
   try {
     const parts = token.split('.');
     if (parts.length !== 3) return null;
-    const payload = JSON.parse(
-      Buffer.from(parts[1], 'base64url').toString('utf8'),
-    ) as { sub?: string; userId?: string; role?: string; tenantId?: string };
+    const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf8')) as {
+      sub?: string;
+      userId?: string;
+      role?: string;
+      tenantId?: string;
+    };
     return payload;
   } catch {
     return null;
@@ -164,7 +176,7 @@ export class AuthController {
     return this.authService.updateUserStatus(userId, dto.status);
   }
 
- @Get('me')
+  @Get('me')
   @HttpCode(HttpStatus.OK)
   @ApiBearerAuth('JWT-auth')
   @ApiOperation({ summary: 'Get current authenticated user' })
@@ -172,7 +184,6 @@ export class AuthController {
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   async getCurrentUser(@Req() req: Request) {
     const decodedUser = decodeJwtPayloadUnsafe(req.headers.authorization?.split(' ')[1] || '');
-    
 
     const userId = decodedUser?.sub || decodedUser?.userId;
 
@@ -182,7 +193,30 @@ export class AuthController {
 
     return this.authService.getUserById(userId);
   }
+
+  // ─── OTP-based Registration (DOCTOR & PATIENT only) ─────────────────────────
+  @Public()
+  @Post('otp/send')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Send OTP for login or registration (DOCTOR / PATIENT only)' })
+  @ApiResponse({ status: 200, description: 'OTP sent successfully' })
+  @ApiResponse({ status: 400, description: 'Invalid input or missing role for registration' })
+  @ApiResponse({ status: 401, description: 'Role not permitted or account inactive' })
+  @ApiResponse({ status: 409, description: 'User already exists (registration)' })
+  async sendOtp(@Body() dto: SendOtpRequestDto) {
+    return this.authService.sendOtp(dto);
+  }
+
+  @Public()
+  @Post('otp/verify')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Verify OTP — logs in or registers based on purpose' })
+  @ApiResponse({ status: 200, description: 'Returns access token, refresh token, and user' })
+  @ApiResponse({ status: 401, description: 'Invalid or expired OTP' })
+  @ApiResponse({ status: 409, description: 'User already exists (registration race condition)' })
+  async verifyOtp(@Body() dto: VerifyOtpRequestDto) {
+    return this.authService.verifyOtp({
+      ...dto,
+    });
+  }
 }
-
-  
-

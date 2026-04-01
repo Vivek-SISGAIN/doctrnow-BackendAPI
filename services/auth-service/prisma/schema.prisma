@@ -1,6 +1,3 @@
-// Prisma Schema for Authentication & Identity Service
-// Database: PostgreSQL
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -11,21 +8,20 @@ datasource db {
 }
 
 model User {
-  id                  String   @id @default(uuid()) @db.Uuid
-  tenantId            String   @map("tenant_id") @db.Uuid
-  email               String   @unique @db.VarChar(255)
-  mobile              String?  @db.VarChar(20)
-  passwordHash        String   @map("password_hash") @db.Text
+  id                  String               @id @default(uuid()) @db.Uuid
+  tenantId            String?               @map("tenant_id") @db.Uuid
+  email               String               @unique @db.VarChar(255)
+  mobile              String?              @db.VarChar(20)
+  passwordHash        String               @map("password_hash")
   role                UserRole
-  status              UserStatus @default(ACTIVE)
-  failedLoginAttempts Int      @map("failed_login_attempts") @default(0)
-  lockedUntil         DateTime? @map("locked_until") @db.Timestamp
-  createdAt           DateTime @default(now()) @map("created_at") @db.Timestamp
-  updatedAt           DateTime @updatedAt @map("updated_at") @db.Timestamp
-
-  sessions            Session[]
+  status              UserStatus           @default(ACTIVE)
+  failedLoginAttempts Int                  @default(0) @map("failed_login_attempts")
+  lockedUntil         DateTime?            @map("locked_until") @db.Timestamp(6)
+  createdAt           DateTime             @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt           DateTime             @updatedAt @map("updated_at") @db.Timestamp(6)
   otpRequests         OtpRequest[]
   passwordResetTokens PasswordResetToken[]
+  sessions            Session[]
 
   @@index([email])
   @@index([mobile])
@@ -35,18 +31,17 @@ model User {
 }
 
 model Session {
-  id              String   @id @default(uuid()) @db.Uuid
-  userId          String   @map("user_id") @db.Uuid
-  tenantId        String   @map("tenant_id") @db.Uuid
-  refreshTokenHash String   @map("refresh_token_hash") @db.Text
-  deviceId        String?  @map("device_id") @db.VarChar(255)
-  ipAddress       String?  @map("ip_address") @db.VarChar(45)
-  userAgent       String?  @map("user_agent") @db.Text
-  expiresAt       DateTime @map("expires_at") @db.Timestamp
-  revokedAt       DateTime? @map("revoked_at") @db.Timestamp
-  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamp
-
-  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id               String    @id @default(uuid()) @db.Uuid
+  userId           String    @map("user_id") @db.Uuid
+  tenantId         String?    @map("tenant_id") @db.Uuid
+  refreshTokenHash String    @map("refresh_token_hash")
+  deviceId         String?   @map("device_id") @db.VarChar(255)
+  ipAddress        String?   @map("ip_address") @db.VarChar(45)
+  userAgent        String?   @map("user_agent")
+  expiresAt        DateTime  @map("expires_at") @db.Timestamp(6)
+  revokedAt        DateTime? @map("revoked_at") @db.Timestamp(6)
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([refreshTokenHash])
@@ -56,19 +51,18 @@ model Session {
 }
 
 model OtpRequest {
-  id            String      @id @default(uuid()) @db.Uuid
-  userId        String?     @map("user_id") @db.Uuid
-  tenantId      String?     @map("tenant_id") @db.Uuid
-  otpHash       String      @map("otp_hash") @db.Text
-  purpose       OtpPurpose
-  expiresAt     DateTime    @map("expires_at") @db.Timestamp
-  verified      Boolean     @default(false)
-  attemptCount  Int         @map("attempt_count") @default(0)
-  createdAt     DateTime    @default(now()) @map("created_at") @db.Timestamp
-  identifierEmail String?   @map("identifier_email") @db.VarChar(255)
-  identifierMobile String?  @map("identifier_mobile") @db.VarChar(20)
-
-  user          User?       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id               String     @id @default(uuid()) @db.Uuid
+  userId           String?    @map("user_id") @db.Uuid
+  tenantId         String?    @map("tenant_id") @db.Uuid
+  otpHash          String     @map("otp_hash")
+  purpose          OtpPurpose
+  expiresAt        DateTime   @map("expires_at") @db.Timestamp(6)
+  verified         Boolean    @default(false)
+  attemptCount     Int        @default(0) @map("attempt_count")
+  createdAt        DateTime   @default(now()) @map("created_at") @db.Timestamp(6)
+  identifierEmail  String?    @map("identifier_email") @db.VarChar(255)
+  identifierMobile String?    @map("identifier_mobile") @db.VarChar(20)
+  user             User?      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([otpHash])
@@ -82,11 +76,10 @@ model OtpRequest {
 model PasswordResetToken {
   id        String   @id @default(uuid()) @db.Uuid
   userId    String   @map("user_id") @db.Uuid
-  token     String   @unique @db.Text
-  expiresAt DateTime @map("expires_at") @db.Timestamp
+  token     String   @unique
+  expiresAt DateTime @map("expires_at") @db.Timestamp(6)
   used      Boolean  @default(false)
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamp
-
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamp(6)
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([token])
@@ -97,10 +90,10 @@ model PasswordResetToken {
 model JwtKey {
   id         String   @id @default(uuid()) @db.Uuid
   keyId      String   @unique @map("key_id") @db.VarChar(255)
-  publicKey  String   @map("public_key") @db.Text
-  privateKey String   @map("private_key") @db.Text // Encrypted at rest
+  publicKey  String   @map("public_key")
+  privateKey String   @map("private_key")
   isActive   Boolean  @default(true) @map("is_active")
-  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamp
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamp(6)
 
   @@index([keyId])
   @@index([isActive])
@@ -126,4 +119,3 @@ enum OtpPurpose {
   PASSWORD_RESET
   REGISTRATION
 }
-

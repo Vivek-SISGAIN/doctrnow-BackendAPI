@@ -7,7 +7,6 @@ import { importSPKI, jwtVerify } from 'jose';
 
 export interface JwtPayload {
   sub: string; // User ID
-  tenantId: string;
   role: string;
   sessionId: string;
   iss: string;
@@ -40,7 +39,6 @@ export class JwtService {
    */
   async generateAccessToken(
     userId: string,
-    tenantId: string,
     role: string,
     sessionId: string,
   ): Promise<string> {
@@ -51,7 +49,6 @@ export class JwtService {
 
     const payload: JwtPayload = {
       sub: userId,
-      tenantId,
       role,
       sessionId,
       iss: issuer,
@@ -94,7 +91,7 @@ export class JwtService {
     role: string,
     sessionId: string,
   ): Promise<TokenPair> {
-    const accessToken = await this.generateAccessToken(userId, tenantId, role, sessionId);
+    const accessToken = await this.generateAccessToken(userId, role, sessionId);
     const { token: refreshToken } = await this.generateRefreshToken();
     const expiresIn = this.configService.get<number>('JWT_ACCESS_TOKEN_TTL', 900);
 
@@ -139,7 +136,6 @@ export class JwtService {
       // Map jose payload to our JwtPayload interface
       const jwtPayload: JwtPayload = {
         sub: payload.sub as string,
-        tenantId: (payload as any).tenantId || '',
         role: (payload as any).role || '',
         sessionId: (payload as any).sessionId || '',
         iss: payload.iss || issuer,

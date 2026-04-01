@@ -61,7 +61,6 @@ class BannerService {
     const { page = 1, limit = 20 } = pagination;
 
     const skip = (page - 1) * limit;
-
     const where = {};
 
     // ✅ Search filter
@@ -89,7 +88,7 @@ class BannerService {
     ]);
 
     return {
-      banners,
+      data : banners,
       pagination: {
         total,
         page: parseInt(page, 10),

@@ -6,7 +6,6 @@ export interface UserRegisteredEvent {
   userId: string;
   email: string;
   role: string;
-  tenantId: string;
   timestamp?: Date;
 }
 
@@ -14,7 +13,6 @@ export interface LoginSucceededEvent {
   userId: string;
   email: string;
   sessionId: string;
-  tenantId: string;
   timestamp?: Date;
 }
 
@@ -22,7 +20,6 @@ export interface LoginFailedEvent {
   email: string;
   userId?: string;
   reason: string;
-  tenantId: string;
   timestamp?: Date;
 }
 
@@ -31,7 +28,6 @@ export interface OtpSentEvent {
   email?: string;
   mobile?: string;
   purpose: string;
-  tenantId: string;
   timestamp?: Date;
 }
 
@@ -40,7 +36,6 @@ export interface OtpVerifiedEvent {
   email?: string;
   mobile?: string;
   purpose: string;
-  tenantId: string;
   timestamp?: Date;
 }
 
@@ -53,21 +48,18 @@ export interface SessionRevokedEvent {
 export interface PasswordResetRequestedEvent {
   userId: string;
   email: string;
-  tenantId: string;
   timestamp?: Date;
 }
 
 export interface PasswordResetCompletedEvent {
   userId: string;
   email: string;
-  tenantId: string;
   timestamp?: Date;
 }
 
 export interface AccountLockedEvent {
   userId: string;
   email: string;
-  tenantId: string;
   timestamp?: Date;
 }
 
@@ -88,7 +80,9 @@ export class EventsService {
   private async initializeKafka(): Promise<void> {
     const enabled = this.configService.get<boolean>('KAFKA_ENABLED', false);
     if (!enabled) {
-      this.logger.log('Kafka disabled (KAFKA_ENABLED not set). Events will be logged but not published.');
+      this.logger.log(
+        'Kafka disabled (KAFKA_ENABLED not set). Events will be logged but not published.',
+      );
       return;
     }
     try {
@@ -98,7 +92,10 @@ export class EventsService {
       // Parse brokers - handle both comma-separated string and array
       let brokers: string[];
       if (typeof brokersConfig === 'string') {
-        brokers = brokersConfig.split(',').map((b) => b.trim()).filter((b) => b.length > 0);
+        brokers = brokersConfig
+          .split(',')
+          .map((b) => b.trim())
+          .filter((b) => b.length > 0);
       } else if (Array.isArray(brokersConfig)) {
         brokers = brokersConfig;
       } else {
@@ -230,4 +227,3 @@ export class EventsService {
     });
   }
 }
-

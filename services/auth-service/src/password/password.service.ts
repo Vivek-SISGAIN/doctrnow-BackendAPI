@@ -70,7 +70,6 @@ export class PasswordService {
     await this.eventsService.publishPasswordResetRequested({
       userId: user.id,
       email: user.email,
-      tenantId: user.tenantId,
     });
 
     return { message: 'If the email exists, a password reset link has been sent' };
@@ -139,7 +138,6 @@ export class PasswordService {
     await this.eventsService.publishPasswordResetCompleted({
       userId: resetToken.userId,
       email: resetToken.user.email,
-      tenantId: resetToken.user.tenantId,
     });
 
     this.logger.log(`Password reset completed for user: ${resetToken.userId}`);
