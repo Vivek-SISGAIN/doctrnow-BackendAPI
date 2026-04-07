@@ -6,7 +6,7 @@ WORKDIR /app
 COPY package*.json ./
 COPY prisma ./prisma/
 
-RUN npm ci
+RUN npm ci --legacy-peer-deps
 RUN npx prisma generate
 
 COPY . .
@@ -20,7 +20,7 @@ FROM node:18-bullseye
 WORKDIR /app
 
 COPY package*.json ./
-RUN npm ci --omit=dev
+RUN npm ci --omit=dev --legacy-peer-deps
 
 COPY prisma ./prisma/
 
