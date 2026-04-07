@@ -89,14 +89,14 @@ export class EventsService implements OnModuleInit {
   constructor(private readonly configService: ConfigService) {
     const host = this.configService.get<string>('REDIS_HOST', 'localhost');
     const port = this.configService.get<number>('REDIS_PORT', 6379);
-    const PASSWORD = process.env.REDIS_PASSWORD || undefined;
+    const passwrod = this.configService.get<string>('REDIS_PASSWORD', 'Redis@123');
 
     this.client = ClientProxyFactory.create({
       transport: Transport.REDIS,
       options: {
         host: host,
         port: port,
-        password: PASSWORD,
+        password: passwrod,
       },
     });
 
