@@ -63,7 +63,9 @@ class SlotService {
         },
         slotLock: null,
         appointments: {
-          none: {},
+          none: {
+            status: { not: "CANCELLED" }
+          },
         },
       },
       orderBy: {
@@ -211,7 +213,11 @@ class SlotService {
           doctorId,
           status: "AVAILABLE",
           startTime: { gte: new Date() },
-          appointments: { none: {} },
+          appointments: {
+            none: {
+              status: { not: "CANCELLED" }
+            }
+          },
           slotLock: null,
         },
       });
@@ -516,7 +522,11 @@ class SlotService {
       where: {
         status: "AVAILABLE",
         startTime: { lt: now },
-        appointments: { none: {} },
+        appointments: {
+          none: {
+            status: { not: "CANCELLED" }
+          }
+        },
         slotLock: null,
       },
       select: { id: true },

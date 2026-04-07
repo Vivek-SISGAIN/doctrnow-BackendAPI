@@ -138,8 +138,11 @@ class AppointmentService {
     }
 
     // Check if slot already has an appointment
-    const existingAppointment = await prisma.appointment.findUnique({
-      where: { slotId: data.slotId },
+    const existingAppointment = await prisma.appointment.findFirst({
+      where: { 
+        slotId: data.slotId,
+        status: { not: "CANCELLED" }
+      },
     });
 
     if (existingAppointment) {

@@ -31,7 +31,7 @@ model Appointment {
   patientId        String
   doctorId         String
   hospitalId       String
-  slotId           String            @unique
+  slotId           String
   status           AppointmentStatus @default(PENDING)
   paymentStatus    PaymentStatus     @default(PENDING)
   consultationType ConsultationType @default(VIDEO)

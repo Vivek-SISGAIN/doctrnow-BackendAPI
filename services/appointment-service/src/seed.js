@@ -59,7 +59,7 @@ const reasons = [
 
 function getFirstSlotDate(now) {
   const todayEnd = new Date(now);
-  todayEnd.setHours(17, 0, 0, 0);
+  todayEnd.setHours(22, 0, 0, 0);
   const firstDate = new Date(now);
   if (now >= todayEnd) {
     firstDate.setDate(firstDate.getDate() + 1);
@@ -71,7 +71,7 @@ function getFirstSlotDate(now) {
       const next = mins <= 30 ? 30 : 60;
       firstDate.setMinutes(next, 0, 0);
       if (next === 60) firstDate.setHours(firstDate.getHours() + 1, 0, 0, 0);
-      if (firstDate.getHours() >= 17) {
+      if (firstDate.getHours() >= 22) {
         firstDate.setDate(firstDate.getDate() + 1);
         firstDate.setHours(9, 0, 0, 0);
       }
@@ -82,7 +82,7 @@ function getFirstSlotDate(now) {
 
 async function createSlotsForDoctor(doctorId, now, firstDate) {
   const slots = [];
-  const SLOTS_PER_DAY = 16;
+  const SLOTS_PER_DAY = 22;
   for (let day = 0; day < 14; day++) {
     const date = new Date(firstDate);
     date.setDate(date.getDate() + day);
@@ -93,7 +93,7 @@ async function createSlotsForDoctor(doctorId, now, firstDate) {
       startTime.setMinutes(date.getMinutes() + i * 30, 0, 0);
       const endTime = new Date(startTime);
       endTime.setMinutes(endTime.getMinutes() + 30);
-      if (startTime.getHours() >= 17) break;
+      if (startTime.getHours() >= 22) break;
 
       slots.push({
         doctorId,
