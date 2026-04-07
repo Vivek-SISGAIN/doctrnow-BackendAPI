@@ -82,19 +82,21 @@ export interface AccountLockedEvent {
 @Injectable()
 export class EventsService implements OnModuleInit {
   private readonly logger = new Logger(EventsService.name);
-  
+
   // --- REDIS IMPLEMENTATION (ACTIVE) ---
   private client: ClientProxy;
 
   constructor(private readonly configService: ConfigService) {
     const host = this.configService.get<string>('REDIS_HOST', 'localhost');
     const port = this.configService.get<number>('REDIS_PORT', 6379);
+    const PASSWORD = process.env.REDIS_PASSWORD || undefined;
 
     this.client = ClientProxyFactory.create({
       transport: Transport.REDIS,
       options: {
-        host,
-        port,
+        host: host,
+        port: port,
+        password: PASSWORD,
       },
     });
 
