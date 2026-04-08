@@ -77,7 +77,6 @@ model Finance {
   // Commission Structure
   platformCommission     Float    @map("platform_commission")
   hospitalShare          Float    @map("hospital_share")
-  doctorShare            Float    @map("doctor_share")
 
   // Payout Settings
   payoutFrequency        String   @map("payout_frequency")
@@ -92,11 +91,9 @@ model Finance {
   accountHolderName      String   @map("account_holder_name")
   branchAddress          String?  @map("branch_address")
 
-  // Relation
   hospitalId             String   @unique
   hospital               Hospital @relation(fields: [hospitalId], references: [id])
 
-  // System Fields
   createdAt              DateTime @default(now())
   updatedAt              DateTime @updatedAt
 
@@ -111,6 +108,7 @@ model Banners {
   title       String
   description String
   portal      PORTAL
+  hospitalId  String?  @map("hospital_id")
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 }

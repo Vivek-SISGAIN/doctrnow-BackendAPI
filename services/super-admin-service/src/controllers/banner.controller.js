@@ -2,7 +2,6 @@ import bannerService from "../services/banners.service.js"
 
 class BannerController {
 
-  // ✅ Create Banner
   async createBanner(req, res) {
     try {
       const { portal } = req.body;
@@ -103,8 +102,10 @@ class BannerController {
 
   // ✅ Get All Banners (search + portal + pagination)
   async getBanners(req, res) {
+    console.log("Fetching banners...");
     try {
       const { search, portal, page, limit } = req.query;
+    console.log("Fetching banners..." , { search, portal, page, limit });
 
       const result = await bannerService.getBanners(
         {
@@ -122,6 +123,7 @@ class BannerController {
         ...result,
       });
     } catch (error) {
+        console.log(error)
       return res.status(500).json({
         success: false,
         message: error.message || "Failed to fetch banners",

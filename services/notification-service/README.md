@@ -1,40 +1,58 @@
 # Notification Service
 
-Handles SMS, Email, and Push notifications.
-
-## Responsibilities
-
-- SMS notifications
-- Email notifications
-- Push notifications (mobile apps)
-- Notification queuing and retry
-- Delivery status tracking
-- Template management
-
-## Storage
-
-- Notification queue: MongoDB
-- Delivery status: MongoDB
-- Templates: Database or file system
+Notification delivery service for EMAIL, SMS, PUSH, and IN_APP channels using RabbitMQ workers.
 
 ## API Endpoints
 
-- `POST /notifications/send` - Send notification
-- `GET /notifications/:id/status` - Get delivery status
-- `GET /notifications/user/:userId` - Get user notifications
+- `POST /api/notifications`
+- `POST /api/devices`
+- `POST /api/otp/send` (publishes OTP event to RabbitMQ)
 
-## Events Consumed
+## RabbitMQ Topology
 
-- `AppointmentBooked` → Send confirmation SMS/Email
-- `AppointmentCancelled` → Send cancellation notification
-- `ConsultationStarted` → Send reminder push notification
-- `PrescriptionGenerated` → Send prescription email
-- `PaymentSuccess` → Send receipt email
-- `PaymentFailed` → Send payment failure notification
+- Main exchange: `notifications_exchange` (direct)
+- Retry exchange: `notifications_retry_exchange` (direct)
+- Channel queues:
+  - `email.queue`
+  - `sms.queue`
+  - `push.queue`
+  - `inapp.queue`
+- OTP exchange: `auth_events_exchange` (topic, configurable via env)
+- OTP queue: `auth.otp.sent.queue`
+- OTP retry queue: `auth.otp.sent.retry.queue`
 
-## Channels
+## OTP Event
 
-- SMS: Twilio, AWS SNS, or local UAE provider
-- Email: AWS SES, SendGrid, or SMTP
-- Push: FCM (Firebase Cloud Messaging), APNS (Apple Push Notification Service)
+Routing key: `auth.otp.sent`
+
+Example payload:
+
+```json
+{
+  "eventType": "OtpSent",
+  "userId": "user-id",
+  "channel": "EMAIL",
+  "email": "user@example.com",
+  "mobile": "+1234567890",
+  "otp": "123456",
+  "purpose": "LOGIN",
+  "tenantId": "default",
+  "timestamp": "2026-03-31T10:00:00.000Z"
+}
+```
+
+Rules:
+
+- `channel` must be `EMAIL` or `SMS`
+- `otp` is required
+- `email` is required when `channel=EMAIL`
+- `mobile` is required when `channel=SMS`
+
+## OTP Test
+
+Publish sample OTP events:
+
+```bash
+npm run test:otp
+```
 

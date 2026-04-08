@@ -14,7 +14,7 @@ import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagg
 import { Request } from 'express';
 import { Public } from '../common/decorators/public.decorator';
 import { AuthService } from './auth.service';
-import { RegisterDto, LoginDto, LoginByOtpDto, UpdateUserStatusDto } from './dto/auth.dto';
+import { RegisterDto, LoginDto, UpdateUserStatusDto } from './dto/auth.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { LogoutDto } from './dto/logout.dto';
 import { Get } from '@nestjs/common';
@@ -94,25 +94,25 @@ export class AuthController {
     });
   }
 
-  @Public()
-  @Post('login/otp')
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Login by OTP (phone)' })
-  @ApiResponse({
-    status: 200,
-    description: 'Login successful, returns tokens',
-  })
-  @ApiResponse({
-    status: 401,
-    description: 'Invalid or expired OTP',
-  })
-  async loginByOtp(@Body() dto: LoginByOtpDto, @Req() req: Request) {
-    return this.authService.loginByOtp({
-      ...dto,
-      ipAddress: req.ip,
-      userAgent: req.get('user-agent'),
-    });
-  }
+  // @Public()
+  // @Post('login/otp')
+  // @HttpCode(HttpStatus.OK)
+  // @ApiOperation({ summary: 'Login by OTP (phone)' })
+  // @ApiResponse({
+  //   status: 200,
+  //   description: 'Login successful, returns tokens',
+  // })
+  // @ApiResponse({
+  //   status: 401,
+  //   description: 'Invalid or expired OTP',
+  // })
+  // async loginByOtp(@Body() dto: LoginByOtpDto, @Req() req: Request) {
+  //   return this.authService.loginByOtp({
+  //     ...dto,
+  //     ipAddress: req.ip,
+  //     userAgent: req.get('user-agent'),
+  //   });
+  // }
 
   @Public()
   @Post('refresh')

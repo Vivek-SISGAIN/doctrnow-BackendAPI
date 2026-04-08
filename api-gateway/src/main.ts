@@ -195,6 +195,7 @@ async function bootstrap(): Promise<void> {
       .addTag('appointments', 'Appointment management')
       .addTag('hospital-admin', 'Hospital admin (health services, packages, doctors)')
       .addTag('consultations', 'Consultation management')
+      .addTag('notifications', 'Notification management (push, email, SMS, OTP)')
       .build();
 
     const document = SwaggerModule.createDocument(app, swaggerConfig);

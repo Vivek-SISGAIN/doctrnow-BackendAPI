@@ -112,12 +112,12 @@ export class AuthService {
     });
 
     // Publish event
-    await this.eventsService.publishUserRegistered({
-      userId: user.id,
-      email: user.email,
-      role: user.role,
-      tenantId: user.tenantId,
-    });
+    // await this.eventsService.publishUserRegistered({
+    //   userId: user.id,
+    //   email: user.email,
+    //   role: user.role,
+    //   tenantId: user.tenantId,
+    // });
 
     this.logger.log(`User registered: ${user.id} (${user.email})`);
 
@@ -165,18 +165,18 @@ export class AuthService {
     // Step 3: Create session and issue tokens immediately (registration verified identity via OTP)
     const session = await this.sessionService.createSession({
       userId: user.id,
-      tenantId: user.tenantId,
+      tenantId: user.tenantId || "default",
       deviceId: dto.deviceId,
       ipAddress: dto.ipAddress,
       userAgent: dto.userAgent,
     });
 
-    await this.eventsService.publishLoginSucceeded({
-      userId: user.id,
-      email: user.email,
-      sessionId: session.sessionId,
-      tenantId: user.tenantId,
-    });
+    // await this.eventsService.publishLoginSucceeded({
+    //   userId: user.id,
+    //   email: user.email,
+    //   sessionId: session.sessionId,
+    //   tenantId: user.tenantId,
+    // });
 
     this.logger.log(`User registered and auto-logged in: ${user.id} (${user.email})`);
 
@@ -186,7 +186,7 @@ export class AuthService {
         id: user.id,
         email: user.email,
         role: user.role,
-        tenantId: user.tenantId,
+        tenantId: user.tenantId || "default",
       },
     };
   }
@@ -214,11 +214,11 @@ export class AuthService {
 
     if (!user) {
       // Publish failed login event
-      await this.eventsService.publishLoginFailed({
-        email: dto.email,
-        reason: 'User not found',
-        tenantId: dto.tenantId,
-      });
+      // await this.eventsService.publishLoginFailed({
+      //   email: dto.email,
+      //   reason: 'User not found',
+      //   tenantId: dto.tenantId,
+      // });
 
       throw new UnauthorizedException('Invalid credentials');
     }
@@ -231,11 +231,11 @@ export class AuthService {
     // Check account lockout
     const isLocked = await this.accountLockoutService.isAccountLocked(user.id);
     if (isLocked) {
-      await this.eventsService.publishAccountLocked({
-        userId: user.id,
-        email: user.email,
-        tenantId: user.tenantId,
-      });
+      // await this.eventsService.publishAccountLocked({
+      //   userId: user.id,
+      //   email: user.email,
+      //   tenantId: user.tenantId,
+      // });
 
       throw new UnauthorizedException('Account is locked due to too many failed login attempts');
     }
@@ -251,12 +251,12 @@ export class AuthService {
       await this.accountLockoutService.recordFailedAttempt(user.id);
 
       // Publish failed login event
-      await this.eventsService.publishLoginFailed({
-        email: dto.email,
-        userId: user.id,
-        reason: 'Invalid password',
-        tenantId: user.tenantId,
-      });
+      // await this.eventsService.publishLoginFailed({
+      //   email: dto.email,
+      //   userId: user.id,
+      //   reason: 'Invalid password',
+      //   tenantId: user.tenantId || ,
+      // });
 
       throw new UnauthorizedException('Invalid credentials');
     }
@@ -282,19 +282,19 @@ export class AuthService {
     // Create session
     const session = await this.sessionService.createSession({
       userId: user.id,
-      tenantId: user.tenantId,
+      tenantId: user.tenantId || "default",
       deviceId: dto.deviceId,
       ipAddress: dto.ipAddress,
       userAgent: dto.userAgent,
     });
 
     // Publish successful login event
-    await this.eventsService.publishLoginSucceeded({
-      userId: user.id,
-      email: user.email,
-      sessionId: session.sessionId,
-      tenantId: user.tenantId,
-    });
+    // await this.eventsService.publishLoginSucceeded({
+    //   userId: user.id,
+    //   email: user.email,
+    //   sessionId: session.sessionId,
+    //   tenantId: user.tenantId,
+    // });
 
     this.logger.log(`User logged in: ${user.id} (${user.email})`);
 
@@ -304,7 +304,7 @@ export class AuthService {
         id: user.id,
         email: user.email,
         role: user.role,
-        tenantId: user.tenantId,
+        tenantId: user.tenantId || "default",
       },
     };
   }
@@ -336,7 +336,7 @@ export class AuthService {
       mobile: dto.mobile,
       otp: dto.otp,
       purpose: OtpPurpose.LOGIN,
-      tenantId: dto.tenantId,
+      tenantId: dto.tenantId || "default",
     });
     if (!result.verified || !result.userId) {
       throw new UnauthorizedException('Invalid or expired OTP');
@@ -356,18 +356,18 @@ export class AuthService {
 
     const session = await this.sessionService.createSession({
       userId: user.id,
-      tenantId: user.tenantId,
+      tenantId: user.tenantId || "default",
       deviceId: dto.deviceId,
       ipAddress: dto.ipAddress,
       userAgent: dto.userAgent,
     });
 
-    await this.eventsService.publishLoginSucceeded({
-      userId: user.id,
-      email: user.email,
-      sessionId: session.sessionId,
-      tenantId: user.tenantId,
-    });
+    // await this.eventsService.publishLoginSucceeded({
+    //   userId: user.id,
+    //   email: user.email,
+    //   sessionId: session.sessionId,
+    //   tenantId: user.tenantId,
+    // });
 
     this.logger.log(`User logged in by OTP: ${user.id} (${user.email})`);
 
@@ -377,7 +377,7 @@ export class AuthService {
         id: user.id,
         email: user.email,
         role: user.role,
-        tenantId: user.tenantId,
+        tenantId: user.tenantId || "default",
       },
     };
   }

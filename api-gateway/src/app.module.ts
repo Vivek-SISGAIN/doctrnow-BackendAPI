@@ -25,6 +25,7 @@ import { HospitalAdminController } from './controllers/hospital-admin.controller
 import { AgoraController } from './controllers/agora.controller';
 import { SuperAdminController } from './controllers/super-admin.controller';
 import { ChatController } from './controllers/chat.controller';
+import { NotificationController } from './controllers/notification.controller';
 
 import { CorrelationIdInterceptor } from './common/interceptors/correlation-id.interceptor';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
@@ -138,6 +139,7 @@ import configuration from './config/configuration';
     SuperAdminController,
     AgoraController,
     ChatController,
+    NotificationController,
   ],
   providers: [
     // Global Guards (execution order: Throttler → JWT → Roles)

@@ -502,6 +502,28 @@ class AppointmentService {
       }))
       .filter((g) => Boolean(g.id));
   }
+
+  async getPreviouslyConsultedDoctors(patientId) {
+    const groups = await prisma.appointment.groupBy({
+      by: ["doctorId"],
+      where: {
+        patientId,
+      },
+      _max: {
+        createdAt: true,
+      },
+      orderBy: {
+        _max: {
+          createdAt: "desc",
+        },
+      },
+    });
+
+    return groups.map((g) => ({
+      doctorId: g.doctorId,
+      lastConsultedAt: g._max?.createdAt || null,
+    }));
+  }
 }
 
 module.exports = new AppointmentService();

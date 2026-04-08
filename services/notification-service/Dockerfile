@@ -1,19 +1,43 @@
-FROM node:18-alpine
+# ---------- BUILD STAGE ----------
+  FROM node:22-alpine AS builder
 
-WORKDIR /app
-
-# Install dependencies needed for simple node apps
-COPY package*.json ./
-RUN npm ci --omit=dev
-
-# Copy application code
-COPY . .
-
-# create a non-root user for security
-RUN addgroup -S nodejs && adduser -S nodejs -G nodejs
-USER nodejs
-
-# Expose port the app runs on
+  WORKDIR /app
+  
+  COPY package*.json ./
+  COPY prisma ./prisma/
+  
+  RUN npm ci
+  
+  RUN npx prisma generate
+  
+  COPY . .
+  
+  RUN npm run build
+  
+  
+  # ---------- PRODUCTION STAGE ----------
+  FROM node:22-alpine
+  
+  WORKDIR /app
+  
+  # install only production deps
+  COPY package*.json ./
+  RUN npm ci --omit=dev
+  
+  # copy prisma only (no need to regenerate again)
+  COPY prisma ./prisma/
+  
+  # copy build output
+  COPY --from=builder /app/dist ./dist
+  
+  # copy prisma client from builder (IMPORTANT)
+  COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
+  COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
+  
+  # create user
+  RUN addgroup -S nodejs && adduser -S nodejs -G nodejs
+  USER nodejs
+  
 EXPOSE 3008
 
 # Start the application

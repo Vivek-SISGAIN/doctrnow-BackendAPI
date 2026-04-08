@@ -2,15 +2,14 @@ import { Injectable, Logger, BadRequestException, NotFoundException, Inject, for
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { EventsService } from '../events/events.service';
-import { SessionService } from '../auth/session.service';
-import { createHash, randomBytes } from 'crypto';
+import { createHash } from 'crypto';
 import { OtpPurpose } from '@prisma/client';
+import { SessionService } from 'src/auth/session.service';
 
 export interface SendOtpDto {
   email?: string;
   mobile?: string;
   purpose: OtpPurpose;
-  tenantId: string;
 }
 
 export interface VerifyOtpDto {
@@ -125,7 +124,6 @@ export class OtpService {
     await this.prisma.otpRequest.create({
       data: {
         userId: user?.id,
-        tenantId: dto.tenantId,
         otpHash,
         purpose: dto.purpose,
         expiresAt,
@@ -134,20 +132,23 @@ export class OtpService {
       },
     });
 
-    // TODO: Send OTP via SMS/Email service
-    // For now, log it (REMOVE IN PRODUCTION - use notification service)
-    this.logger.warn(`OTP for ${dto.email || normalizedMobile}: ${otp} (DO NOT LOG IN PRODUCTION)`);
+    // Dispatch OTP delivery via notification-service → RabbitMQ → worker
+    await this.dispatchOtpViaNotificationService({
+      otp,
+      email: dto.email,
+      mobile: dto.mobile,
+      userName: user ? ((user as any).name ?? 'User') : 'User',
+    });
 
     // Publish event
-    await this.eventsService.publishOtpSent({
-      userId: user?.id,
-      email: dto.email,
-      mobile: normalizedMobile,
-      otp,
-      channel: dto.email ? 'EMAIL' : 'SMS',
-      purpose: dto.purpose,
-      tenantId: dto.tenantId,
-    });
+    // await this.eventsService.publishOtpSent({
+    //   userId: user?.id,
+    //   email: dto.email,
+    //   mobile: normalizedMobile,
+    //   otp,
+    //   channel: dto.email ? 'EMAIL' : 'SMS',
+    //   purpose: dto.purpose,
+    // });
 
     return {
       message: 'OTP sent successfully',
@@ -180,28 +181,10 @@ export class OtpService {
         } else if (dto.email) {
           user = await this.prisma.user.findUnique({ where: { email: dto.email } });
         }
-        this.logger.warn(`Accepting test OTP 111111 for LOGIN (ACCEPT_TEST_OTP=true), userId=${user?.id ?? 'none'}`);
-        
-        if (user) {
-          if (user.status !== 'ACTIVE') {
-            throw new BadRequestException('User account is not active');
-          }
-          const session = await this.sessionService.createSession({
-            userId: user.id,
-            tenantId: user.tenantId,
-          });
-          return {
-            verified: true,
-            ...session,
-            user: {
-              id: user.id,
-              email: user.email,
-              role: user.role,
-              tenantId: user.tenantId,
-            }
-          };
-        }
-        throw new NotFoundException('No user found for this mobile number');
+        this.logger.warn(
+          `Accepting test OTP 111111 for LOGIN (ACCEPT_TEST_OTP=true), userId=${user?.id ?? 'none'}`,
+        );
+        return { verified: true, userId: user?.id ?? undefined };
       }
     }
 
@@ -212,7 +195,6 @@ export class OtpService {
       where: {
         otpHash,
         purpose: dto.purpose,
-        tenantId: dto.tenantId,
         verified: false,
         expiresAt: {
           gt: new Date(),
@@ -254,7 +236,6 @@ export class OtpService {
       email: dto.email,
       mobile: normalizedMobile,
       purpose: dto.purpose,
-      tenantId: dto.tenantId,
     });
 
     if (dto.purpose === 'LOGIN' && otpRequest.userId && otpRequest.user) {
@@ -264,7 +245,7 @@ export class OtpService {
       }
       const session = await this.sessionService.createSession({
         userId: user.id,
-        tenantId: user.tenantId,
+        tenantId: user.tenantId || "default",
       });
       return {
         verified: true,
@@ -287,5 +268,57 @@ export class OtpService {
       userId: otpRequest.userId || undefined,
     };
   }
-}
 
+  /**
+   * Dispatch OTP to the user via the notification-service HTTP endpoint.
+   * The notification-service enqueues the message in RabbitMQ; the worker
+   * delivers it via SMS or Email.
+   */
+  private async dispatchOtpViaNotificationService(payload: {
+    otp: string;
+    email?: string;
+    mobile?: string;
+    userName?: string;
+  }): Promise<void> {
+    // const baseUrl = this.configService.get<string>(
+    //   'NOTIFICATION_SERVICE_URL',
+    //   'http://localhost:4000',
+    // );
+    const baseUrl = process.env.BASE_URL || 'http://localhost:8080';
+
+
+    const channel = payload.mobile ? 'SMS' : 'EMAIL';
+    console.log("Working" , channel , payload.mobile , payload.email);
+    try {
+      const response = await fetch(`${baseUrl}/api/v1/otp/send`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          otp: payload.otp,
+          channel,
+          mobile: payload.mobile,
+          email: payload.email,
+          userName: payload.userName ?? 'User',
+          eventType: 'OtpSent',
+          timestamp: new Date().toISOString(),
+        }),
+      });
+
+      console.log("Response" , response)
+      if (!response.ok) {
+        const body = await response.text();
+        this.logger.error(`[OtpService] Notification service error ${response.status}: ${body}`);
+      } else {
+        this.logger.log(
+          `[OtpService] OTP dispatched via notification-service (channel: ${channel})`,
+        );
+      }
+    } catch (error) {
+      // Non-fatal: OTP is already stored in DB. Log and continue.
+      this.logger.error(
+        '[OtpService] Failed to reach notification-service — OTP stored but not delivered:',
+        error,
+      );
+    }
+  }
+}

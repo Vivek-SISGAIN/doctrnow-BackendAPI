@@ -141,7 +141,7 @@ const getAllAppointments = asyncHandler(async (req, res) => {
     page = 1,
     limit = 20,
   } = req.query;
- 
+
   const filters = {
     patientId,
     doctorId,
@@ -153,14 +153,14 @@ const getAllAppointments = asyncHandler(async (req, res) => {
     startDate,
     endDate,
   };
- 
+
   const pagination = {
     page: parseInt(page, 10),
     limit: parseInt(limit, 10),
   };
- 
+
   const result = await appointmentService.findAll(filters, pagination);
- 
+
   if (!result || !result.appointments) {
     return res.status(200).json({
       success: true,
@@ -168,21 +168,20 @@ const getAllAppointments = asyncHandler(async (req, res) => {
       pagination: result?.pagination || {},
     });
   }
- 
-  const doctorIds = [...new Set(
-    result.appointments.map((a) => a.doctorId).filter(Boolean)
-  )];
- 
-  const patientIds = [...new Set(
-    result.appointments.map((a) => a.patientId).filter(Boolean)
-  )];
- 
+
+  const doctorIds = [
+    ...new Set(result.appointments.map((a) => a.doctorId).filter(Boolean)),
+  ];
+
+  const patientIds = [
+    ...new Set(result.appointments.map((a) => a.patientId).filter(Boolean)),
+  ];
+
   let doctorMap = {};
   let patientMap = {};
   const authHeader = req.headers.authorization;
- 
+
   await Promise.all([
- 
     // ── Bulk patient fetch ────────────────────────────────────────────────────
     patientIds.length > 0
       ? fetchProfilesBulk(
@@ -194,7 +193,7 @@ const getAllAppointments = asyncHandler(async (req, res) => {
           patientMap = m;
         })
       : Promise.resolve(),
- 
+
     // ── Bulk doctor fetch ─────────────────────────────────────────────────────
     doctorIds.length > 0
       ? fetchProfilesBulk(
@@ -206,17 +205,19 @@ const getAllAppointments = asyncHandler(async (req, res) => {
           doctorMap = m;
         })
       : Promise.resolve(),
- 
   ]);
- 
- const transformedAppointments = result.appointments
-  .map((appointment) => ({
-    ...appointment,
-    doctor: doctorMap[appointment.doctorId] || null,
-    patient: patientMap[appointment.patientId] || null,
-  }))
-  .filter((appointment) => appointment.doctor !== null && appointment.patient !== null); 
- 
+
+  const transformedAppointments = result.appointments
+    .map((appointment) => ({
+      ...appointment,
+      doctor: doctorMap[appointment.doctorId] || null,
+      patient: patientMap[appointment.patientId] || null,
+    }))
+    .filter(
+      (appointment) =>
+        appointment.doctor !== null && appointment.patient !== null,
+    );
+
   res.status(200).json({
     success: true,
     data: transformedAppointments,
@@ -383,13 +384,14 @@ const getHospitalPatients = asyncHandler(async (req, res) => {
     limit: parseInt(limit, 10),
   };
 
-  const normalizedSearch = String(search || "").trim().toLowerCase();
+  const normalizedSearch = String(search || "")
+    .trim()
+    .toLowerCase();
   const authHeader = req.headers.authorization;
 
   if (normalizedSearch) {
-    const allPatientIds = await appointmentService.getAllHospitalPatientIds(
-      hospitalId,
-    );
+    const allPatientIds =
+      await appointmentService.getAllHospitalPatientIds(hospitalId);
 
     const chunkSize = 100;
     const patientProfileById = {};
@@ -414,9 +416,15 @@ const getHospitalPatients = asyncHandler(async (req, res) => {
 
       return (
         fullName.includes(normalizedSearch) ||
-        String(profile.email || "").toLowerCase().includes(normalizedSearch) ||
-        String(profile.emiratesId || "").toLowerCase().includes(normalizedSearch) ||
-        String(profile.mobileNumber || "").toLowerCase().includes(normalizedSearch)
+        String(profile.email || "")
+          .toLowerCase()
+          .includes(normalizedSearch) ||
+        String(profile.emiratesId || "")
+          .toLowerCase()
+          .includes(normalizedSearch) ||
+        String(profile.mobileNumber || "")
+          .toLowerCase()
+          .includes(normalizedSearch)
       );
     };
 
@@ -484,9 +492,39 @@ const getHospitalPatients = asyncHandler(async (req, res) => {
   });
 });
 
+const getPreviouslyConsultedDoctors = asyncHandler(async (req, res) => {
+  const { patientId } = req.params;
+  const authHeader = req.headers.authorization;
+
+  const doctors =
+    await appointmentService.getPreviouslyConsultedDoctors(patientId);
+
+  const doctorIds = doctors.map((d) => d.doctorId).filter(Boolean);
+
+  // 🔥 Bulk fetch doctor profiles
+  const doctorProfiles = await fetchProfilesBulk(
+    doctorIds,
+    `${baseUrl}profiles/doctors/bulk`,
+    authHeader,
+    "doctor",
+  );
+
+  const result = doctors.map((doc) => ({
+    doctorId: doc.doctorId,
+    lastConsultedAt: doc.lastConsultedAt,
+    profile: doctorProfiles[doc.doctorId] || null,
+  }));
+
+  res.status(200).json({
+    success: true,
+    data: result,
+  });
+});
+
 module.exports = {
   getAllAppointments,
   getAppointmentById,
+  getPreviouslyConsultedDoctors,
   createAppointment,
   updateAppointment,
   cancelAppointment,
@@ -495,5 +533,5 @@ module.exports = {
   completeAppointment,
   markMissedAsNoShow,
   markNoShow,
-  getHospitalPatients
+  getHospitalPatients,
 };

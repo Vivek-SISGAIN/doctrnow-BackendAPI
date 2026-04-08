@@ -32,7 +32,6 @@ export class DoctorController {
             hospitalSharePercent,
             platformSharePercent,
             role,
-            tenantId,
             password
         } = req.body;
 
@@ -147,7 +146,6 @@ export class DoctorController {
             hospitalSharePercent: parseInt(hospitalSharePercent),
             platformSharePercent: parseInt(platformSharePercent),
             role,
-            tenantId,
             password
         });
 
