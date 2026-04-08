@@ -2,7 +2,6 @@ import bannerService from "../services/banners.service.js"
 
 class BannerController {
 
-  // ✅ Create Banner
   async createBanner(req, res) {
     try {
       const { portal } = req.body;

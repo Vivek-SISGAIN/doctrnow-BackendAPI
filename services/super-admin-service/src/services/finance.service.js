@@ -6,7 +6,6 @@ class FinanceService {
       data: {
         platformCommission: data.platformCommission,
         hospitalShare: data.hospitalShare,
-        doctorShare: data.doctorShare,
         payoutFrequency: data.payoutFrequency,
         paymentMethod: data.paymentMethod,
         minPayoutThreshold: data.minPayoutThreshold,

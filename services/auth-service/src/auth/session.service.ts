@@ -2,9 +2,11 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { JwtService } from '../jwt/jwt.service';
+// import { v4 as uuidv4 } from 'uuid';
 
 export interface CreateSessionData {
   userId: string;
+  tenantId: string;
   deviceId?: string;
   ipAddress?: string;
   userAgent?: string;
@@ -46,6 +48,7 @@ export class SessionService {
     const session = await this.prisma.session.create({
       data: {
         userId: data.userId,
+        tenantId: data.tenantId,
         refreshTokenHash,
         deviceId: data.deviceId,
         ipAddress: data.ipAddress,
@@ -66,8 +69,9 @@ export class SessionService {
 
     const accessToken = await this.jwtService.generateAccessToken(
       data.userId,
+      data.tenantId,
       user.role,
-      session.id, 
+      session.id,
     );
 
     const expiresIn = this.configService.get<number>('JWT_ACCESS_TOKEN_TTL', 900);
@@ -149,6 +153,7 @@ export class SessionService {
 
     const accessToken = await this.jwtService.generateAccessToken(
       session.user.id,
+      session.user.tenantId || "default",
       session.user.role,
       newSession.id,
     );

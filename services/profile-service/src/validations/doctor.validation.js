@@ -63,7 +63,7 @@ const createDoctorSchema = Joi.object({
     'any.required': 'Nationality is required'
   }),
   emiratesId: Joi.string()
-    .pattern(/^784-[0-9]{4}-[0-9]{7}-[0-9]$/)
+    .pattern(/^784[0-9]{12}$/)
     .required()
     .messages({
       'string.pattern.base': 'Emirates ID must be in format 784-XXXX-XXXXXXX-X',

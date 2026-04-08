@@ -16,7 +16,7 @@ export interface VerifyOtpDto {
   mobile?: string;
   otp: string;
   purpose: OtpPurpose;
-  // tenantId: string;
+  tenantId: string;
 }
 
 /**
@@ -59,6 +59,7 @@ export class OtpService {
    * Send OTP
    */
   async sendOtp(dto: SendOtpDto): Promise<{ message: string }> {
+    console.log("Otp executed")
     if (!dto.email && !dto.mobile) {
       throw new BadRequestException('Either email or mobile must be provided');
     }

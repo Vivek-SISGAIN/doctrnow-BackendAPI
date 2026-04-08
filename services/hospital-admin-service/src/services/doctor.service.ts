@@ -58,32 +58,29 @@ class DoctorService {
     hospitalSharePercent: number;
     platformSharePercent: number;
     role: string;
-    tenantId: string;
     password: string;
   }) {
-    const { password, role, tenantId, schedule, ...profilePayload } = data;
+    const { password, role, schedule, ...profilePayload } = data;
 
     let createdUserId: string | null = null;
     let createdDoctorId: string | null = null;
 
     try {
       // Step 1: Create auth user
-      const authResponse = await axios.post(`${process.env.API_BASE_URL}/auth/register`, {
+      const authResponse = await axios.post(`${process.env.API_BASE_URL}api/v1/auth/register`, {
         email: profilePayload.email,
         password,
         role,
-        tenantId
       });
 
       createdUserId = authResponse.data.userId;
 
       // Step 2: Create doctor profile
       const doctorResponse = await axios.post(
-        `${process.env.API_BASE_URL}/profiles/doctors`,
+        `${process.env.API_BASE_URL}api/v1/profiles/doctors`,
         { ...profilePayload, schedule, userId: createdUserId },
         {
           headers: {
-            'X-Tenant-Id': tenantId,
             'X-Service-Name': 'hospital-admin-service'
           }
         }
@@ -104,7 +101,7 @@ class DoctorService {
           schedule,
           from,
           to,
-          tenantId
+          "00000000-0000-0000-0000-000000000001"
         ).catch((err) => {
           console.error('[DoctorService] Slot generation failed after doctor create:', err.message);
         });

@@ -10,6 +10,7 @@ class BannerService {
         serviceDesc: data.serviceDesc,
         title: data.title,
         description: data.description,
+        hospitalId : data.hospitalId,
         portal: data.portal, // ✅ REQUIRED NOW
       },
     });

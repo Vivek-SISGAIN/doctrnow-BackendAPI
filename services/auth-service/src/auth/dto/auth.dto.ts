@@ -21,9 +21,9 @@ export class RegisterDto {
   @IsEnum(UserRole)
   role!: UserRole;
 
-  // @ApiProperty({ example: 'tenant-uuid' })
-  // @IsString()
-  // tenantId!: string;
+  @ApiProperty({ example: 'tenant-uuid' })
+  @IsString()
+  tenantId!: string;
 }
 
 export class LoginDto {
@@ -35,9 +35,9 @@ export class LoginDto {
   @IsString()
   password!: string;
 
-  // @ApiProperty({ example: 'tenant-uuid' })
-  // @IsString()
-  // tenantId!: string;
+  @ApiProperty({ example: 'tenant-uuid' })
+  @IsString()
+  tenantId!: string;
 
   @ApiProperty({ required: false })
   @IsOptional()
