@@ -2,15 +2,14 @@ import { Injectable, Logger, BadRequestException, NotFoundException, Inject, for
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { EventsService } from '../events/events.service';
-import { SessionService } from '../auth/session.service';
-import { createHash, randomBytes } from 'crypto';
+import { createHash } from 'crypto';
 import { OtpPurpose } from '@prisma/client';
+import { SessionService } from 'src/auth/session.service';
 
 export interface SendOtpDto {
   email?: string;
   mobile?: string;
   purpose: OtpPurpose;
-  tenantId: string;
 }
 
 export interface VerifyOtpDto {
@@ -125,7 +124,6 @@ export class OtpService {
     await this.prisma.otpRequest.create({
       data: {
         userId: user?.id,
-        tenantId: dto.tenantId,
         otpHash,
         purpose: dto.purpose,
         expiresAt,
@@ -134,20 +132,23 @@ export class OtpService {
       },
     });
 
-    // TODO: Send OTP via SMS/Email service
-    // For now, log it (REMOVE IN PRODUCTION - use notification service)
-    this.logger.warn(`OTP for ${dto.email || normalizedMobile}: ${otp} (DO NOT LOG IN PRODUCTION)`);
+    // Dispatch OTP delivery via notification-service → RabbitMQ → worker
+    await this.dispatchOtpViaNotificationService({
+      otp,
+      email: dto.email,
+      mobile: dto.mobile,
+      userName: user ? ((user as any).name ?? 'User') : 'User',
+    });
 
     // Publish event
-    await this.eventsService.publishOtpSent({
-      userId: user?.id,
-      email: dto.email,
-      mobile: normalizedMobile,
-      otp,
-      channel: dto.email ? 'EMAIL' : 'SMS',
-      purpose: dto.purpose,
-      tenantId: dto.tenantId,
-    });
+    // await this.eventsService.publishOtpSent({
+    //   userId: user?.id,
+    //   email: dto.email,
+    //   mobile: normalizedMobile,
+    //   otp,
+    //   channel: dto.email ? 'EMAIL' : 'SMS',
+    //   purpose: dto.purpose,
+    // });
 
     return {
       message: 'OTP sent successfully',
@@ -161,131 +162,184 @@ export class OtpService {
    * - LOGIN: looks up user by mobile/email and returns userId so login/otp can issue tokens.
    */
   async verifyOtp(dto: VerifyOtpDto): Promise<{ verified: boolean; userId?: string; accessToken?: string; refreshToken?: string; expiresIn?: number; sessionId?: string; user?: any }> {
-    const normalizedMobile = this.normalizeMobile(dto.mobile);
+  const normalizedMobile = this.normalizeMobile(dto.mobile);
 
-    if (!dto.email && !normalizedMobile) {
-      throw new BadRequestException('Either email or mobile must be provided');
+  if (!dto.email && !normalizedMobile) {
+    throw new BadRequestException('Either email or mobile must be provided');
+  }
+
+  const acceptTestOtp = this.configService.get<string>('ACCEPT_TEST_OTP', 'true') === 'true';
+  if (acceptTestOtp && dto.otp === '111111') {
+    if (dto.purpose === 'REGISTRATION') {
+      this.logger.warn('Accepting test OTP 111111 for REGISTRATION (ACCEPT_TEST_OTP=true)');
+      return { verified: true, userId: undefined };
     }
-
-    const acceptTestOtp = this.configService.get<string>('ACCEPT_TEST_OTP', 'true') === 'true';
-    if (acceptTestOtp && dto.otp === '111111') {
-      if (dto.purpose === 'REGISTRATION') {
-        this.logger.warn('Accepting test OTP 111111 for REGISTRATION (ACCEPT_TEST_OTP=true)');
-        return { verified: true, userId: undefined };
-      }
-      if (dto.purpose === 'LOGIN') {
-        let user = null;
-        if (normalizedMobile) {
-          user = await this.findUserByMobile(normalizedMobile);
-        } else if (dto.email) {
-          user = await this.prisma.user.findUnique({ where: { email: dto.email } });
-        }
-        this.logger.warn(`Accepting test OTP 111111 for LOGIN (ACCEPT_TEST_OTP=true), userId=${user?.id ?? 'none'}`);
-        
-        if (user) {
-          if (user.status !== 'ACTIVE') {
-            throw new BadRequestException('User account is not active');
-          }
-          const session = await this.sessionService.createSession({
-            userId: user.id,
-            tenantId: user.tenantId,
-          });
-          return {
-            verified: true,
-            ...session,
-            user: {
-              id: user.id,
-              email: user.email,
-              role: user.role,
-              tenantId: user.tenantId,
-            }
-          };
-        }
-        throw new NotFoundException('No user found for this mobile number');
-      }
-    }
-
-    const otpHash = this.hashOtp(dto.otp);
-
-    // Find OTP request: by user relation (login) or by identifier email/mobile (registration)
-    const otpRequest = await this.prisma.otpRequest.findFirst({
-      where: {
-        otpHash,
-        purpose: dto.purpose,
-        tenantId: dto.tenantId,
-        verified: false,
-        expiresAt: {
-          gt: new Date(),
-        },
-        OR: [
-          ...(dto.email ? [{ identifierEmail: dto.email }] : []),
-          ...(normalizedMobile ? [{ identifierMobile: normalizedMobile }] : []),
-        ].filter(Boolean),
-      },
-      include: {
-        user: true,
-      },
-      orderBy: {
-        createdAt: 'desc',
-      },
-    });
-
-    if (!otpRequest) {
-      throw new NotFoundException('Invalid or expired OTP');
-    }
-
-    const maxAttempts = this.configService.get<number>('OTP_MAX_ATTEMPTS', 3);
-    if (otpRequest.attemptCount >= maxAttempts) {
-      throw new BadRequestException('Maximum OTP verification attempts exceeded');
-    }
-
-    // Mark as verified
-    await this.prisma.otpRequest.update({
-      where: { id: otpRequest.id },
-      data: {
-        verified: true,
-        attemptCount: otpRequest.attemptCount + 1,
-      },
-    });
-
-    // Publish event
-    await this.eventsService.publishOtpVerified({
-      userId: otpRequest.userId || undefined,
-      email: dto.email,
-      mobile: normalizedMobile,
-      purpose: dto.purpose,
-      tenantId: dto.tenantId,
-    });
-
-    if (dto.purpose === 'LOGIN' && otpRequest.userId && otpRequest.user) {
-      const user = otpRequest.user;
-      if (user.status !== 'ACTIVE') {
-        throw new BadRequestException('User account is not active');
-      }
-      const session = await this.sessionService.createSession({
-        userId: user.id,
-        tenantId: user.tenantId,
-      });
-      return {
-        verified: true,
-        ...session,
-        user: {
-          id: user.id,
-          email: user.email,
-          role: user.role,
-          tenantId: user.tenantId,
-        }
-      };
-    }
-
     if (dto.purpose === 'LOGIN') {
+      let user = null;
+      if (normalizedMobile) {
+        user = await this.findUserByMobile(normalizedMobile);
+      } else if (dto.email) {
+        user = await this.prisma.user.findUnique({ where: { email: dto.email } });
+      }
+      this.logger.warn(
+        `Accepting test OTP 111111 for LOGIN (ACCEPT_TEST_OTP=true), userId=${user?.id ?? 'none'}`,
+      );
+
+      // ADD THIS BLOCK - same as old code
+      if (user) {
+        if (user.status !== 'ACTIVE') {
+          throw new BadRequestException('User account is not active');
+        }
+        const session = await this.sessionService.createSession({
+          userId: user.id,
+          tenantId: user.tenantId || "default",
+        });
+        return {
+          verified: true,
+          ...session,
+          user: {
+            id: user.id,
+            email: user.email,
+            role: user.role,
+            tenantId: user.tenantId,
+          }
+        };
+      }
       throw new NotFoundException('No user found for this mobile number');
     }
+  }
 
+  const otpHash = this.hashOtp(dto.otp);
+
+  // Find OTP request: by user relation (login) or by identifier email/mobile (registration)
+  const otpRequest = await this.prisma.otpRequest.findFirst({
+    where: {
+      otpHash,
+      purpose: dto.purpose,
+      verified: false,
+      expiresAt: {
+        gt: new Date(),
+      },
+      OR: [
+        ...(dto.email ? [{ identifierEmail: dto.email }] : []),
+        ...(normalizedMobile ? [{ identifierMobile: normalizedMobile }] : []),
+      ].filter(Boolean),
+    },
+    include: {
+      user: true,
+    },
+    orderBy: {
+      createdAt: 'desc',
+    },
+  });
+
+  if (!otpRequest) {
+    throw new NotFoundException('Invalid or expired OTP');
+  }
+
+  const maxAttempts = this.configService.get<number>('OTP_MAX_ATTEMPTS', 3);
+  if (otpRequest.attemptCount >= maxAttempts) {
+    throw new BadRequestException('Maximum OTP verification attempts exceeded');
+  }
+
+  // Mark as verified
+  await this.prisma.otpRequest.update({
+    where: { id: otpRequest.id },
+    data: {
+      verified: true,
+      attemptCount: otpRequest.attemptCount + 1,
+    },
+  });
+
+  // Publish event
+  await this.eventsService.publishOtpVerified({
+    userId: otpRequest.userId || undefined,
+    email: dto.email,
+    mobile: normalizedMobile,
+    purpose: dto.purpose,
+  });
+
+  if (dto.purpose === 'LOGIN' && otpRequest.userId && otpRequest.user) {
+    const user = otpRequest.user;
+    if (user.status !== 'ACTIVE') {
+      throw new BadRequestException('User account is not active');
+    }
+    const session = await this.sessionService.createSession({
+      userId: user.id,
+      tenantId: user.tenantId || "default",
+    });
     return {
       verified: true,
-      userId: otpRequest.userId || undefined,
+      ...session,
+      user: {
+        id: user.id,
+        email: user.email,
+        role: user.role,
+        tenantId: user.tenantId,
+      }
     };
   }
+
+  if (dto.purpose === 'LOGIN') {
+    throw new NotFoundException('No user found for this mobile number');
+  }
+
+  return {
+    verified: true,
+    userId: otpRequest.userId || undefined,
+  };
 }
 
+  /**
+   * Dispatch OTP to the user via the notification-service HTTP endpoint.
+   * The notification-service enqueues the message in RabbitMQ; the worker
+   * delivers it via SMS or Email.
+   */
+  private async dispatchOtpViaNotificationService(payload: {
+    otp: string;
+    email?: string;
+    mobile?: string;
+    userName?: string;
+  }): Promise<void> {
+    // const baseUrl = this.configService.get<string>(
+    //   'NOTIFICATION_SERVICE_URL',
+    //   'http://localhost:4000',
+    // );
+    const baseUrl = process.env.BASE_URL || 'http://localhost:8080';
+
+
+    const channel = payload.mobile ? 'SMS' : 'EMAIL';
+    console.log("Working" , channel , payload.mobile , payload.email);
+    try {
+      const response = await fetch(`${baseUrl}/api/v1/otp/send`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          otp: payload.otp,
+          channel,
+          mobile: payload.mobile,
+          email: payload.email,
+          userName: payload.userName ?? 'User',
+          eventType: 'OtpSent',
+          timestamp: new Date().toISOString(),
+        }),
+      });
+
+      console.log("Response" , response)
+      if (!response.ok) {
+        const body = await response.text();
+        this.logger.error(`[OtpService] Notification service error ${response.status}: ${body}`);
+      } else {
+        this.logger.log(
+          `[OtpService] OTP dispatched via notification-service (channel: ${channel})`,
+        );
+      }
+    } catch (error) {
+      // Non-fatal: OTP is already stored in DB. Log and continue.
+      this.logger.error(
+        '[OtpService] Failed to reach notification-service — OTP stored but not delivered:',
+        error,
+      );
+    }
+  }
+}

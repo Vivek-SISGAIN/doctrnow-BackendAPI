@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { JwtService } from '../jwt/jwt.service';
-import { v4 as uuidv4 } from 'uuid';
+// import { v4 as uuidv4 } from 'uuid';
 
 export interface CreateSessionData {
   userId: string;
@@ -153,7 +153,7 @@ export class SessionService {
 
     const accessToken = await this.jwtService.generateAccessToken(
       session.user.id,
-      session.user.tenantId,
+      session.user.tenantId || "default",
       session.user.role,
       newSession.id,
     );

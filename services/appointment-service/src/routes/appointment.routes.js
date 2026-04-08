@@ -1,4 +1,4 @@
-const express = require('express');
+const express = require("express");
 const router = express.Router();
 const {
   getAllAppointments,
@@ -12,15 +12,16 @@ const {
   markMissedAsNoShow,
   markNoShow,
   getAllAppointmentsV1,
-  getHospitalPatients
-} = require('../controllers/appointment.controller');
+  getHospitalPatients,
+  getPreviouslyConsultedDoctors,
+} = require("../controllers/appointment.controller");
 const {
   createAppointmentSchema,
   updateAppointmentSchema,
   rescheduleAppointmentSchema,
-  cancelAppointmentSchema
-} = require('../validations/appointment.validation');
-const validate = require('../middleware/validation');
+  cancelAppointmentSchema,
+} = require("../validations/appointment.validation");
+const validate = require("../middleware/validation");
 
 /**
  * @swagger
@@ -87,18 +88,17 @@ const validate = require('../middleware/validation');
  *       200:
  *         description: List of appointments
  */
-router.get('/', getAllAppointments);
+router.get("/", getAllAppointments);
 // router.get('/v123', getAllAppointmentsV1); // New version with improved filtering and pagination
 
+/** POST /api/appointments/mark-missed-no-shows - must be before /:id to avoid matching as id */
+router.post("/mark-missed-no-shows", markMissedAsNoShow);
 
 /** POST /api/appointments/mark-missed-no-shows - must be before /:id to avoid matching as id */
-router.post('/mark-missed-no-shows', markMissedAsNoShow);
+router.post("/mark-missed-no-shows", markMissedAsNoShow);
 
 /** POST /api/appointments/mark-missed-no-shows - must be before /:id to avoid matching as id */
-router.post('/mark-missed-no-shows', markMissedAsNoShow);
-
-/** POST /api/appointments/mark-missed-no-shows - must be before /:id to avoid matching as id */
-router.post('/mark-missed-no-shows', markMissedAsNoShow);
+router.post("/mark-missed-no-shows", markMissedAsNoShow);
 
 /**
  * @swagger
@@ -120,7 +120,7 @@ router.post('/mark-missed-no-shows', markMissedAsNoShow);
  *       404:
  *         description: Appointment not found
  */
-router.get('/:id', getAppointmentById);
+router.get("/:id", getAppointmentById);
 
 /**
  * @swagger
@@ -164,7 +164,7 @@ router.get('/:id', getAppointmentById);
  *       400:
  *         description: Validation error
  */
-router.post('/', validate(createAppointmentSchema), createAppointment);
+router.post("/", validate(createAppointmentSchema), createAppointment);
 
 /**
  * @swagger
@@ -203,7 +203,7 @@ router.post('/', validate(createAppointmentSchema), createAppointment);
  *       200:
  *         description: Appointment updated successfully
  */
-router.patch('/:id', validate(updateAppointmentSchema), updateAppointment);
+router.patch("/:id", validate(updateAppointmentSchema), updateAppointment);
 
 /**
  * @swagger
@@ -230,7 +230,11 @@ router.patch('/:id', validate(updateAppointmentSchema), updateAppointment);
  *       200:
  *         description: Appointment cancelled successfully
  */
-router.post('/:id/cancel', validate(cancelAppointmentSchema), cancelAppointment);
+router.post(
+  "/:id/cancel",
+  validate(cancelAppointmentSchema),
+  cancelAppointment,
+);
 
 /**
  * @swagger
@@ -261,7 +265,11 @@ router.post('/:id/cancel', validate(cancelAppointmentSchema), cancelAppointment)
  *       200:
  *         description: Appointment rescheduled successfully
  */
-router.post('/:id/reschedule', validate(rescheduleAppointmentSchema), rescheduleAppointment);
+router.post(
+  "/:id/reschedule",
+  validate(rescheduleAppointmentSchema),
+  rescheduleAppointment,
+);
 
 /**
  * @swagger
@@ -280,7 +288,7 @@ router.post('/:id/reschedule', validate(rescheduleAppointmentSchema), reschedule
  *       200:
  *         description: Appointment confirmed successfully
  */
-router.post('/:id/confirm', confirmAppointment);
+router.post("/:id/confirm", confirmAppointment);
 
 /**
  * @swagger
@@ -299,7 +307,7 @@ router.post('/:id/confirm', confirmAppointment);
  *       200:
  *         description: Appointment marked as completed
  */
-router.post('/:id/complete', completeAppointment);
+router.post("/:id/complete", completeAppointment);
 
 /**
  * @swagger
@@ -316,7 +324,7 @@ router.post('/:id/complete', completeAppointment);
  *       200:
  *         description: Missed appointments marked as no-show
  */
-router.post('/mark-missed-no-shows', markMissedAsNoShow);
+router.post("/mark-missed-no-shows", markMissedAsNoShow);
 
 /**
  * @swagger
@@ -335,8 +343,12 @@ router.post('/mark-missed-no-shows', markMissedAsNoShow);
  *       200:
  *         description: Appointment marked as no-show
  */
-router.post('/:id/no-show', markNoShow);
+router.post("/:id/no-show", markNoShow);
 
-router.get('/:hospitalId/hospitals', getHospitalPatients); 
+router.get("/:hospitalId/hospitals", getHospitalPatients);
+router.get(
+  "/:patientId/previously-consulted-doctors",
+  getPreviouslyConsultedDoctors,
+);
 
 module.exports = router;

@@ -18,7 +18,6 @@ export class HospitalAdminController {
             department,
             profileImage,
             role,
-            tenantId,
             password
         } = req.body;
         
@@ -54,13 +53,6 @@ export class HospitalAdminController {
             });
         }
 
-        if (!tenantId) {
-            return res.status(400).json({
-                success: false,
-                message: "Tenant ID is required"
-            });
-        }
-
         if (!password || password.length < 6) {
             return res.status(400).json({
                 success: false,
@@ -81,7 +73,6 @@ export class HospitalAdminController {
             department,
             profileImage,
             role,
-            tenantId,
             password
         });
 

@@ -124,7 +124,7 @@ export class SuperAdminController {
       const status = error.status || HttpStatus.INTERNAL_SERVER_ERROR;
       res.status(status).json({
         error: {
-          code: 'PROXY_ERROR',
+          code: 'PROXY_ERROR THis one',
           message: error.message || 'Internal server error',
           correlationId,
           ...(error?.data && { details: error.data }),

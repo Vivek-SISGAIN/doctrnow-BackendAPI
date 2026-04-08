@@ -15,14 +15,12 @@ export class HospitalAdminService {
     profileImage?: string;
 
     role: string;
-    tenantId: string;
     password: string;
 }) {
 
     const {
         password,
         role,
-        tenantId,
         ...profilePayload
     } = data;
 
@@ -33,26 +31,24 @@ export class HospitalAdminService {
 
         // 1️⃣ Create user in auth-service
         const authResponse = await axios.post(
-            `${process.env.API_BASE_URL}/api/v1/auth/register`,
+            `${process.env.API_BASE_URL}api/v1/auth/register`,
             {
                 email: profilePayload.email,
                 password,
                 role,
-                tenantId
             }
         );
 
         createdUserId = authResponse.data.userId;
         // 2️⃣ Create hospital admin profile
         const hospitalAdminResponse = await axios.post(
-            `${process.env.API_BASE_URL}/api/v1/profiles/hospital-admins`,
+            `${process.env.API_BASE_URL}api/v1/profiles/hospital-admins`,
             {
                 ...profilePayload,
                 userId: createdUserId
             },
             {
                 headers: {
-                    "X-Tenant-Id": tenantId,
                     "X-Service-Name": "profile-service"
                 }
             }
