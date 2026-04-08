@@ -41,7 +41,8 @@ const createHospitalAdmin = asyncHandler(async (req, res) => {
     profileImage,
     hospitalId,
     position,
-    department
+    department,
+    tenantId
   } = req.body;
 
   const hospitalAdmin = await hospitalAdminService.createHospitalAdmin({
@@ -56,7 +57,8 @@ const createHospitalAdmin = asyncHandler(async (req, res) => {
     profileImage,
     hospitalId,
     position,
-    department
+    department,
+    tenantId
   });
 
   res.status(201).json({

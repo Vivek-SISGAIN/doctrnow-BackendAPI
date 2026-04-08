@@ -13,7 +13,7 @@ export class HospitalAdminService {
     position: string;
     department?: string;
     profileImage?: string;
-
+    tenantId: string;
     role: string;
     password: string;
 }) {
@@ -21,6 +21,7 @@ export class HospitalAdminService {
     const {
         password,
         role,
+        tenantId,
         ...profilePayload
     } = data;
 
@@ -36,6 +37,7 @@ export class HospitalAdminService {
                 email: profilePayload.email,
                 password,
                 role,
+                tenantId
             }
         );
 

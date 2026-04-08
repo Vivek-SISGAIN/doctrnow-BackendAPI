@@ -58,9 +58,10 @@ class DoctorService {
     hospitalSharePercent: number;
     platformSharePercent: number;
     role: string;
+    tenantId: string;
     password: string;
   }) {
-    const { password, role, schedule, ...profilePayload } = data;
+    const { password, role, schedule,tenantId ,...profilePayload } = data;
 
     let createdUserId: string | null = null;
     let createdDoctorId: string | null = null;
@@ -71,6 +72,8 @@ class DoctorService {
         email: profilePayload.email,
         password,
         role,
+        tenantId
+
       });
 
       createdUserId = authResponse.data.userId;
@@ -78,7 +81,7 @@ class DoctorService {
       // Step 2: Create doctor profile
       const doctorResponse = await axios.post(
         `${process.env.API_BASE_URL}api/v1/profiles/doctors`,
-        { ...profilePayload, schedule, userId: createdUserId },
+        { ...profilePayload, schedule, userId: createdUserId , tenantId},
         {
           headers: {
             'X-Service-Name': 'hospital-admin-service'

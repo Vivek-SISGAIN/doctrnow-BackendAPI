@@ -9,8 +9,6 @@ const {
   createHospitalAdmin,
   getAllHospitalAdmins
 } = require('../controllers/hospitalAdmin.controller');
-const {  updateHospitalAdminSchema, createHospitalAdminSchema } = require('../validations/hospitalAdmin.validation');
-const validate = require('../middleware/validation');
 
 /**
  * @swagger
@@ -124,7 +122,7 @@ router.get('/:id', getHospitalAdminById);
  *       404:
  *         description: Hospital admin not found
  */
-router.patch('/:id', validate(updateHospitalAdminSchema), updateHospitalAdmin);
+router.patch('/:id', updateHospitalAdmin);
 
 /**
  * @swagger

@@ -245,7 +245,7 @@ router.delete('/:id', deleteDoctor);
  */
 router.get('/', getAllDoctors);
 
-router.post('/', validate(createDoctorSchema), createDoctor);
+router.post('/',  createDoctor);
 
 router.post('/bulk', getDoctorsByBulkIds);
 

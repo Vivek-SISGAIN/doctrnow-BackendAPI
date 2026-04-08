@@ -18,6 +18,7 @@ export class HospitalAdminController {
             department,
             profileImage,
             role,
+            tenantId,
             password
         } = req.body;
         
@@ -73,6 +74,7 @@ export class HospitalAdminController {
             department,
             profileImage,
             role,
+            tenantId,
             password
         });
 

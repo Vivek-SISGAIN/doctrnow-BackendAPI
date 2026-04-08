@@ -32,7 +32,8 @@ export class DoctorController {
             hospitalSharePercent,
             platformSharePercent,
             role,
-            password
+            password,
+            tenantId
         } = req.body;
 
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -47,6 +48,13 @@ export class DoctorController {
             return res.status(400).json({
                 success: false,
                 message: 'Invalid phone number'
+            });
+        }
+
+        if (!tenantId) {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid tenant ID'
             });
         }
 
@@ -146,7 +154,8 @@ export class DoctorController {
             hospitalSharePercent: parseInt(hospitalSharePercent),
             platformSharePercent: parseInt(platformSharePercent),
             role,
-            password
+            password,
+            tenantId
         });
 
         return res.status(201).json({
