@@ -19,6 +19,26 @@ class ProfileClient {
       return null;
     }
   }
+  async getPatientsByBulkIds(ids) {
+    if (!ids || ids.length === 0) return {};
+    try {
+      const response = await fetch(`${PROFILE_SERVICE_URL}/api/patients/bulk`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids })
+      });
+
+      if (!response.ok) {
+        return {};
+      }
+
+      const result = await response.json();
+      return result.data || {};
+    } catch (err) {
+      console.warn('Profile service unreachable for bulk fetch', { ids, error: err.message });
+      return {};
+    }
+  }
 }
 
 module.exports = new ProfileClient();

@@ -465,6 +465,7 @@ const getConsultationReviews = asyncHandler(async (req, res) => {
       where,
       select: {
         id: true,
+        patientId: true,
         rating: true,
         comment: true,
         isAnonymous: true,
@@ -477,13 +478,29 @@ const getConsultationReviews = asyncHandler(async (req, res) => {
     prisma.consultation.count({ where }),
   ]);
 
-  const reviews = consultations.map((c) => ({
-    id: c.id,
-    patientName: c.isAnonymous ? 'Anonymous' : 'Patient',
-    rating: c.rating,
-    comment: c.comment,
-    reviewedAt: c.reviewedAt,
-  }));
+  // Fetch patient names for non-anonymous reviews
+  const patientIds = [...new Set(consultations.filter(c => !c.isAnonymous).map(c => c.patientId))];
+  const patientMap = await profileClient.getPatientsByBulkIds(patientIds);
+
+  const reviews = consultations.map((c) => {
+    let patientName = 'Patient'; // Default fallback
+    if (c.isAnonymous) {
+      patientName = 'Anonymous';
+    } else {
+      const profile = patientMap[c.patientId];
+      if (profile) {
+        patientName = [profile.firstName, profile.lastName].filter(Boolean).join(' ').trim() || 'Patient';
+      }
+    }
+
+    return {
+      id: c.id,
+      patientName,
+      rating: c.rating,
+      comment: c.comment,
+      reviewedAt: c.reviewedAt,
+    };
+  });
 
   res.status(200).json({
     success: true,
