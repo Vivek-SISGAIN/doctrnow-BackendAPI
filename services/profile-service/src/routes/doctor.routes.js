@@ -6,6 +6,7 @@ const {
   deleteDoctor,
   searchDoctorsBySpecialization,
   createDoctor,
+  checkExists,
   getAllDoctors,
   getAvailability,
   setAvailability,
@@ -248,6 +249,8 @@ router.get('/', getAllDoctors);
 router.post('/',  createDoctor);
 
 router.post('/bulk', getDoctorsByBulkIds);
+
+router.post('/check-exists', checkExists);
 
 router.get('/hospital/:hospitalId', getDocByHospitalId);
 

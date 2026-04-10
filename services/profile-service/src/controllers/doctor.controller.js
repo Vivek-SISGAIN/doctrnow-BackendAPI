@@ -16,8 +16,9 @@ const getAllDoctors = asyncHandler(async (req, res) => {
     availabilityStatus,
     page = 1,
     limit = 20,
-    sortBy = 'experience'
-  } = req.query;
+    sortBy = 'experience',
+    filters: dynamicFilters // New: Accept filters from query or body
+  } = { ...req.query, ...req.body }; // Merge query params and body
 
   let specialtyName = specialty;
   if (specialtyId && !specialtyName) {
@@ -27,16 +28,29 @@ const getAllDoctors = asyncHandler(async (req, res) => {
     }
   }
 
-  const filters = {
-    specialtyName,
-    search,
-    gender,
-    minExperience,
-    maxFee,
-    workingDay,
-    status,
-    availabilityStatus
-  };
+  let filters = {};
+
+  // If dynamic filters are provided (new format)
+  if (dynamicFilters) {
+    try {
+      filters = typeof dynamicFilters === 'string' ? JSON.parse(dynamicFilters) : dynamicFilters;
+    } catch (error) {
+      throw new Error('Invalid filters format');
+    }
+  }
+  // Otherwise use legacy format (old format)
+  else {
+    filters = {
+      specialtyName,
+      search,
+      gender,
+      minExperience,
+      maxFee,
+      workingDay,
+      status,
+      availabilityStatus
+    };
+  }
 
   const pagination = {
     page: parseInt(page, 10),
@@ -44,6 +58,61 @@ const getAllDoctors = asyncHandler(async (req, res) => {
   };
 
   const result = await doctorService.findAllWithFilters(filters, pagination, sortBy);
+
+  res.status(200).json({
+    success: true,
+    data: result.doctors,
+    pagination: result.pagination
+  });
+});
+
+const getDocByHospitalId = asyncHandler(async (req, res) => {
+  const { hospitalId } = req.params;
+  const {
+    search,
+    gender,
+    specialization,
+    minExperience,
+    maxFee,
+    workingDay,
+    status,
+    availabilityStatus,
+    page = 1,
+    limit = 20,
+    sortBy = 'name',
+    filters: dynamicFilters // New: Accept filters from query or body
+  } = { ...req.query, ...req.body }; // Merge query params and body
+
+  let filters = {};
+
+  // If dynamic filters are provided (new format)
+  if (dynamicFilters) {
+    try {
+      filters = typeof dynamicFilters === 'string' ? JSON.parse(dynamicFilters) : dynamicFilters;
+    } catch (error) {
+      throw new Error('Invalid filters format');
+    }
+  }
+  // Otherwise use legacy format (old format)
+  else {
+    filters = {
+      search,
+      gender,
+      specialization,
+      minExperience,
+      maxFee,
+      workingDay,
+      status,
+      availabilityStatus
+    };
+  }
+
+  const pagination = {
+    page: parseInt(page, 10),
+    limit: parseInt(limit, 10)
+  };
+
+  const result = await doctorService.findDocByHospital({ hospitalId }, filters, pagination, sortBy);
 
   res.status(200).json({
     success: true,
@@ -64,47 +133,6 @@ const getDoctorById = asyncHandler(async (req, res) => {
   res.status(200).json({
     success: true,
     data: doctor
-  });
-});
-
-const getDocByHospitalId = asyncHandler(async (req, res) => {
-  const { hospitalId } = req.params;
-  const {
-    search,
-    gender,
-    specialization,
-    minExperience,
-    maxFee,
-    workingDay,
-    status,
-    availabilityStatus,
-    page = 1,
-    limit = 20,
-    sortBy = 'name'
-  } = req.query;
-
-  const filters = {
-    search,
-    gender,
-    specialization,
-    minExperience,
-    maxFee,
-    workingDay,
-    status,
-    availabilityStatus
-  };
-
-  const pagination = {
-    page: parseInt(page, 10),
-    limit: parseInt(limit, 10)
-  };
-
-  const result = await doctorService.findDocByHospital({ hospitalId }, filters, pagination, sortBy);
-
-  res.status(200).json({
-    success: true,
-    data: result.doctors,
-    pagination: result.pagination
   });
 });
 
@@ -297,6 +325,15 @@ const createDoctor = asyncHandler(async (req, res) => {
   });
 });
 
+const checkExists = asyncHandler(async (req, res) => {
+  const { email, mobile, emiratesId, licenseNumber } = req.body;
+  const result = await doctorService.checkDoctorExists({ email, mobile, emiratesId, licenseNumber });
+  res.status(200).json({
+    success: true,
+    data: result
+  });
+});
+
 const getDoctorsByBulkIds = asyncHandler(async (req, res) => {
   const { ids } = req.body;
 
@@ -351,6 +388,7 @@ module.exports = {
   getDoctorById,
   updateDoctor,
   createDoctor,
+  checkExists,
   deleteDoctor,
   getAllDoctors,
   searchDoctorsBySpecialization,

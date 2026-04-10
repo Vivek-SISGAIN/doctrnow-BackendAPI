@@ -7,7 +7,7 @@ const {
   createCurrentPatient,
   updatePatient,
   deletePatient,
-  getPatientsByBulkIds,
+  getPatientsByBulkIds
   // getPatientsByBulkIds
 } = require('../controllers/patient.controller');
 const { createPatientSchema, updatePatientSchema } = require('../validations/patient.validation');

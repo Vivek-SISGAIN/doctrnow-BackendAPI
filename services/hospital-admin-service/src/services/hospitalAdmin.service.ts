@@ -16,7 +16,7 @@ export class HospitalAdminService {
     tenantId: string;
     role: string;
     password: string;
-}) {
+}, authHeader: string) {
 
     const {
         password,
@@ -63,11 +63,13 @@ export class HospitalAdminService {
 
             try {
                 await axios.delete(
-                    `${process.env.API_BASE_URL}/api/v1/auth/users/${createdUserId}`
+                    `${process.env.API_BASE_URL}api/v1/auth/users/${createdUserId}`,
+                    { headers: { Authorization: authHeader } }
                 );
 
                  await axios.delete(
-                    `${process.env.API_BASE_URL}/api/v1/profiles/hospital-admins${createdProfileId}`
+                    `${process.env.API_BASE_URL}api/v1/profiles/hospital-admins/${createdProfileId}`,
+                    { headers: { Authorization: authHeader } }
                 );
             } catch (cleanupError) {
                 console.error(
