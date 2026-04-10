@@ -157,7 +157,7 @@ class AppointmentService {
           doctorId: data.doctorId,
           slotId: data.slotId,
           hospitalId: data.hospitalId,
-          status: data.status || "PENDING",
+          status: data.status || (data.paymentStatus === "PAID" ? "CONFIRMED" : "PENDING"),
           paymentStatus: data.paymentStatus || "PENDING",
           consultationType: data.consultationType || "VIDEO",
           reason: data.reason,

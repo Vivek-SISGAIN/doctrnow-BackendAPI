@@ -39,6 +39,10 @@ const createAppointmentSchema = Joi.object({
   familyMemberId: Joi.string().uuid().optional()
     .messages({
       'string.guid': 'Family member ID must be a valid UUID'
+    }),
+  status: Joi.string().valid('PENDING', 'CONFIRMED', 'COMPLETED', 'CANCELLED', 'NO_SHOW').optional()
+    .messages({
+      'any.only': 'Status must be PENDING, CONFIRMED, COMPLETED, CANCELLED, or NO_SHOW'
     })
 });
 
