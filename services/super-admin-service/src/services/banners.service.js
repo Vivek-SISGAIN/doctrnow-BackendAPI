@@ -1,7 +1,6 @@
 import prisma from "../prisma/client.js";
 
 class BannerService {
-
   // ✅ Create Banner
   async createBanner(data) {
     const banner = await prisma.banners.create({
@@ -10,7 +9,7 @@ class BannerService {
         serviceDesc: data.serviceDesc,
         title: data.title,
         description: data.description,
-        hospitalId : data.hospitalId,
+        hospitalId: data.hospitalId,
         portal: data.portal, // ✅ REQUIRED NOW
       },
     });
@@ -20,8 +19,8 @@ class BannerService {
 
   // ✅ Get Banner by ID
   async getBannerById(id) {
-    const banner = await prisma.banners.findUnique({
-      where: { id },
+    const banner = await prisma.banners.findMany({
+      where: { hospitalId: id },
     });
 
     if (!banner) {
@@ -89,7 +88,7 @@ class BannerService {
     ]);
 
     return {
-      data : banners,
+      data: banners,
       pagination: {
         total,
         page: parseInt(page, 10),

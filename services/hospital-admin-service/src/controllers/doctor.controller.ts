@@ -125,44 +125,55 @@ export class DoctorController {
             });
         }
 
-        const doctor = await doctorService.createDoctor({
-            fullName,
-            email,
-            mobile,
-            gender,
-            nationality,
-            hospitalId,
-            emiratesId,
-            primarySpecialization,
-            subSpecialization,
-            licenseNumber,
-            licenseType,
-            licenseExpiry: expiryDate,
-            yearsOfExperience: parseInt(yearsOfExperience),
-            medicalDegree,
-            university,
-            profileImage,
-            languagesSpoken,
-            servicesOffered,
-            certifications,
-            professionalMemberships,
-            professionalBio,
-            schedule,
-            videoConsultationFee: parseFloat(videoConsultationFee),
-            phoneConsultationFee: parseFloat(phoneConsultationFee),
-            followUpFee: parseFloat(followUpFee),
-            hospitalSharePercent: parseInt(hospitalSharePercent),
-            platformSharePercent: parseInt(platformSharePercent),
-            role,
-            password,
-            tenantId
-        });
+        try {
+            const authHeader = req.headers.authorization ?? '';
+            const doctor = await doctorService.createDoctor({
+                fullName,
+                email,
+                mobile,
+                gender,
+                nationality,
+                hospitalId,
+                emiratesId,
+                primarySpecialization,
+                subSpecialization,
+                licenseNumber,
+                licenseType,
+                licenseExpiry: expiryDate,
+                yearsOfExperience: parseInt(yearsOfExperience),
+                medicalDegree,
+                university,
+                profileImage,
+                languagesSpoken,
+                servicesOffered,
+                certifications,
+                professionalMemberships,
+                professionalBio,
+                schedule,
+                videoConsultationFee: parseFloat(videoConsultationFee),
+                phoneConsultationFee: parseFloat(phoneConsultationFee),
+                followUpFee: parseFloat(followUpFee),
+                hospitalSharePercent: parseInt(hospitalSharePercent),
+                platformSharePercent: parseInt(platformSharePercent),
+                role,
+                password,
+                tenantId
+            }, authHeader);
 
-        return res.status(201).json({
-            success: true,
-            message: 'Doctor created successfully',
-            data: doctor
-        });
+            return res.status(201).json({
+                success: true,
+                message: 'Doctor created successfully',
+                data: doctor
+            });
+        } catch (error: any) {
+            console.error('[DoctorController] createDoctor error:', error?.response?.data || error.message);
+            const status = error?.response?.status || 500;
+            const message = error?.response?.data?.message || error.message || 'Failed to create doctor';
+            return res.status(status).json({
+                success: false,
+                message: message
+            });
+        }
     }
 
 

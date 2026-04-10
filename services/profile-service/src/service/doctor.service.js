@@ -18,6 +18,26 @@ class DoctorService {
     });
   }
 
+  async checkDoctorExists({ email, mobile, emiratesId, licenseNumber }) {
+    if (email) {
+      const doc = await prisma.doctor.findFirst({ where: { email } });
+      if (doc) return { exists: true, field: 'email' };
+    }
+    if (mobile) {
+      const doc = await prisma.doctor.findFirst({ where: { mobile } });
+      if (doc) return { exists: true, field: 'mobile number' };
+    }
+    if (emiratesId) {
+      const doc = await prisma.doctor.findFirst({ where: { emiratesId } });
+      if (doc) return { exists: true, field: 'Emirates ID' };
+    }
+    if (licenseNumber) {
+      const doc = await prisma.doctor.findFirst({ where: { licenseNumber } });
+      if (doc) return { exists: true, field: 'license number' };
+    }
+    return { exists: false };
+  }
+
   /**
    * Find doctors by hospitalId with filters and pagination
    */
@@ -128,59 +148,95 @@ class DoctorService {
   /**
    * Build where clause for filtering
    */
-  buildWhereClause({
-    search,
-    specialization,
-    gender,
-    minExperience,
-    maxFee,
-    workingDay,
-    status,
-    availabilityStatus
-  } = {}) {
+  buildWhereClause(filters = {}) {
     const where = {};
 
-    if (search) {
-      where.OR = [
-        { fullName: { contains: search, mode: 'insensitive' } },
-        { email: { contains: search, mode: 'insensitive' } },
-        { mobile: { contains: search, mode: 'insensitive' } },
-        { licenseNumber: { contains: search, mode: 'insensitive' } },
-        { primarySpecialization: { contains: search, mode: 'insensitive' } }
-      ];
-    }
+    // Handle both old format and new operator-based format
+    Object.entries(filters).forEach(([key, value]) => {
+      if (!value) {
+        return;
+      }
 
-    if (specialization) {
-      where.primarySpecialization = { equals: specialization, mode: 'insensitive' };
-    }
+      // New operator-based format
+      if (typeof value === 'object' && value.op && value.value !== undefined) {
+        where[key] = this.applyOperator(value.op, value.value);
+        // eslint-disable-next-line brace-style
+      }
+      // Legacy format - map old filter keys to new structure
+      else {
+        switch (key) {
+          case 'search':
+            if (value) {
+              where.OR = [
+                { fullName: { contains: value, mode: 'insensitive' } },
+                { mobile: { contains: value, mode: 'insensitive' } },
+                { email: { contains: value, mode: 'insensitive' } },
+                { licenseNumber: { contains: value, mode: 'insensitive' } },
+                { primarySpecialization: { contains: value, mode: 'insensitive' } }
+              ];
+            }
+            break;
 
-    if (gender) {
-      where.gender = gender;
-    }
+          case 'specialization':
+          case 'specialty':
+          case 'specialtyName':
+            where.primarySpecialization = { contains: value, mode: 'insensitive' };
+            break;
 
-    if (minExperience) {
-      where.yearsOfExperience = { gte: parseInt(minExperience) };
-    }
+          case 'gender':
+            where.gender = { equals: value };
+            break;
 
-    if (maxFee) {
-      where.videoConsultationFee = { lte: parseFloat(maxFee) };
-    }
+          case 'minExperience':
+            where.experience = { gte: parseInt(value, 10) };
+            break;
 
-    if (workingDay) {
-      where.workingDays = { has: workingDay };
-    }
+          case 'maxFee':
+            where.consultationFee = { lte: parseFloat(value) };
+            break;
 
-    if (status) {
-      where.status = status.toUpperCase();
-    }
+          case 'workingDay':
+            where.workingDays = { has: value };
+            break;
 
-    if (availabilityStatus) {
-      where.availabilityStatus = availabilityStatus.toUpperCase();
-    }
+          case 'status':
+            where.status = { equals: value };
+            break;
+
+          case 'availabilityStatus':
+            where.availabilityStatus = { equals: value };
+            break;
+
+          default:
+            // Direct field assignment for unknown keys
+            where[key] = value;
+        }
+      }
+    });
 
     return where;
   }
 
+  applyOperator(op, value) {
+    const operators = {
+      equals: (val) => ({ equals: val }),
+      contains: (val) => ({ contains: val, mode: 'insensitive' }),
+      startsWith: (val) => ({ startsWith: val, mode: 'insensitive' }),
+      endsWith: (val) => ({ endsWith: val, mode: 'insensitive' }),
+      gt: (val) => ({ gt: this.parseValue(val) }),
+      gte: (val) => ({ gte: this.parseValue(val) }),
+      lt: (val) => ({ lt: this.parseValue(val) }),
+      lte: (val) => ({ lte: this.parseValue(val) }),
+      in: (val) => ({ in: Array.isArray(val) ? val : [val] }),
+      notIn: (val) => ({ notIn: Array.isArray(val) ? val : [val] }),
+      not: (val) => ({ not: val }),
+      has: (val) => ({ has: val }),
+      hasSome: (val) => ({ hasSome: Array.isArray(val) ? val : [val] }),
+      hasEvery: (val) => ({ hasEvery: Array.isArray(val) ? val : [val] })
+    };
+
+    return operators[op] ? operators[op](value) : { equals: value };
+  }
   /**
    * Build orderBy clause
    */
@@ -200,6 +256,13 @@ class DoctorService {
     }
   }
 
+  parseValue(val) {
+    if (typeof val === 'number') {
+      return val;
+    }
+    const num = parseFloat(val);
+    return isNaN(num) ? val : num;
+  }
   /**
    * Find doctor by ID
    */
@@ -254,17 +317,7 @@ class DoctorService {
     const { page = 1, limit = 20 } = pagination;
     const skip = (page - 1) * limit;
 
-    const where = this.buildWhereClause({
-      search: filters.search,
-      specialization: filters.specialty || filters.specialtyName,
-      gender: filters.gender,
-      minExperience: filters.minExperience,
-      maxFee: filters.maxFee,
-      workingDay: filters.workingDay,
-      status: filters.status,
-      availabilityStatus: filters.availabilityStatus
-    });
-
+    const where = this.buildWhereClause(filters);
     const orderBy = this.buildOrderBy(sortBy);
 
     const [doctors, total] = await Promise.all([

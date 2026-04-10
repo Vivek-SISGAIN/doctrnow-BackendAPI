@@ -81,19 +81,67 @@ class HospitalService {
 
  
   async getHospitals(filters = {}, pagination = {}) {
-    const { search } = filters;
+    const {
+      search,
+      location,
+      specialties,       // comma-separated string or array
+      status,            // comma-separated string or array
+      doctorMin,
+      doctorMax,
+      consultationMin,
+      consultationMax,
+    } = filters;
+
     const { page = 1, limit = 20 } = pagination;
     const skip = (page - 1) * limit;
 
+    // ── Build Prisma where clause ───────────────────────────────────────────
     const where = {};
+
+    // Hospital name – partial / full match
     if (search) {
       where.OR = [
         { officialName: { contains: search, mode: "insensitive" } },
-        { shortName: { contains: search, mode: "insensitive" } },
+        { shortName:    { contains: search, mode: "insensitive" } },
         { registrationNumber: { contains: search, mode: "insensitive" } },
       ];
     }
 
+    // Location – matches emirate, area, fullAddress, or branchId
+    if (location) {
+      const locConditions = [
+        { emirate:     { contains: location, mode: "insensitive" } },
+        { area:        { contains: location, mode: "insensitive" } },
+        { fullAddress: { contains: location, mode: "insensitive" } },
+        { branchId:    { contains: location, mode: "insensitive" } },
+      ];
+      // Merge with existing OR or create a new AND block
+      if (where.OR) {
+        // Wrap into AND: (name matches) AND (location matches)
+        where.AND = [
+          { OR: where.OR },
+          { OR: locConditions },
+        ];
+        delete where.OR;
+      } else {
+        where.OR = locConditions;
+      }
+    }
+
+    // Specialties – multi-select (array or comma-separated
+    const specialtyList = parseList(specialties);
+    if (specialtyList.length > 0) {
+      where.specializationsAvailable = { hasSome: specialtyList };
+    }
+
+    // Status – multi-select
+    const statusList = parseList(status);
+    if (statusList.length > 0) {
+      // Map to uppercase to match typical enum storage
+      where.state = { in: statusList.map((s) => s.toUpperCase()) };
+    }
+
+    // ── Query DB ────────────────────────────────────────────────────────────
     const [hospitals, total] = await Promise.all([
       prisma.hospital.findMany({
         where,
@@ -105,25 +153,35 @@ class HospitalService {
       prisma.hospital.count({ where }),
     ]);
 
-    // For every hospital, fire both requests in parallel
+    // ── Enrich with external counts ─────────────────────────────────────────
     const enriched = await Promise.all(
       hospitals.map(async (hospital) => {
         const [totalConsultations, doctors] = await Promise.all([
           fetchConsultationCount(hospital.id),
           fetchDoctorCount(hospital.id),
         ]);
-        return {
-          ...hospital,
-          totalConsultations,
-          doctors,
-        };
+        return { ...hospital, totalConsultations, doctors };
       })
     );
 
+    // ── Post-enrichment filter: doctor / consultation count ranges ──────────
+    const dMin = doctorMin !== undefined ? parseInt(doctorMin, 10) : null;
+    const dMax = doctorMax !== undefined ? parseInt(doctorMax, 10) : null;
+    const cMin = consultationMin !== undefined ? parseInt(consultationMin, 10) : null;
+    const cMax = consultationMax !== undefined ? parseInt(consultationMax, 10) : null;
+
+    const filtered = enriched.filter((h) => {
+      if (dMin !== null && (h.doctors ?? 0) < dMin) return false;
+      if (dMax !== null && (h.doctors ?? 0) > dMax) return false;
+      if (cMin !== null && (h.totalConsultations ?? 0) < cMin) return false;
+      if (cMax !== null && (h.totalConsultations ?? 0) > cMax) return false;
+      return true;
+    });
+
     return {
-      hospitals: enriched,
+      hospitals: filtered,
       pagination: {
-        total,
+        total,                          // DB total (before count-range filter)
         page: parseInt(page, 10),
         limit: parseInt(limit, 10),
         totalPages: Math.ceil(total / limit),
@@ -162,5 +220,16 @@ async function fetchDoctorCount(hospitalId){
   }
 }
 
+/**
+ * Normalises a filter value that can be:
+ *   - undefined / null          → []
+ *   - a comma-separated string  → ["Cardiology","Neurology"]
+ *   - already an array          → returned as-is (trimmed)
+ */
+function parseList(value) {
+  if (!value) return [];
+  if (Array.isArray(value)) return value.map((v) => v.trim()).filter(Boolean);
+  return String(value).split(",").map((v) => v.trim()).filter(Boolean);
+}
 
 export default new HospitalService();

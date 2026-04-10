@@ -61,28 +61,39 @@ export class HospitalAdminController {
             });
         }
 
-        const hospitalAdmin = await hospitalAdminService.createHospitalAdmin({
-            fullName,
-            email,
-            phoneNumber,
-            gender,
-            nationality,
-            emiratesId,
-            hospitalName,
-            hospitalId,
-            position,
-            department,
-            profileImage,
-            role,
-            tenantId,
-            password
-        });
+        try {
+            const authHeader = req.headers.authorization ?? '';
+            const hospitalAdmin = await hospitalAdminService.createHospitalAdmin({
+                fullName,
+                email,
+                phoneNumber,
+                gender,
+                nationality,
+                emiratesId,
+                hospitalName,
+                hospitalId,
+                position,
+                department,
+                profileImage,
+                role,
+                password,
+                tenantId
+            }, authHeader);
 
-        return res.status(201).json({
-            success: true,
-            message: "Hospital Admin created successfully",
-            data: hospitalAdmin
-        });
+            return res.status(201).json({
+                success: true,
+                message: "Hospital Admin created successfully",
+                data: hospitalAdmin
+            });
+        } catch (error: any) {
+            console.error('[HospitalAdminController] createHospitalAdmin error:', error?.response?.data || error.message);
+            const status = error?.response?.status || 500;
+            const message = error?.response?.data?.message || error.message || 'Failed to create hospital admin';
+            return res.status(status).json({
+                success: false,
+                message: message
+            });
+        }
     }
 
 }

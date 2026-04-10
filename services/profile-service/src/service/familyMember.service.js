@@ -113,7 +113,7 @@ class FamilyMemberService {
    */
   update(id, data) {
     const updateData = { ...data };
-    if (data.dateOfBirth) updateData.dateOfBirth = new Date(data.dateOfBirth);
+    if (data.dateOfBirth) {updateData.dateOfBirth = new Date(data.dateOfBirth);}
     return prisma.familyMember.update({
       where: { id },
       data: updateData

@@ -60,20 +60,41 @@ class DoctorService {
     role: string;
     tenantId: string;
     password: string;
-  }) {
-    const { password, role, schedule,tenantId ,...profilePayload } = data;
+  }, authHeader: string) {
+    const { password, role, schedule, ...profilePayload } = data;
 
     let createdUserId: string | null = null;
     let createdDoctorId: string | null = null;
 
     try {
+      // Step 0: Check if doctor already exists with any of the unique fields
+      const checkResponse = await axios.post(
+        `${process.env.API_BASE_URL}api/v1/profiles/doctors/check-exists`,
+        {
+          email: profilePayload.email,
+          mobile: profilePayload.mobile,
+          emiratesId: profilePayload.emiratesId,
+          licenseNumber: profilePayload.licenseNumber
+        },
+        {
+          headers: {
+            'X-Service-Name': 'hospital-admin-service'
+          }
+        }
+      );
+
+      const { exists, field } = checkResponse.data?.data || {};
+      
+      if (exists) {
+        throw new Error(`Doctor already exists with the provided ${field}`);
+      }
+
       // Step 1: Create auth user
       const authResponse = await axios.post(`${process.env.API_BASE_URL}api/v1/auth/register`, {
         email: profilePayload.email,
         password,
         role,
-        tenantId
-
+        tenantId: "00000000-0000-0000-0000-000000000001"
       });
 
       createdUserId = authResponse.data.userId;
@@ -81,7 +102,7 @@ class DoctorService {
       // Step 2: Create doctor profile
       const doctorResponse = await axios.post(
         `${process.env.API_BASE_URL}api/v1/profiles/doctors`,
-        { ...profilePayload, schedule, userId: createdUserId , tenantId},
+        { ...profilePayload, schedule, userId: createdUserId , tenantId :"00000000-0000-0000-0000-000000000001" },
         {
           headers: {
             'X-Service-Name': 'hospital-admin-service'
@@ -111,15 +132,17 @@ class DoctorService {
       }
 
       return doctorResponse.data;
-    } catch (error) {
+    } catch (error: any) {
       // Compensation: rollback auth user if anything failed before slot generation
       if (createdUserId) {
         try {
-          await axios.delete(`${process.env.API_BASE_URL}/auth/users/${createdUserId}`);
-        } catch (cleanupError) {
+          await axios.delete(`${process.env.API_BASE_URL}api/v1/auth/users/${createdUserId}`, {
+             headers: { Authorization: authHeader }
+          });
+        } catch (cleanupError: any) {
           console.error(
             '[DoctorService] Failed to rollback user creation:',
-            (cleanupError as Error).message
+            cleanupError.message
           );
         }
       }
@@ -341,5 +364,7 @@ class DoctorService {
       auth: authUpdateRes.data
     };
   }
+
+  
 }
 export default new DoctorService();

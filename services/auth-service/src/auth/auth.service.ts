@@ -68,7 +68,7 @@ export class AuthService {
     status: string;
   }> {
     const normalizedMobile = this.normalizeMobile(dto.mobile);
-
+    console.log("This was executed")
     // Validate password is a string
     if (!dto.password || typeof dto.password !== 'string') {
       throw new BadRequestException('Password must be a non-empty string');

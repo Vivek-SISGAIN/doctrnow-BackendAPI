@@ -16,20 +16,38 @@ class HospitalController {
   });
 
   getHospitals = asyncHandler(async (req, res) => {
-    const { search, page = 1, limit = 20 } = req.query;
+    const {
+      search,
+      location,
+      specialties,       // "Cardiology,Neurology" or repeated ?specialties[]=…
+      status,            // "ACTIVE,PENDING" or repeated ?status[]=…
+      doctorMin,
+      doctorMax,
+      consultationMin,
+      consultationMax,
+      page  = 1,
+      limit = 20,
+    } = req.query;
 
-    const result = await hospitalService.getHospitals(
-      { search },
-      { page, limit }
-    );
+    const filters = {
+      search,
+      location,
+      specialties,
+      status,
+      doctorMin,
+      doctorMax,
+      consultationMin,
+      consultationMax,
+    };
+
+    const result = await hospitalService.getHospitals(filters, { page, limit });
 
     res.status(200).json({
       success: true,
       count: result.hospitals.length,
       data: result.hospitals,
-      pagination: result.pagination
+      pagination: result.pagination,
     });
-
   });
 
   getHospitalById = asyncHandler(async (req, res) => {

@@ -30,7 +30,7 @@
 
     // Best Practices
     "eqeqeq": ["error", "always"],
-    "curly": ["error", "all"],
+    "curly": ["warn", "all"],
     "no-eval": "error",
     "no-implied-eval": "error",
     "no-with": "error",
@@ -65,7 +65,7 @@
     "keyword-spacing": ["error", { "before": true, "after": true }],
     "comma-spacing": ["error", { "before": false, "after": true }],
     "arrow-spacing": ["error", { "before": true, "after": true }],
-    "brace-style": ["error", "1tbs", { "allowSingleLine": true }],
+    "brace-style": ["warn", "1tbs", { "allowSingleLine": true }],
 
     // Node.js Specific
     "callback-return": "warn",

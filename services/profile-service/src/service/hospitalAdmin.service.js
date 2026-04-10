@@ -100,7 +100,7 @@ class HospitalAdminService {
 
         hospitalName: data.hospitalName,
         hospitalId: data.hospitalId,
-  
+
         position: data.position,
         department: data.department || null,
 

@@ -8,22 +8,23 @@ const router = Router();
 router.post("/hospital", hospitalController.createHospital);
 router.get("/hospital", hospitalController.getHospitals);
 router.get("/hospital/:id", hospitalController.getHospitalById);
-router.put("/hospital/:id", hospitalController.updateHospital);
+router.patch("/hospital/:id", hospitalController.updateHospital);
 router.delete("/hospital/:id", hospitalController.deleteHospital);
 
 router.post("/finance", financeController.createFinance);
 router.get("/finance", financeController.getFinances);
 router.get("/finance/:id", financeController.getFinanceById);
-router.get("/finance/hospital/:hospitalId", financeController.getFinanceByHospitalId);
+router.get(
+  "/finance/hospital/:hospitalId",
+  financeController.getFinanceByHospitalId,
+);
 router.put("/finance/:id", financeController.updateFinance);
 router.delete("/finance/:id", financeController.deleteFinance);
-
 
 router.post("/banner", bannerController.createBanner);
 router.get("/banner", bannerController.getBanners);
 router.get("/banner/:id", bannerController.getBannerById);
 router.put("/banner/:id", bannerController.updateBanner);
 router.delete("/banner/:id", bannerController.deleteBanner);
-
 
 export default router;
