@@ -125,6 +125,7 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
       path.includes('/profiles'),
       path.includes('/super-admins'),
       path.includes('/chat'),
+      path.includes('/search'),
     ];
     if (doctorPortalPaths.some(Boolean)) {
       const authHeader = request?.headers?.authorization;

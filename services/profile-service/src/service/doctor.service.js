@@ -192,7 +192,7 @@ class DoctorService {
             break;
 
           case 'maxFee':
-            where.consultationFee = { lte: parseFloat(value) };
+            where.videoConsultationFee = { lte: parseFloat(value) };
             break;
 
           case 'workingDay':
