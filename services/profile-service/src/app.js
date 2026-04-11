@@ -117,6 +117,7 @@ const patientRoutes = require('./routes/patient.routes');
 const familyMemberRoutes = require('./routes/familyMember.routes');
 const doctorRoutes = require('./routes/doctor.routes');
 const specialtyRoutes = require('./routes/specialty.routes');
+const internalSearchRoute = require('./routes/internalSearch.route');
 const hospitalAdminRoutes = require('./routes/hospitalAdmin.routes');
 const superAdminRoutes = require('./routes/superAdmin.routes');
 const insuranceProviderRoutes = require('./routes/insuranceProvider.routes');
@@ -126,12 +127,13 @@ app.use('/api/patients', patientRoutes);
 app.use('/api/family-members', familyMemberRoutes);
 app.use('/api/doctors', doctorRoutes);
 app.use('/api/specialties', specialtyRoutes);
+app.use('/internal/search', internalSearchRoute);
 app.use('/api/hospital-admins', hospitalAdminRoutes);
 app.use('/api/super-admins', superAdminRoutes);
 app.use('/api/insurance-providers', insuranceProviderRoutes);
 
 // Error handling middleware
-app.use((err, req, res) => {
+app.use((err, req, res, next) => {
   // eslint-disable-next-line no-console
   console.error(err);
 
