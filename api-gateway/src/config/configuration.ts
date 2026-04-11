@@ -9,9 +9,7 @@ export default () => ({
   JWT_AUDIENCE: process.env.JWT_AUDIENCE || 'doctornow-api',
   JWT_ALGORITHM: process.env.JWT_ALGORITHM || 'RS256',
   // Dev only: skip JWT for /api/v1/appointments so you can test without auth-service (set to false for real auth)
-  SKIP_APPOINTMENT_AUTH:
-    process.env.SKIP_APPOINTMENT_AUTH === 'true' ||
-    (process.env.NODE_ENV !== 'production' && process.env.SKIP_APPOINTMENT_AUTH !== 'false'),
+  SKIP_APPOINTMENT_AUTH: process.env.SKIP_APPOINTMENT_AUTH === 'true',
 
   // Redis Configuration
   REDIS_HOST: process.env.REDIS_HOST || 'localhost',
