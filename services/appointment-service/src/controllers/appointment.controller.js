@@ -365,12 +365,33 @@ const markNoShow = asyncHandler(async (req, res) => {
   }
 
   const updatedAppointment = await appointmentService.markNoShow(id);
-
   res.status(200).json({
     success: true,
     message: "Appointment marked as no-show",
     data: updatedAppointment,
   });
+});
+
+const extendAppointment = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  try {
+    const updatedAppointment = await appointmentService.extend(id);
+    res.status(200).json({
+      success: true,
+      message: "Appointment extended successfully",
+      newEndTime: updatedAppointment.slot.endTime,
+      extendedByMinutes: parseInt(process.env.CALL_EXTEND_DURATION_MINUTES || "5", 10),
+    });
+  } catch (error) {
+    if (error.reason === "NEXT_SLOT_BOOKED") {
+      return res.status(409).json({
+        success: false,
+        reason: "NEXT_SLOT_BOOKED",
+        message: error.message,
+      });
+    }
+    throw error;
+  }
 });
 
 const getHospitalPatients = asyncHandler(async (req, res) => {
@@ -533,5 +554,6 @@ module.exports = {
   completeAppointment,
   markMissedAsNoShow,
   markNoShow,
+  extendAppointment,
   getHospitalPatients,
 };

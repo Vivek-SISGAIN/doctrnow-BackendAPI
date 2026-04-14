@@ -14,6 +14,38 @@ class SlotService {
   // ─────────────────────────────────────────────────────────────────────────────
 
   /**
+   * Check if the next slot or duration is available for the doctor.
+   * Returns { available: boolean, nextAppointmentTime?: Date }
+   */
+  async checkNextSlotAvailability(doctorId, endTime, durationMinutes) {
+    const extendUntil = dayjs(endTime).add(durationMinutes, "minute").toDate();
+
+    const nextAppointment = await prisma.appointment.findFirst({
+      where: {
+        doctorId,
+        status: { not: "CANCELLED" },
+        slot: {
+          startTime: {
+            gte: endTime,
+            lt: extendUntil,
+          },
+        },
+      },
+      include: { slot: true },
+      orderBy: { slot: { startTime: "asc" } },
+    });
+
+    if (nextAppointment) {
+      return {
+        available: false,
+        nextAppointmentTime: nextAppointment.slot.startTime,
+      };
+    }
+
+    return { available: true };
+  }
+
+  /**
    * Throws if the slot's startTime is in the past.
    * Call this before any mutation (book, update, delete, lock).
    */

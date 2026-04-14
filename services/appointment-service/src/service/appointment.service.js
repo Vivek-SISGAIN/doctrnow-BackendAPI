@@ -1,6 +1,8 @@
 const prisma = require("../prisma/prisma");
 const slotService = require("./slot.service");
 const ApiError = require("../utils/ApiError");
+const axios = require("axios");
+const dayjs = require("dayjs");
 
 class AppointmentService {
   /**
@@ -523,6 +525,70 @@ class AppointmentService {
       doctorId: g.doctorId,
       lastConsultedAt: g._max?.createdAt || null,
     }));
+  }
+
+  /**
+   * Extend the appointment duration
+   */
+  async extend(id) {
+    const appointment = await this.findById(id);
+    if (!appointment) {
+      throw ApiError.notFound("Appointment not found");
+    }
+
+    if (appointment.status === "CANCELLED" || appointment.status === "COMPLETED") {
+      throw ApiError.badRequest(`Cannot extend a ${appointment.status.toLowerCase()} appointment`);
+    }
+
+    if (appointment.extend_used) {
+      throw ApiError.badRequest("Extension already used for this appointment");
+    }
+
+    // Default 5 minutes per user request
+    const durationMinutes = parseInt(process.env.CALL_EXTEND_DURATION_MINUTES || "5", 10);
+    
+    const availability = await slotService.checkNextSlotAvailability(
+      appointment.doctorId,
+      appointment.slot.endTime,
+      durationMinutes
+    );
+
+    if (!availability.available) {
+      const err = new Error("The next appointment slot is booked. Call cannot be extended.");
+      err.statusCode = 409;
+      err.reason = "NEXT_SLOT_BOOKED";
+      throw err;
+    }
+
+    return prisma.$transaction(async (tx) => {
+      // Update the slot end time
+      const newEndTime = dayjs(appointment.slot.endTime).add(durationMinutes, "minute").toDate();
+      
+      await tx.slot.update({
+        where: { id: appointment.slotId },
+        data: { endTime: newEndTime },
+      });
+
+      // Mark extension as used
+      const updatedAppointment = await tx.appointment.update({
+        where: { id },
+        data: { extend_used: true },
+        include: { slot: true },
+      });
+
+      // Notify consultation-service to broadcast
+      try {
+        const CONSULTATION_SERVICE_URL = process.env.CONSULTATION_SERVICE_URL || "http://localhost:3005";
+        await axios.post(`${CONSULTATION_SERVICE_URL}/api/consultations/appointment/${id}/broadcast-extension`, {
+          newEndTime,
+          extendedByMinutes: durationMinutes,
+        });
+      } catch (e) {
+        console.error("[AppointmentService] Failed to broadcast extension:", e.message);
+      }
+
+      return updatedAppointment;
+    });
   }
 }
 

@@ -343,6 +343,22 @@ const saveHealthDetails = asyncHandler(async (req, res) => {
   });
 });
 
+const broadcastExtension = asyncHandler(async (req, res) => {
+  const { appointmentId } = req.params;
+  const { newEndTime, extendedByMinutes } = req.body;
+
+  emitToRoom(appointmentId, CONSULTATION_EVENTS.CALL_EXTENDED, {
+    appointmentId,
+    newEndTime,
+    extendedByMinutes,
+  });
+
+  res.status(200).json({
+    success: true,
+    message: 'Extension broadcasted',
+  });
+});
+
 const getHealthDetails = asyncHandler(async (req, res) => {
   const { appointmentId } = req.params;
 
@@ -530,6 +546,7 @@ module.exports = {
   markNoShow,
   saveHealthDetails,
   getHealthDetails,
+  broadcastExtension,
   submitReview,
   getDoctorRating,
   getConsultationReviews,

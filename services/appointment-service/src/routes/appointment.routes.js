@@ -11,6 +11,7 @@ const {
   completeAppointment,
   markMissedAsNoShow,
   markNoShow,
+  extendAppointment,
   getAllAppointmentsV1,
   getHospitalPatients,
   getPreviouslyConsultedDoctors,
@@ -289,6 +290,25 @@ router.post(
  *         description: Appointment confirmed successfully
  */
 router.post("/:id/confirm", confirmAppointment);
+
+/**
+ * @swagger
+ * /api/appointments/{id}/extend:
+ *   post:
+ *     summary: Extend appointment
+ *     tags: [Appointments]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     responses:
+ *       200:
+ *         description: Appointment extended successfully
+ */
+router.post("/:id/extend", extendAppointment);
 
 /**
  * @swagger

@@ -38,6 +38,7 @@ model Appointment {
   reason           String?
   notes            String?
   familyMemberId   String?
+  extend_used      Boolean           @default(false)
   createdAt        DateTime          @default(now())
   updatedAt        DateTime          @updatedAt
 

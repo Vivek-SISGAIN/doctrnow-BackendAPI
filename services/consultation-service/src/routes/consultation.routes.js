@@ -16,6 +16,7 @@ const {
   markNoShow,
   saveHealthDetails,
   getHealthDetails,
+  broadcastExtension,
   submitReview,
   getDoctorRating,
   getConsultationReviews,
@@ -210,6 +211,7 @@ router.get('/appointment/:appointmentId/health-details', getHealthDetails);
  *         description: Consent requested
  */
 router.post('/appointment/:appointmentId/request-consent', requestConsent);
+router.post('/appointment/:appointmentId/broadcast-extension', broadcastExtension);
 
 /**
  * @swagger

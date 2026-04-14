@@ -12,6 +12,7 @@ const CONSULTATION_EVENTS = {
   CONSENT_ACCEPTED: 'consent_accepted',
   CONSENT_REJECTED: 'consent_rejected',
   CALL_ENDED: 'call_ended',
+  CALL_EXTENDED: 'call_extended',
 };
 
 let io;
