@@ -1,4 +1,7 @@
 const prisma = require('../prisma/prisma');
+const prescriptionDocumentService = require('./prescription-document.service');
+const prescriptionPdfService = require('./prescription-pdf.service');
+const prescriptionNotificationService = require('./prescription-notification.service');
 
 class PrescriptionService {
   /**
@@ -282,18 +285,56 @@ class PrescriptionService {
    * Send prescription (SIGNED → SENT)
    */
   async send(id) {
+    console.log(`[PrescriptionService] Entering send method for prescription ID: ${id}`);
     const prescription = await prisma.prescription.findUnique({
       where: { id }
     });
 
     if (!prescription) {
+      console.error(`[PrescriptionService] Send failed: Prescription ${id} not found`);
       throw new Error('Prescription not found');
     }
 
     if (prescription.lifecycle !== 'SIGNED') {
+      console.warn(`[PrescriptionService] Send skipped: Prescription ${id} is in ${prescription.lifecycle} state, not SIGNED`);
       throw new Error('Only signed prescriptions can be sent');
     }
 
+    const emailEnabled = String(process.env.PRESCRIPTION_EMAIL_ENABLED || 'false').trim().toLowerCase() === 'true';
+    console.log(`[PrescriptionService] Prescription email enabled: ${emailEnabled}`);
+
+    if (emailEnabled) {
+      console.log(`[PrescriptionService] Building document model for prescription ${id}...`);
+      const documentModel = await prescriptionDocumentService.buildDocumentModel(id);
+      console.log(`[PrescriptionService] Document model built successfully for Rx ${documentModel.prescription.rxId}`);
+
+      console.log(`[PrescriptionService] Generating PDF buffer for Rx ${documentModel.prescription.rxId}...`);
+      const pdfBuffer = await prescriptionPdfService.generate(documentModel);
+      console.log(`[PrescriptionService] PDF buffer generated (${pdfBuffer.length} bytes)`);
+
+      if (!documentModel.patient.email) {
+        console.error(`[PrescriptionService] Send failed: Patient email is missing for Rx ${documentModel.prescription.rxId}`);
+        throw new Error('Patient email is missing; cannot send prescription email');
+      }
+
+      console.log(`[PrescriptionService] Calling notification service to send Rx ${documentModel.prescription.rxId} to ${documentModel.patient.email}`);
+      await prescriptionNotificationService.sendPrescriptionEmail({
+        to: documentModel.patient.email,
+        patientName: documentModel.patient.patient,
+        doctorName: documentModel.doctor.name,
+        facilityName: documentModel.facility.name,
+        rxId: documentModel.prescription.rxId,
+        pdfBuffer,
+      });
+      console.log(`[PrescriptionService] Notification service call completed for Rx ${documentModel.prescription.rxId}`);
+    } else {
+      console.log('[PrescriptionService] Prescription email skipped because PRESCRIPTION_EMAIL_ENABLED=false', {
+        prescriptionId: id,
+        patientId: prescription.patientId,
+      });
+    }
+
+    console.log(`[PrescriptionService] Updating prescription ${id} status to SENT...`);
     return await prisma.prescription.update({
       where: { id },
       data: {

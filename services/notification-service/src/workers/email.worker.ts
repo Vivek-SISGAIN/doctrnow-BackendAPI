@@ -5,7 +5,13 @@ import { emailService } from '../services/email.service';
 const prisma = new PrismaClient();
 
 export const startEmailWorker = async () => {
-  const channel = getChannel();
+  let channel: ReturnType<typeof getChannel>;
+  try {
+    channel = getChannel();
+  } catch {
+    console.warn('[EmailWorker] RabbitMQ not available — email worker skipped.');
+    return;
+  }
   const queueName = `${CHANNELS.EMAIL}.queue`;
 
   channel.consume(queueName, async (msg) => {

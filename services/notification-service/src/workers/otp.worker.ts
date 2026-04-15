@@ -32,7 +32,13 @@ const getRetryCount = (msg: ConsumeMessage): number => {
 };
 
 export const startOtpWorker = async () => {
-  const channel = getChannel();
+  let channel: ReturnType<typeof getChannel>;
+  try {
+    channel = getChannel();
+  } catch {
+    console.warn('[OtpWorker] RabbitMQ not available — OTP worker skipped.');
+    return;
+  }
   const otpConfig = getOtpRabbitMQConfig();
   const maxRetries = Number(process.env.OTP_MAX_RETRIES || 3);
 

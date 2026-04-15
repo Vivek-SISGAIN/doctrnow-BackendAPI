@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { NotificationService } from '../services/notification.service';
+import { emailService } from '../services/email.service';
 
 export const createNotification = async (req: Request, res: Response) => {
   try {
@@ -28,5 +29,34 @@ export const createNotification = async (req: Request, res: Response) => {
   } catch (error) {
     console.error('[NotificationController] create error:', error);
     res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
+export const sendPrescriptionEmail = async (req: Request, res: Response) => {
+  try {
+    const { to, patientName, doctorName, facilityName, rxId, attachments } = req.body;
+    console.log(`[NotificationController] Received prescription email request: to=${to}, rxId=${rxId}, patientName=${patientName}`);
+
+    if (!to || !rxId) {
+      console.warn(`[NotificationController] Missing required fields for prescription email: to=${to}, rxId=${rxId}`);
+      return res.status(400).json({ error: 'Missing required fields: to, rxId' });
+    }
+
+    await emailService.sendPrescriptionEmail({
+      to,
+      patientName,
+      doctorName,
+      facilityName,
+      rxId,
+      attachments,
+    });
+
+    res.status(200).json({
+      success: true,
+      message: 'Prescription email sent successfully',
+    });
+  } catch (error) {
+    console.error('[NotificationController] sendPrescriptionEmail error:', error);
+    res.status(500).json({ error: 'Failed to send prescription email' });
   }
 };

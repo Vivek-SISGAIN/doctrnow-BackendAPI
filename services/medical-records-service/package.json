@@ -7,7 +7,7 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
- "build": "mkdir -p dist && cp -r src/* dist/",
+    "build": "mkdir -p dist && cp -r src/* dist/",
     "test": "echo \"Error: no test specified\" && exit 1",
     "lint": "eslint src/**/*.js",
     "lint:fix": "eslint src/**/*.js --fix",
@@ -46,6 +46,7 @@
     "morgan": "^1.10.1",
     "multer": "^2.0.2",
     "nodemon": "^3.1.11",
+    "pdfkit": "^0.18.0",
     "prettier": "^3.2.5",
     "prisma": "^6.19.2",
     "swagger-jsdoc": "^6.2.8",

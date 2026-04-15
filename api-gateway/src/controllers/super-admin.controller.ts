@@ -33,7 +33,7 @@ export class SuperAdminController {
 
   /** Base path: /api/v1/super-admins */
   @Get()
-  @Roles(UserRole.SUPER_ADMIN, UserRole.PATIENT, UserRole.HOSPITAL_ADMIN)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.PATIENT, UserRole.DOCTOR, UserRole.HOSPITAL_ADMIN)
   async proxyBaseGet(@Req() req: Request, @Res() res: Response): Promise<void> {
     return this.proxyRequest(req, res);
   }
@@ -64,13 +64,13 @@ export class SuperAdminController {
 
   /** Subpaths: /api/v1/super-admins/* */
   @Get('*')
-  @Roles(UserRole.SUPER_ADMIN, UserRole.PATIENT, UserRole.HOSPITAL_ADMIN)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.PATIENT, UserRole.HOSPITAL_ADMIN, UserRole.DOCTOR)
   async proxyRequestGet(@Req() req: Request, @Res() res: Response): Promise<void> {
     return this.proxyRequest(req, res);
   }
 
   @Post('*')
-  @Roles(UserRole.SUPER_ADMIN , UserRole.HOSPITAL_ADMIN)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.HOSPITAL_ADMIN)
   async proxyRequestPost(@Req() req: Request, @Res() res: Response): Promise<void> {
     return this.proxyRequest(req, res);
   }

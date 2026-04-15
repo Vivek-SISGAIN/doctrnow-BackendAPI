@@ -5,7 +5,13 @@ import { smsService } from '../services/sms.service';
 const prisma = new PrismaClient();
 
 export const startSmsWorker = async () => {
-  const channel = getChannel();
+  let channel: ReturnType<typeof getChannel>;
+  try {
+    channel = getChannel();
+  } catch {
+    console.warn('[SmsWorker] RabbitMQ not available — SMS worker skipped.');
+    return;
+  }
   const queueName = `${CHANNELS.SMS}.queue`;
 
   channel.consume(queueName, async (msg) => {

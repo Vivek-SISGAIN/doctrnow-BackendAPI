@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Your Prescription</title>
+</head>
+<body style="margin: 0; padding: 0; background-color: #f0f4f8; font-family: Arial, sans-serif;">
+  <table width="100%" border="0" cellspacing="0" cellpadding="0"
+    style="background-color: #f0f4f8; padding: 20px 0; font-family: Arial, sans-serif;">
+    <tr>
+      <td align="center">
+        <table width="500" border="0" cellspacing="0" cellpadding="0" align="center"
+          style="background-color: #ffffff; border-radius: 12px; overflow: hidden;">
+          <tr>
+            <td style="background-color: #2AACE2; padding: 28px 20px; text-align: center;">
+              <h1
+                style="color: #ffffff; font-size: 26px; font-weight: bold; margin: 4px 0 0 0; font-family: Arial, sans-serif;">
+                DoctrNow</h1>
+              <p style="color: #d0edf9; font-size: 13px; margin: 4px 0 0 0; font-family: Arial, sans-serif;">
+                Your Healthcare Partner
+              </p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding: 40px 30px; text-align: left; font-family: Arial, sans-serif;">
+              <h2 style="color: #1a8ab5; font-size: 20px; font-weight: bold; margin-top: 0;">Your Prescription Is Attached</h2>
+              <p style="color: #333333; font-size: 15px; margin-bottom: 12px;">Hello {{PATIENT_NAME}},</p>
+              <p style="color: #64748b; font-size: 14px; line-height: 1.6; margin: 0 0 12px 0;">
+                Dr. {{DOCTOR_NAME}} from {{FACILITY_NAME}} has issued your prescription.
+                We have attached the prescription PDF to this email for your reference.
+              </p>
+              <table border="0" cellspacing="0" cellpadding="0" width="100%"
+                style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; margin: 20px 0;">
+                <tr>
+                  <td style="padding: 16px 18px;">
+                    <p style="margin: 0; color: #64748b; font-size: 12px;">Prescription ID</p>
+                    <p style="margin: 6px 0 0 0; color: #0f172a; font-size: 18px; font-weight: bold;">{{RX_ID}}</p>
+                  </td>
+                </tr>
+              </table>
+              <p style="color: #64748b; font-size: 13px; line-height: 1.6; margin: 0;">
+                If you have any questions about your prescription, please contact your care provider or the facility directly.
+              </p>
+            </td>
+          </tr>
+          <tr>
+            <td
+              style="background-color: #f8fafc; border-top: 1px solid #e2e8f0; padding: 20px; text-align: center; font-family: Arial, sans-serif;">
+              <p style="color: #64748b; font-size: 12px; margin: 0;">
+                Need help? Contact <a href="mailto:support@doctrnow.com"
+                  style="color: #2AACE2; text-decoration: none;">support@doctrnow.com</a>
+              </p>
+              <p style="color: #94a3b8; font-size: 11px; margin: 6px 0 0 0;">&copy; 2026 DoctrNow. All rights reserved.</p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>

@@ -84,7 +84,7 @@ class DoctorService {
       );
 
       const { exists, field } = checkResponse.data?.data || {};
-      
+
       if (exists) {
         throw new Error(`Doctor already exists with the provided ${field}`);
       }
@@ -102,7 +102,7 @@ class DoctorService {
       // Step 2: Create doctor profile
       const doctorResponse = await axios.post(
         `${process.env.API_BASE_URL}api/v1/profiles/doctors`,
-        { ...profilePayload, schedule, userId: createdUserId , tenantId :"00000000-0000-0000-0000-000000000001" },
+        { ...profilePayload, schedule, userId: createdUserId, tenantId: "00000000-0000-0000-0000-000000000001" },
         {
           headers: {
             'X-Service-Name': 'hospital-admin-service'
@@ -136,7 +136,7 @@ class DoctorService {
       if (createdUserId) {
         try {
           await axios.delete(`${process.env.API_BASE_URL}api/v1/auth/users/${createdUserId}`, {
-             headers: { Authorization: authHeader }
+            headers: { Authorization: authHeader }
           });
         } catch (cleanupError: any) {
           console.error(
@@ -284,7 +284,7 @@ class DoctorService {
             'X-Tenant-Id': tenantId,
             'X-Service-Name': 'hospital-admin-service'
           },
-          timeout: 10000 
+          timeout: 10000
         }
       );
       console.log(
@@ -364,6 +364,6 @@ class DoctorService {
     };
   }
 
-  
+
 }
 export default new DoctorService();

@@ -5,7 +5,13 @@ import { emitToUser } from '../sockets';
 const prisma = new PrismaClient();
 
 export const startInAppWorker = async () => {
-  const channel = getChannel();
+  let channel: ReturnType<typeof getChannel>;
+  try {
+    channel = getChannel();
+  } catch {
+    console.warn('[InAppWorker] RabbitMQ not available — in-app worker skipped.');
+    return;
+  }
   const queueName = `${CHANNELS.IN_APP}.queue`;
 
   channel.consume(queueName, async (msg) => {

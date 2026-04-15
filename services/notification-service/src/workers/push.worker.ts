@@ -5,7 +5,13 @@ import { pushService } from '../services/push.service';
 const prisma = new PrismaClient();
 
 export const startPushWorker = async () => {
-  const channel = getChannel();
+  let channel: ReturnType<typeof getChannel>;
+  try {
+    channel = getChannel();
+  } catch {
+    console.warn('[PushWorker] RabbitMQ not available — push worker skipped.');
+    return;
+  }
   const queueName = `${CHANNELS.PUSH}.queue`;
 
   channel.consume(queueName, async (msg) => {

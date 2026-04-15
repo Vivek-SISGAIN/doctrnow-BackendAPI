@@ -94,8 +94,9 @@ export const connectRabbitMQ = async () => {
 
     console.log("RabbitMQ connected and topology setup complete");
   } catch (error) {
-    console.error("RabbitMQ connection error:", error);
-    process.exit(1);
+    // RabbitMQ is optional — HTTP endpoints (email, OTP) must still work without it.
+    // Workers that depend on RabbitMQ will be skipped gracefully.
+    console.warn("[RabbitMQ] Connection failed — service will start without queue support.", (error as Error).message);
   }
 };
 
