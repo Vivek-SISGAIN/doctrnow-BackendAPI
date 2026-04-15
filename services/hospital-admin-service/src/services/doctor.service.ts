@@ -130,7 +130,6 @@ class DoctorService {
           console.error('[DoctorService] Slot generation failed after doctor create:', err.message);
         });
       }
-
       return doctorResponse.data;
     } catch (error: any) {
       // Compensation: rollback auth user if anything failed before slot generation
@@ -278,7 +277,7 @@ class DoctorService {
 
     try {
       const response = await axios.post(
-        `${process.env.API_BASE_URL}/appointments/slots/bulk`,
+        `${process.env.API_BASE_URL}api/v1/appointments/slots/bulk`,
         { doctorId, hospitalId, slots, isUpdate },
         {
           headers: {
