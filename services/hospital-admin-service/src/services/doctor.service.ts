@@ -162,7 +162,7 @@ class DoctorService {
   ) {
     // Step 1: Persist new schedule in profile-service
     const profileUpdateRes = await axios.patch(
-      `${process.env.API_BASE_URL}/profiles/doctors/${doctorProfileId}`,
+      `${process.env.API_BASE_URL}api/v1/profiles/doctors/${doctorProfileId}`,
       { schedule: newSchedule },
       {
         headers: {
@@ -333,7 +333,7 @@ class DoctorService {
 
     // Step 1: Fetch doctor profile to get linked userId
     const profileRes = await axios.get(
-      `${process.env.API_BASE_URL}/profiles/doctors/${doctorProfileId}`,
+      `${process.env.API_BASE_URL}api/v1/profiles/doctors/${doctorProfileId}`,
       { headers: forwardHeaders }
     );
 
@@ -346,14 +346,14 @@ class DoctorService {
 
     // Step 2: Update profile-service
     const profileUpdateRes = await axios.patch(
-      `${process.env.API_BASE_URL}/profiles/doctors/${doctorProfileId}`,
+      `${process.env.API_BASE_URL}api/v1/profiles/doctors/${doctorProfileId}`,
       { status },
       { headers: forwardHeaders }
     );
 
     // Step 3: Update auth-service
     const authUpdateRes = await axios.patch(
-      `${process.env.API_BASE_URL}/auth/users/${userId}/status`,
+      `${process.env.API_BASE_URL}api/v1/auth/users/${userId}/status`,
       { status },
       { headers: forwardHeaders }
     );
