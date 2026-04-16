@@ -110,6 +110,22 @@ export class NotificationController {
     return this.proxyToService(req, res, '/api/v1/otp', '/api/otp');
   }
 
+  // ─── /api/v1/notifications/email ──────────────────────────────────────────────
+
+  @Post('notifications/email/prescription')
+  @Roles(UserRole.PATIENT, UserRole.DOCTOR, UserRole.HOSPITAL_ADMIN, UserRole.SUPER_ADMIN)
+  @ApiOperation({ summary: 'Proxy prescription email requests' })
+  async proxyPrescriptionEmail(@Req() req: Request, @Res() res: Response): Promise<void> {
+    return this.proxyRequest(req, res, '/api/emails/prescription');
+  }
+
+  @Post('notifications/email/*')
+  @Roles(UserRole.PATIENT, UserRole.DOCTOR, UserRole.HOSPITAL_ADMIN, UserRole.SUPER_ADMIN)
+  @ApiOperation({ summary: 'Proxy other email requests' })
+  async proxyEmail(@Req() req: Request, @Res() res: Response): Promise<void> {
+    return this.proxyToService(req, res, '/api/v1/notifications/email', '/api/emails');
+  }
+
   // ─── Private helpers ──────────────────────────────────────────────────────────
 
   /**

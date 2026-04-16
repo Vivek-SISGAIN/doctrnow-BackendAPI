@@ -1,8 +1,7 @@
 const prisma = require('../prisma/prisma');
 
-const PROFILE_SERVICE_URL = process.env.PROFILE_SERVICE_URL || 'http://localhost:5000';
-const CONSULTATION_SERVICE_URL = process.env.CONSULTATION_SERVICE_URL || 'http://localhost:3005';
-const SUPER_ADMIN_SERVICE_URL = process.env.SUPER_ADMIN_SERVICE_URL || 'http://localhost:5001';
+const API_GATEWAY_URL = process.env.API_GATEWAY_URL || 'http://localhost:8080/api/v1';
+const INTERNAL_SERVICE_KEY = process.env.INTERNAL_SERVICE_KEY;
 
 const DEFAULT_FACILITY = {
   name: 'DoctrNow Medical Center',
@@ -25,7 +24,10 @@ async function fetchJson(url) {
   try {
     const response = await fetch(url, {
       method: 'GET',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        'x-internal-service-key': INTERNAL_SERVICE_KEY
+      },
     });
 
     if (!response.ok) {
@@ -34,7 +36,7 @@ async function fetchJson(url) {
 
     return await response.json();
   } catch (error) {
-    console.warn('[PrescriptionDocumentService] Failed to fetch resource', {
+    console.warn('[PrescriptionDocumentService] Failed to fetch resource via Gateway', {
       url,
       error: error.message,
     });
@@ -45,14 +47,14 @@ async function fetchJson(url) {
 class PrescriptionDocumentService {
   async fetchPatient(patientId) {
     const result = await fetchJson(
-      `${PROFILE_SERVICE_URL}/api/patients/${encodeURIComponent(patientId)}`
+      `${API_GATEWAY_URL}/profiles/patients/${encodeURIComponent(patientId)}`
     );
     return result?.data ?? null;
   }
 
   async fetchDoctor(doctorId) {
     const result = await fetchJson(
-      `${PROFILE_SERVICE_URL}/api/doctors/${encodeURIComponent(doctorId)}`
+      `${API_GATEWAY_URL}/profiles/doctors/${encodeURIComponent(doctorId)}`
     );
     return result?.data ?? null;
   }
@@ -60,7 +62,7 @@ class PrescriptionDocumentService {
   async fetchHealthDetails(appointmentId) {
     if (!appointmentId) return null;
     const result = await fetchJson(
-      `${CONSULTATION_SERVICE_URL}/api/consultations/appointment/${encodeURIComponent(
+      `${API_GATEWAY_URL}/consultations/appointment/${encodeURIComponent(
         appointmentId
       )}/health-details`
     );
@@ -70,7 +72,7 @@ class PrescriptionDocumentService {
   async fetchConsultationNotes(consultationId) {
     if (!consultationId) return [];
     const result = await fetchJson(
-      `${CONSULTATION_SERVICE_URL}/api/consultation-notes/consultation/${encodeURIComponent(
+      `${API_GATEWAY_URL}/consultation-notes/consultation/${encodeURIComponent(
         consultationId
       )}`
     );
@@ -80,7 +82,7 @@ class PrescriptionDocumentService {
   async fetchHospital(hospitalId) {
     if (!hospitalId) return null;
     const result = await fetchJson(
-      `${SUPER_ADMIN_SERVICE_URL}/api/super-admins/hospital/${encodeURIComponent(hospitalId)}`
+      `${API_GATEWAY_URL}/super-admins/hospital/${encodeURIComponent(hospitalId)}`
     );
     return result?.data ?? null;
   }

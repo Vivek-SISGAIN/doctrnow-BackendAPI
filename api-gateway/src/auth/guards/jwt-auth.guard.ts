@@ -173,6 +173,22 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
     ]);
     if (isPublic) return true;
 
+    // ── Internal Service Bypass ──────────────────────────────────────────────
+    // Allows microservices to call each other through the gateway using a secret key.
+    const internalKey = request?.headers?.['x-internal-service-key'];
+    const internalSecret = this.configService.get<string>('INTERNAL_SERVICE_SECRET');
+
+    if (internalKey && internalSecret && internalKey === internalSecret) {
+      this.logger.debug(`Internal service authenticated bypass for ${request.url}`);
+      request.user = {
+        userId: 'internal-service',
+        sub: 'internal-service',
+        role: 'SUPER_ADMIN', // Give internal services high privileges on proxied routes
+        tenantId: null,
+      };
+      return true;
+    }
+
     const rawPath = (
       request?.url ??
       request?.originalUrl ??

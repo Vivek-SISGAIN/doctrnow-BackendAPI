@@ -7,7 +7,7 @@ import { initializeSockets } from './sockets';
 import { connectRabbitMQ } from './config/rabbitmq';
 import { startWorkers } from './workers';
 
-const PORT = process.env.PORT || 4000;
+const PORT = process.env.PORT || 3008;
 const server = http.createServer(app);
 
 const startServer = async () => {

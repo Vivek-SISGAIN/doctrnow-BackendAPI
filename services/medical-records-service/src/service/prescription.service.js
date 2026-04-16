@@ -317,16 +317,19 @@ class PrescriptionService {
         throw new Error('Patient email is missing; cannot send prescription email');
       }
 
-      console.log(`[PrescriptionService] Calling notification service to send Rx ${documentModel.prescription.rxId} to ${documentModel.patient.email}`);
-      await prescriptionNotificationService.sendPrescriptionEmail({
+      console.log(`[PrescriptionService] Calling notification service (background) for Rx ${documentModel.prescription.rxId}`);
+      // Fire and forget (don't await) to prevent Gateway timeout
+      prescriptionNotificationService.sendPrescriptionEmail({
         to: documentModel.patient.email,
         patientName: documentModel.patient.patient,
         doctorName: documentModel.doctor.name,
         facilityName: documentModel.facility.name,
         rxId: documentModel.prescription.rxId,
         pdfBuffer,
+      }).catch(err => {
+        console.error(`[PrescriptionService] Background notification failed for Rx ${documentModel.prescription.rxId}:`, err);
       });
-      console.log(`[PrescriptionService] Notification service call completed for Rx ${documentModel.prescription.rxId}`);
+      console.log(`[PrescriptionService] Notification triggered for Rx ${documentModel.prescription.rxId}`);
     } else {
       console.log('[PrescriptionService] Prescription email skipped because PRESCRIPTION_EMAIL_ENABLED=false', {
         prescriptionId: id,
