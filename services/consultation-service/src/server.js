@@ -12,16 +12,24 @@ const server = http.createServer(app);
 
 // Initialize WebSocket server
 const { initializeSocket } = require('./utils/socket');
-initializeSocket(server);
 
-server.listen(PORT, () => {
-  console.log('=================================');
-  console.log('🚀 Consultation Service is running');
-  console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
-  console.log(`📡 URL: http://${HOST}:${PORT}`);
-  console.log(`📊 Health Check: http://${HOST}:${PORT}/health`);
-  console.log('=================================');
-});
+(async () => {
+  try {
+    await initializeSocket(server);
+    
+    server.listen(PORT, () => {
+      console.log('=================================');
+      console.log('🚀 Consultation Service is running');
+      console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
+      console.log(`📡 URL: http://${HOST}:${PORT}`);
+      console.log(`📊 Health Check: http://${HOST}:${PORT}/health`);
+      console.log('=================================');
+    });
+  } catch (error) {
+    console.error('❌ Failed to initialize Socket.IO:', error);
+    process.exit(1);
+  }
+})();
 
 
 // Graceful shutdown

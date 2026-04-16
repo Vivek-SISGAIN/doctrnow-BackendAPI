@@ -1,5 +1,7 @@
 const { Server } = require('socket.io');
+const { createAdapter } = require('@socket.io/redis-adapter');
 const jwt = require('jsonwebtoken');
+const { redisClient } = require('../config/redis');
 
 const CONSULTATION_ROOM_PREFIX = 'consultation:';
 const DOCTOR_ROOM_PREFIX = 'doctor:';
@@ -17,7 +19,14 @@ const CONSULTATION_EVENTS = {
 
 let io;
 
-const initializeSocket = (server) => {
+const initializeSocket = async (server) => {
+  // ── Redis adapter setup ──────────────────────────────────────────────────
+  // Two separate clients are required: one for publish, one for subscribe.
+  const pubClient = redisClient.duplicate();
+  const subClient = redisClient.duplicate();
+
+  await Promise.all([pubClient.connect(), subClient.connect()]);
+
   // Express Catch-All handles everything except what Socket.IO handles internally.
   // We use this path to avoid Express "Route not found" if they conflict.
   io = new Server(server, {
@@ -31,8 +40,10 @@ const initializeSocket = (server) => {
     transports: ['websocket', 'polling'],
   });
 
-  io.on('connection', async (socket) => {
+  io.adapter(createAdapter(pubClient, subClient));
+  console.log('✅ Socket.IO Redis adapter attached');
 
+  io.on('connection', async (socket) => {
     try {
       const token = socket.handshake?.auth?.token ?? socket.handshake?.query?.token;
 
