@@ -579,12 +579,22 @@ class AppointmentService {
       // Notify consultation-service to broadcast
       try {
         const CONSULTATION_SERVICE_URL = process.env.CONSULTATION_SERVICE_URL || "http://localhost:3005";
+        console.log(`[BROADCAST DEBUG] Initiating extension broadcast for Appointment: ${id}`);
+        console.log(`[BROADCAST DEBUG] Target URL: ${CONSULTATION_SERVICE_URL}/api/consultations/appointment/${id}/broadcast-extension`);
+        
         await axios.post(`${CONSULTATION_SERVICE_URL}/api/consultations/appointment/${id}/broadcast-extension`, {
           newEndTime,
           extendedByMinutes: durationMinutes,
         });
+        
+        console.log(`[BROADCAST DEBUG] Extension broadcast successful for Appointment: ${id}`);
       } catch (e) {
-        console.error("[AppointmentService] Failed to broadcast extension:", e.message);
+        process.stdout.write(`\x1b[31m[BROADCAST ERROR] Failed to notify Consultation Service for Appointment: ${id}\x1b[0m\n`);
+        process.stdout.write(`\x1b[31m[BROADCAST ERROR] Error Details: ${e.message}\x1b[0m\n`);
+        if (e.response) {
+          process.stdout.write(`\x1b[31m[BROADCAST ERROR] Response Status: ${e.response.status}\x1b[0m\n`);
+          process.stdout.write(`\x1b[31m[BROADCAST ERROR] Response Data: ${JSON.stringify(e.response.data)}\x1b[0m\n`);
+        }
       }
 
       return updatedAppointment;
