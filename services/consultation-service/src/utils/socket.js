@@ -115,9 +115,13 @@ const verifyToken = (token) => {
 };
 
 const emitToRoom = (appointmentId, event, data) => {
-  if (!io) return;
+  if (!io) {
+    console.warn(`[SOCKET ERROR] Cannot emit ${event}: io is not initialized`);
+    return;
+  }
   const room = `${CONSULTATION_ROOM_PREFIX}${appointmentId}`;
-  console.log(`Emitting ${event} to room ${room} with data:`, data);
+  console.log(`[SOCKET DEBUG] Emitting ${event} to room ${room}`);
+  console.log(`[SOCKET DEBUG] Data:`, JSON.stringify(data));
   io.to(room).emit(event, data);
 };
 

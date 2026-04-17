@@ -347,6 +347,9 @@ const broadcastExtension = asyncHandler(async (req, res) => {
   const { appointmentId } = req.params;
   const { newEndTime, extendedByMinutes } = req.body;
 
+  console.log(`[RECEIVE DEBUG] Received extension broadcast request for Appointment: ${appointmentId}`);
+  console.log(`[RECEIVE DEBUG] Payload: NewEndTime=${newEndTime}, ExtendedByMinutes=${extendedByMinutes}`);
+
   emitToRoom(appointmentId, CONSULTATION_EVENTS.CALL_EXTENDED, {
     appointmentId,
     newEndTime,
