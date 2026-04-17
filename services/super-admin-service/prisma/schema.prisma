@@ -58,13 +58,25 @@ model Hospital {
   servicesOffered        String[]
   specializationsAvailable String[]
 
-  // Documents
-  tradeLicenseDocument           String?
-  dhaLicenseDocument             String?
-  insuranceDocuments             String[]
-  establishmentCard              String?
-  accreditationCertificates      String[]
+  // Documents – public S3 URLs (stored for quick read)
+  tradeLicenseDocument           String?  @map("trade_license_document")
+  tradeLicenseDocumentKey        String?  @map("trade_license_document_key")
+
+  dhaLicenseDocument             String?  @map("dha_license_document")
+  dhaLicenseDocumentKey          String?  @map("dha_license_document_key")
+
+  insuranceDocuments             String[] @map("insurance_documents")
+  insuranceDocumentKeys          String[] @map("insurance_document_keys")
+
+  establishmentCard              String?  @map("establishment_card")
+  establishmentCardKey           String?  @map("establishment_card_key")
+
+  accreditationCertificates      String[] @map("accreditation_certificates")
+  accreditationCertificateKeys   String[] @map("accreditation_certificate_keys")
+
+  // Relations
   finance                        Finance?
+
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
@@ -92,14 +104,12 @@ model Finance {
   branchAddress          String?  @map("branch_address")
 
   hospitalId             String   @unique
-  hospital               Hospital @relation(fields: [hospitalId], references: [id])
-
+  hospital               Hospital @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
   createdAt              DateTime @default(now())
   updatedAt              DateTime @updatedAt
 
   @@map("finances")
 }
-
 
 model Banners {
   id          String   @id @default(uuid())

@@ -1,3 +1,4 @@
+const prisma = require('../prisma/prisma');
 const doctorService = require('../service/doctor.service');
 const specialtyService = require('../service/specialty.service');
 const ApiError = require('../utils/ApiError');
@@ -327,7 +328,12 @@ const createDoctor = asyncHandler(async (req, res) => {
 
 const checkExists = asyncHandler(async (req, res) => {
   const { email, mobile, emiratesId, licenseNumber } = req.body;
-  const result = await doctorService.checkDoctorExists({ email, mobile, emiratesId, licenseNumber });
+  const result = await doctorService.checkDoctorExists({
+    email,
+    mobile,
+    emiratesId,
+    licenseNumber
+  });
   res.status(200).json({
     success: true,
     data: result
@@ -374,8 +380,15 @@ const assignDoctorToHospital = asyncHandler(async (req, res) => {
   if (!doctor) {
     throw ApiError.notFound('Doctor not found');
   }
-
-  const updatedDoctor = await doctorService.update(id, { hospitalId });
+  
+  const updatedDoctor = await prisma.doctor.update({
+    where: { id },
+    data: {
+      assignedHospitalIds: {
+        push: hospitalId
+      }
+    }
+  });
 
   res.status(200).json({
     success: true,

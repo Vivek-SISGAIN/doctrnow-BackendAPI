@@ -51,7 +51,10 @@ class DoctorService {
     const skip = (page - 1) * limit;
 
     const where = {
-      hospitalId,
+      OR: [
+        { hospitalId },
+        { assignedHospitalIds: { has: hospitalId } }
+      ],
       ...this.buildWhereClause(filters)
     };
 
@@ -107,7 +110,6 @@ class DoctorService {
 
         primarySpecialization: data.primarySpecialization,
         subSpecialization: data.subSpecialization || null,
-
         licenseNumber: data.licenseNumber,
         licenseType: data.licenseType,
         licenseExpiry: data.licenseExpiry,
@@ -134,7 +136,14 @@ class DoctorService {
         platformSharePercent: data.platformSharePercent
       }
     });
-
+    await prisma.doctor.update({
+      where: { id: doctor.id },
+      data: {
+        assignedHospitalIds: {
+          push: data.hospitalId
+        }
+      }
+    });
     // 3️⃣ Trigger slot generation if schedule exists
     if (data.schedule) {
       this._triggerSlotRegeneration(doctor.id, doctor.hospitalId, data.schedule, false).catch(
