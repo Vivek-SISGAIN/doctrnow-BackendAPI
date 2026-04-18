@@ -320,7 +320,23 @@ const markNoShow = asyncHandler(async (req, res) => {
 
 const saveHealthDetails = asyncHandler(async (req, res) => {
   const { appointmentId } = req.params;
-  const { patientId, doctorId, hospitalId, weight, height, bloodPressure, temperature, pulse, spo2, sugarLevel, consultationReason, allergies, criticalConditions } = req.body;
+  const {
+    patientId,
+    doctorId,
+    hospitalId,
+    weight,
+    height,
+    bloodPressure,
+    temperature,
+    pulse,
+    spo2,
+    sugarLevel,
+    consultationReason,
+    allergies,
+    criticalConditions,
+    medications,
+    lifestyleHabits
+  } = req.body;
 
   const { vitals } = await consultationService.ensureConsultationAndSaveHealthDetails(appointmentId, patientId, doctorId, {
     hospitalId,
@@ -334,6 +350,8 @@ const saveHealthDetails = asyncHandler(async (req, res) => {
     consultationReason,
     allergies,
     criticalConditions,
+    medications,
+    lifestyleHabits,
   });
 
   res.status(200).json({

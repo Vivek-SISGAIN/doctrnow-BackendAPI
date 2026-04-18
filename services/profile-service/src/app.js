@@ -121,9 +121,11 @@ const internalSearchRoute = require('./routes/internalSearch.route');
 const hospitalAdminRoutes = require('./routes/hospitalAdmin.routes');
 const superAdminRoutes = require('./routes/superAdmin.routes');
 const insuranceProviderRoutes = require('./routes/insuranceProvider.routes');
+const patientHealthRoutes = require('./routes/patientHealth.routes');
 
 // Register routes
 app.use('/api/patients', patientRoutes);
+app.use('/api/patients', patientHealthRoutes);
 app.use('/api/family-members', familyMemberRoutes);
 app.use('/api/doctors', doctorRoutes);
 app.use('/api/specialties', specialtyRoutes);

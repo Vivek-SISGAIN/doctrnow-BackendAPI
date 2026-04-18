@@ -20,28 +20,45 @@ const CONSULTATION_EVENTS = {
 let io;
 
 const initializeSocket = async (server) => {
-  // ── Redis adapter setup ──────────────────────────────────────────────────
-  // Two separate clients are required: one for publish, one for subscribe.
-  const pubClient = redisClient.duplicate();
-  const subClient = redisClient.duplicate();
+  let redisAdapterAttached = false;
 
-  await Promise.all([pubClient.connect(), subClient.connect()]);
+  try {
+    // ── Redis adapter setup ──────────────────────────────────────────────────
+    // Two separate clients are required: one for publish, one for subscribe.
+    const pubClient = redisClient.duplicate();
+    const subClient = redisClient.duplicate();
 
-  // Express Catch-All handles everything except what Socket.IO handles internally.
-  // We use this path to avoid Express "Route not found" if they conflict.
-  io = new Server(server, {
-    cors: {
-      origin: '*', // Allow all for testing
-      methods: ['GET', 'POST', 'OPTIONS'],
-      allowedHeaders: ['Authorization', 'Content-Type', 'Accept'],
-      credentials: true,
-    },
-    path: '/consultation-events',
-    transports: ['websocket', 'polling'],
-  });
+    await Promise.all([pubClient.connect(), subClient.connect()]);
 
-  io.adapter(createAdapter(pubClient, subClient));
-  console.log('✅ Socket.IO Redis adapter attached');
+    io = new Server(server, {
+      cors: {
+        origin: '*',
+        methods: ['GET', 'POST', 'OPTIONS'],
+        allowedHeaders: ['Authorization', 'Content-Type', 'Accept'],
+        credentials: true,
+      },
+      path: '/consultation-events',
+      transports: ['websocket', 'polling'],
+    });
+
+    io.adapter(createAdapter(pubClient, subClient));
+    console.log('✅ Socket.IO Redis adapter attached');
+    redisAdapterAttached = true;
+  } catch (error) {
+    if (!redisAdapterAttached) {
+      io = new Server(server, {
+        cors: {
+          origin: '*',
+          methods: ['GET', 'POST', 'OPTIONS'],
+          allowedHeaders: ['Authorization', 'Content-Type', 'Accept'],
+          credentials: true,
+        },
+        path: '/consultation-events',
+        transports: ['websocket', 'polling'],
+      });
+      console.log('ℹ️ Redis not available, using memory adapter (local mode)');
+    }
+  }
 
   io.on('connection', async (socket) => {
     try {
