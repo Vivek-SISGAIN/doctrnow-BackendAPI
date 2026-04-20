@@ -45,12 +45,14 @@ export class HttpProxyService {
       method: request.method as any,
       url: `${serviceUrl}${request.url}`,
       headers: {
-        'Content-Type': 'application/json',
         'X-Correlation-ID': request.correlationId,
         ...(request.userId && { 'X-User-ID': request.userId }),
         ...(request.role && { 'X-User-Role': request.role }),
         ...(request.tenantId && { 'X-Tenant-ID': request.tenantId }),
         ...request.headers,
+        ...(!request.headers?.['content-type'] && !request.headers?.['Content-Type']
+          ? { 'Content-Type': 'application/json' }
+          : {}),
       },
       params: request.query,
       data: request.body,
@@ -58,6 +60,16 @@ export class HttpProxyService {
       maxRedirects: this.configService.get<number>('HTTP_MAX_REDIRECTS', 5),
       validateStatus: (status) => status < 500, // Don't throw on 4xx
     };
+
+    // Support multipart uploads through the gateway (e.g. profileImage FormData).
+    const contentType =
+      (axiosConfig.headers?.['content-type'] as string) ||
+      (axiosConfig.headers?.['Content-Type'] as string) ||
+      '';
+    if (typeof contentType === 'string' && contentType.startsWith('multipart/')) {
+      axiosConfig.maxBodyLength = Infinity;
+      axiosConfig.maxContentLength = Infinity;
+    }
 
     const doRequest = async () => client.request(axiosConfig);
 

@@ -36,12 +36,18 @@ export const startInAppWorker = async () => {
       });
 
       // Emit over Socket.IO (room = userId)
-      emitToUser(dbNotification.userId, 'notification', {
+      const eventPayload = {
         id: dbNotification.id,
+        userId: dbNotification.userId,
+        channel: dbNotification.channel,
+        status: dbNotification.status,
         title: dbNotification.title,
         body: dbNotification.body,
         payload: dbNotification.payload,
-      });
+        createdAt: dbNotification.createdAt,
+      };
+      emitToUser(dbNotification.userId, 'notification', eventPayload);
+      emitToUser(dbNotification.userId, 'notification:new', eventPayload);
 
       await prisma.notification.update({
         where: { id: dbNotification.id },

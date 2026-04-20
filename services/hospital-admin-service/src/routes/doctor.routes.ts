@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { asyncHandler } from '../utils';
 import doctorController from '../controllers/doctor.controller';
+import { profileImageUpload } from '../middlewares/upload.middleware';
 
 const router = Router();
 
@@ -26,7 +27,7 @@ const router = Router();
  *         $ref: '#/components/responses/InternalServerError'
  */
 
-router.post('/', asyncHandler(doctorController.createDoctor.bind(doctorController)));
+router.post('/', profileImageUpload, asyncHandler(doctorController.createDoctor.bind(doctorController)));
 
 
 /**

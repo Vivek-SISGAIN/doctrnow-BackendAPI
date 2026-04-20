@@ -31,6 +31,8 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1031.0",
+    "@aws-sdk/s3-request-presigner": "^3.1031.0",
     "@prisma/client": "^6.19.2",
     "axios": "^1.13.4",
     "compression": "^1.7.4",
@@ -44,9 +46,11 @@
     "hpp": "^0.2.3",
     "joi": "^18.0.2",
     "morgan": "^1.10.0",
+    "multer": "^2.1.1",
     "prisma": "^6.19.2",
     "swagger-jsdoc": "^6.2.8",
-    "swagger-ui-express": "^5.0.1"
+    "swagger-ui-express": "^5.0.1",
+    "uuid": "^13.0.0"
   },
   "devDependencies": {
     "@types/compression": "^1.7.5",
@@ -56,6 +60,7 @@
     "@types/hpp": "^0.2.6",
     "@types/jest": "^29.5.12",
     "@types/morgan": "^1.9.9",
+    "@types/multer": "^2.1.0",
     "@types/node": "^20.19.30",
     "@types/supertest": "^6.0.2",
     "@types/swagger-jsdoc": "^6.0.4",

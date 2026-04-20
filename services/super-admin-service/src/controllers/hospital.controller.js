@@ -104,7 +104,6 @@ class HospitalController {
         message: "No files were uploaded. Please attach at least one document.",
       });
     }
-    console.log("RIght now in Controller")
 
     const hospital = await hospitalService.uploadDocuments(
       req.params.id,

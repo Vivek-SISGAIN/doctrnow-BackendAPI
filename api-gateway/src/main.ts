@@ -48,6 +48,8 @@ async function bootstrap(): Promise<void> {
   // ─── WebSocket proxy for video-chat-service (Socket.IO) ───────────────────
   const videoChatUrl =
     configService.get<string>('VIDEO_CHAT_SERVICE_URL') ?? 'http://localhost:3007';
+  const notificationServiceUrl =
+    configService.get<string>('NOTIFICATION_SERVICE_URL') ?? 'http://localhost:3008';
 
   // /socket.io — default Socket.IO path (used internally)
   const socketIoProxy = createProxyMiddleware({
@@ -70,6 +72,17 @@ async function bootstrap(): Promise<void> {
 
   app.use('/chat-events', chatEventsProxy);
 
+  // /notification-events — path used by hospital-admin frontend for in-app notifications
+  const notificationEventsProxy = createProxyMiddleware({
+    target: notificationServiceUrl,
+    changeOrigin: true,
+    ws: true,
+    logLevel: 'warn',
+    pathRewrite: { '^/notification-events': '/socket.io' },
+  });
+
+  app.use('/notification-events', notificationEventsProxy);
+
   // ─── Manual WebSocket Upgrade Handling ─────────────────────────────────────
   // In NestJS + http-proxy-middleware v3, we must manually bind the 'upgrade' event
   // to the server to ensure WebSocket connections are correctly proxied.
@@ -80,6 +93,8 @@ async function bootstrap(): Promise<void> {
       chatEventsProxy.upgrade(req, socket, head);
     } else if (url.startsWith('/socket.io')) {
       socketIoProxy.upgrade(req, socket, head);
+    } else if (url.startsWith('/notification-events')) {
+      notificationEventsProxy.upgrade(req, socket, head);
     } else if (url.startsWith('/consultation-events')) {
       consultationProxy.upgrade(req, socket, head);
     }

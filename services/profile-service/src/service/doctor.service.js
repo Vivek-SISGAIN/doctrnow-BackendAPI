@@ -1,5 +1,6 @@
 const prisma = require('../prisma/prisma');
 const axios = require('axios');
+const { getPresignedS3Url } = require('../utils/s3Handler');
 
 class DoctorService {
   /**
@@ -51,10 +52,7 @@ class DoctorService {
     const skip = (page - 1) * limit;
 
     const where = {
-      OR: [
-        { hospitalId },
-        { assignedHospitalIds: { has: hospitalId } }
-      ],
+      OR: [{ hospitalId }, { assignedHospitalIds: { has: hospitalId } }],
       ...this.buildWhereClause(filters)
     };
 
@@ -71,7 +69,7 @@ class DoctorService {
     ]);
 
     return {
-      doctors,
+      doctors: await this._populatePresignedUrls(doctors),
       pagination: {
         page: parseInt(page, 10),
         limit: parseInt(limit, 10),
@@ -117,7 +115,7 @@ class DoctorService {
         yearsOfExperience: data.yearsOfExperience,
         medicalDegree: data.medicalDegree,
         university: data.university,
-        profileImage: data.profileImage,
+        profileImage: data.profileImage || '',
 
         languagesSpoken: data.languagesSpoken || [],
         servicesOffered: data.servicesOffered || [],
@@ -151,7 +149,7 @@ class DoctorService {
       );
     }
 
-    return doctor;
+    return this._populatePresignedUrls(doctor);
   }
 
   /**
@@ -275,21 +273,22 @@ class DoctorService {
   /**
    * Find doctor by ID
    */
-  findById(id) {
-    return prisma.doctor.findUnique({
+  async findById(id) {
+    const doctor = await prisma.doctor.findUnique({
       where: { id }
     });
+    return this._populatePresignedUrls(doctor);
   }
 
   /**
    * Find doctor by ID or by userId (auth user id)
    */
   async findByIdOrUserId(id) {
-    const byId = await prisma.doctor.findUnique({ where: { id } });
-    if (byId) {
-      return byId;
+    let doctor = await prisma.doctor.findUnique({ where: { id } });
+    if (!doctor) {
+      doctor = await prisma.doctor.findUnique({ where: { userId: id } });
     }
-    return prisma.doctor.findUnique({ where: { userId: id } });
+    return this._populatePresignedUrls(doctor);
   }
 
   async getAvailability(id) {
@@ -311,8 +310,9 @@ class DoctorService {
     });
   }
 
-  findAll() {
-    return prisma.doctor.findMany();
+  async findAll() {
+    const doctors = await prisma.doctor.findMany();
+    return this._populatePresignedUrls(doctors);
   }
 
   /**
@@ -340,7 +340,7 @@ class DoctorService {
     ]);
 
     return {
-      doctors,
+      doctors: await this._populatePresignedUrls(doctors),
       pagination: {
         page: parseInt(page, 10),
         limit: parseInt(limit, 10),
@@ -405,7 +405,7 @@ class DoctorService {
       );
     }
 
-    return doctor;
+    return this._populatePresignedUrls(doctor);
   }
 
   async _triggerSlotRegeneration(doctorId, hospitalId, schedule, isUpdate) {
@@ -438,23 +438,43 @@ class DoctorService {
     });
   }
 
-  findByIdsOrUserIds(ids) {
-    return prisma.doctor.findMany({
+  async findByIdsOrUserIds(ids) {
+    const doctors = await prisma.doctor.findMany({
       where: {
         OR: [{ id: { in: ids } }, { userId: { in: ids } }]
       }
     });
+    return this._populatePresignedUrls(doctors);
   }
 
   /**
    * Find multiple doctors strictly by their primary doctor ID.
    */
-  findByIds(ids) {
-    return prisma.doctor.findMany({
+  async findByIds(ids) {
+    const doctors = await prisma.doctor.findMany({
       where: {
         id: { in: ids }
       }
     });
+    return this._populatePresignedUrls(doctors);
+  }
+
+  async _populatePresignedUrls(data) {
+    if (!data) return data;
+    const isArray = Array.isArray(data);
+    const elements = isArray ? data : [data];
+
+    const populated = await Promise.all(
+      elements.map(async (doc) => {
+        const plainDoc = { ...doc }; // ✅ spread into plain object first
+        if (plainDoc.profileImage) {
+          plainDoc.profileImage = await getPresignedS3Url(plainDoc.profileImage);
+        }
+        return plainDoc;
+      })
+    );
+
+    return isArray ? populated : populated[0];
   }
 }
 

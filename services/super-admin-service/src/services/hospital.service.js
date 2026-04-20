@@ -187,7 +187,6 @@ class HospitalService {
    */
   async uploadDocuments(hospitalId, files) {
     // 1. Verify hospital exists
-    console.log("RIght now in services");
     const hospital = await prisma.hospital.findUnique({
       where: { id: hospitalId },
     });

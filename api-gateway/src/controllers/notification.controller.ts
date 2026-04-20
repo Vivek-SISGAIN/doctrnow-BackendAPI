@@ -35,7 +35,7 @@ import { Public } from 'src/common/decorators/public.decorator';
  */
 @ApiTags('notifications')
 @ApiBearerAuth('JWT-auth')
-@Controller()   // No shared prefix — each subpath has its own @Controller below
+@Controller() // No shared prefix — each subpath has its own @Controller below
 @SkipThrottle() // Rate limiting handled at service level
 @UseGuards(JwtAuthGuard)
 export class NotificationController {
@@ -48,6 +48,27 @@ export class NotificationController {
   @ApiOperation({ summary: 'Create a notification (all channels)' })
   async createNotification(@Req() req: Request, @Res() res: Response): Promise<void> {
     return this.proxyRequest(req, res, '/api/notifications');
+  }
+
+  @Post('notifications/single')
+  @Roles(UserRole.PATIENT, UserRole.DOCTOR, UserRole.HOSPITAL_ADMIN, UserRole.SUPER_ADMIN)
+  @ApiOperation({ summary: 'Create a single notification' })
+  async createSingleNotification(@Req() req: Request, @Res() res: Response): Promise<void> {
+    return this.proxyRequest(req, res, '/api/notifications/single');
+  }
+
+  @Post('notifications/bulk')
+  @Roles(UserRole.PATIENT, UserRole.DOCTOR, UserRole.HOSPITAL_ADMIN, UserRole.SUPER_ADMIN)
+  @ApiOperation({ summary: 'Create bulk notifications' })
+  async createBulkNotification(@Req() req: Request, @Res() res: Response): Promise<void> {
+    return this.proxyRequest(req, res, '/api/notifications/bulk');
+  }
+
+  @Post('notifications/broadcast')
+  @Roles(UserRole.PATIENT, UserRole.DOCTOR, UserRole.HOSPITAL_ADMIN, UserRole.SUPER_ADMIN)
+  @ApiOperation({ summary: 'Create a broadcast notification' })
+  async createBroadcastNotification(@Req() req: Request, @Res() res: Response): Promise<void> {
+    return this.proxyRequest(req, res, '/api/notifications/broadcast');
   }
 
   @Get('notifications')
@@ -172,6 +193,8 @@ export class NotificationController {
     gatewayBase: string,
     serviceBase: string,
   ): Promise<void> {
+    console.log('AUTH HEADER:', req.headers['authorization']);
+  console.log('USER FROM JWT:', (req as any).user);
     const correlationId = this.correlationId(req);
     const rawUrl = (req as any).originalUrl || req.url || '';
     const incomingPath = rawUrl.split('?')[0];
@@ -210,13 +233,33 @@ export class NotificationController {
 
   private extractHeaders(req: Request): Record<string, string> {
     const headers: Record<string, string> = {};
-    const allowedHeaders = ['content-type', 'accept', 'x-tenant-id', 'authorization'];
+    const allowedHeaders = [
+      'content-type',
+      'accept',
+      'x-tenant-id',
+      'authorization',
+      'x-user-id',
+      'x-user-role',
+    ];
 
     for (const [key, value] of Object.entries(req.headers)) {
       if (allowedHeaders.includes(key.toLowerCase())) {
         const val = Array.isArray(value) ? value[0] : value;
         if (typeof val === 'string') headers[key] = val;
       }
+    }
+
+    // Inject user context from decoded JWT (populated by JwtAuthGuard)
+    // These override anything that may have arrived in the incoming request headers
+    const user = (req as any).user;
+    if (user) {
+      const userId = user.userId ?? user.sub;
+      const role = user.role;
+      const tenantId = user.tenantId;
+
+      if (userId) headers['x-user-id'] = String(userId);
+      if (role) headers['x-user-role'] = String(role);
+      if (tenantId) headers['x-tenant-id'] = String(tenantId);
     }
 
     return headers;
