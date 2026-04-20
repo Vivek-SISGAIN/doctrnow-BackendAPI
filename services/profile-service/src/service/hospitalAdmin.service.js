@@ -66,6 +66,16 @@ class HospitalAdminService {
     });
   }
 
+  /**
+   * Find hospital admins by hospitalId
+   */
+  findByHospitalId(hospitalId) {
+    return prisma.hospitalAdmin.findMany({
+      where: { hospitalId },
+      orderBy: { createdAt: 'desc' }
+    });
+  }
+
   async createHospitalAdmin(data) {
     // 1️⃣ Check for uniqueness conflicts
     const existingAdmin = await prisma.hospitalAdmin.findFirst({

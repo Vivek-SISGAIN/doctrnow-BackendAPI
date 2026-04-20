@@ -1,9 +1,10 @@
 import { Request, Response } from 'express';
 import doctorService from '../services/doctor.service';
+import { uploadToS3 } from '../utils/s3Handler';
 
 export class DoctorController {
-    async createDoctor(req: Request, res: Response) {
-        const {
+    async createDoctor(req: any, res: Response) {
+        let {
             fullName,
             email,
             mobile,
@@ -19,7 +20,6 @@ export class DoctorController {
             yearsOfExperience,
             medicalDegree,
             university,
-            profileImage,
             languagesSpoken,
             servicesOffered,
             certifications,
@@ -33,9 +33,33 @@ export class DoctorController {
             platformSharePercent,
             role,
             password,
-            tenantId
+            tenantId,
         } = req.body;
 
+        // Parse array/object fields if they come stringified via FormData
+        if (typeof req.body.languagesSpoken === 'string') languagesSpoken = JSON.parse(req.body.languagesSpoken);
+        if (typeof req.body.servicesOffered === 'string') servicesOffered = JSON.parse(req.body.servicesOffered);
+        if (typeof req.body.certifications === 'string') certifications = JSON.parse(req.body.certifications);
+        if (typeof req.body.professionalMemberships === 'string') professionalMemberships = JSON.parse(req.body.professionalMemberships);
+        if (typeof req.body.schedule === 'string') schedule = JSON.parse(req.body.schedule);
+        console.log("REQ FILE" ,
+            req.file
+        )
+
+        let profileImageKey = "";
+        if (req.file) {
+            try {
+                const s3Result = await uploadToS3(req.file as any);
+                profileImageKey = s3Result.key;
+            } catch (error) {
+                return res.status(500).json({
+                    success: false,
+                    message: 'Failed to upload profile image'
+                });
+            }
+        }
+
+        console.log(req.body)
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
         if (!emailRegex.test(email)) {
             return res.status(400).json({
@@ -97,7 +121,8 @@ export class DoctorController {
             });
         }
 
-        if (hospitalSharePercent + platformSharePercent !== 100) {
+        if (parseInt(hospitalSharePercent) + parseInt(platformSharePercent) !== 100) {
+            console.log("Total" , parseInt(hospitalSharePercent) + parseInt(platformSharePercent))
             return res.status(400).json({
                 success: false,
                 message: 'Hospital and platform share must total 100%'
@@ -143,7 +168,7 @@ export class DoctorController {
                 yearsOfExperience: parseInt(yearsOfExperience),
                 medicalDegree,
                 university,
-                profileImage,
+                profileImage: profileImageKey,
                 languagesSpoken,
                 servicesOffered,
                 certifications,

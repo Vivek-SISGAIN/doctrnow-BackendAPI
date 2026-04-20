@@ -94,7 +94,7 @@ model Doctor {
   platformSharePercent    Int
   createdAt               DateTime     @default(now())
   updatedAt               DateTime     @updatedAt
-
+  assignedHospitalIds     String[]     @default([])
   @@map("doctor")
 }
 

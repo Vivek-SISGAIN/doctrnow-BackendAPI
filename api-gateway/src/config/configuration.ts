@@ -46,7 +46,7 @@ export default () => ({
   VIDEO_CHAT_SERVICE_URL: process.env.VIDEO_CHAT_SERVICE_URL || 'http://localhost:3007',
   PAYMENT_SERVICE_URL: process.env.PAYMENT_SERVICE_URL || 'http://localhost:3006',
   MEDICAL_RECORDS_SERVICE_URL: process.env.MEDICAL_RECORDS_SERVICE_URL || 'http://localhost:3007',
-  NOTIFICATION_SERVICE_URL: process.env.NOTIFICATION_SERVICE_URL || 'http://localhost:4000',
+  NOTIFICATION_SERVICE_URL: process.env.NOTIFICATION_SERVICE_URL || 'http://localhost:3008',
   HOSPITAL_ADMIN_SERVICE_URL: process.env.HOSPITAL_ADMIN_SERVICE_URL || 'http://localhost:3009',
   SUPER_ADMIN_SERVICE_URL: process.env.SUPER_ADMIN_SERVICE_URL || 'http://localhost:5001',
   AUDIT_SERVICE_URL: process.env.AUDIT_SERVICE_URL || 'http://localhost:3011',

@@ -7,14 +7,19 @@ export class HealthServiceController {
    * Create a new health service
    * POST /api/health-services
    */
-  async createService(req: Request, res: Response) {
-    const { name, type, originalPrice, finalPrice, status , hospitalId} = req.body;
+  async createService(req: any, res: Response) {
+    const { name, type, originalPrice, finalPrice, status, hospitalId } = req.body;
+    const userId = req.headers['x-user-id'];
+    const authorization = req.headers.authorization as string | undefined;
+    const tenantId = req.headers['x-tenant-id'] as string | undefined;
 
+
+    // console.log("Headers---" , userId)
     // Validate required fields
-    if (!name || !type || !originalPrice || !finalPrice) {
+    if (!name || !type || !originalPrice || !finalPrice || !hospitalId || !userId) {
       return res.status(400).json({
         success: false,
-        message: 'Missing required fields: name, type, originalPrice, finalPrice'
+        message: 'Missing required fields: name, type, originalPrice, finalPrice, hospitalId'
       });
     }
 
@@ -38,9 +43,14 @@ export class HealthServiceController {
       name,
       type,
       hospitalId,
+      userId,
       originalPrice: parseFloat(originalPrice),
       finalPrice: parseFloat(finalPrice),
       status: status || ServiceStatus.ACTIVE
+    }, {
+      authorization,
+      tenantId,
+      actorUserId: String(userId),
     });
 
     return res.status(201).json({
