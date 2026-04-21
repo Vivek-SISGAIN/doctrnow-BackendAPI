@@ -280,8 +280,6 @@ const createDoctor = asyncHandler(async (req, res) => {
     platformSharePercent
   } = req.body;
 
-  console.log('DOCTOR IMAGE' , profileImage)
-
   const doctor = await doctorService.createDoctor({
     userId,
     hospitalId,

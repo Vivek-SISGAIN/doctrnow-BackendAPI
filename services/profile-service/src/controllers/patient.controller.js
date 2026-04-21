@@ -4,30 +4,6 @@ const ApiError = require('../utils/ApiError');
 const asyncHandler = require('../utils/asyncHandler');
 const axios = require('axios');
 
-const authServiceClient = {
-  async getUserStatusBulk(userIds) {
-    if (!userIds?.length) {
-      return {};
-    }
-    try {
-      const { data } = await axios.post(
-        `${process.env.BASE_URL}/api/v1/auth/users/status-bulk`,
-        { userIds },
-        {
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          timeout: 3000
-        }
-      );
-      return data;
-    } catch (err) {
-      console.error('Failed to fetch user statuses from auth service:', err.message);
-      return {}; // graceful degradation — return empty, status will be null
-    }
-  }
-};
-
 const getAllPatients = asyncHandler(async (req, res) => {
   const {
     search,
@@ -47,16 +23,10 @@ const getAllPatients = asyncHandler(async (req, res) => {
     sortBy
   );
 
-  // Extract all userIds from this page of patients
-  const userIds = result.patients.map((p) => p.userId).filter(Boolean);
-
-  // Fetch statuses in one bulk call
-  const statusMap = await authServiceClient.getUserStatusBulk(userIds);
 
   // Merge status into each patient
   const patients = result.patients.map((p) => ({
-    ...p,
-    status: statusMap[p.userId] ?? null
+    ...p
   }));
 
   res.status(200).json({
@@ -236,6 +206,32 @@ const getPatientsByBulkIds = asyncHandler(async (req, res) => {
   });
 });
 
+const updatePatientStatus = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const { status } = req.body;
+
+  const patient = await patientService.findById(id);
+
+  if (!patient) {
+    throw ApiError.notFound('Patient not found');
+  }
+
+  await axios.patch(`${process.env.API_BASE_URL}/auth/users/${patient.userId}/status`, {
+    status
+  }).catch((err) => {
+    console.error('Failed to update user status in auth service:', err?.response?.data || err.message);
+    throw ApiError.internal('Failed to update user status');
+  });
+
+  const updatedPatient = await patientService.update(id, { status });
+
+  res.status(200).json({
+    success: true,
+    message: 'Patient status updated successfully',
+    data: updatedPatient
+  });
+});
+
 module.exports = {
   getAllPatients,
   getPatientById,
@@ -243,5 +239,6 @@ module.exports = {
   createCurrentPatient,
   updatePatient,
   deletePatient,
+  updatePatientStatus,
   getPatientsByBulkIds
 };
