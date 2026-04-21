@@ -177,8 +177,11 @@ const getAllAppointments = asyncHandler(async (req, res) => {
     ...new Set(result.appointments.map((a) => a.patientId).filter(Boolean)),
   ];
 
+  const appointmentIds = result.appointments.map((a) => a.id).filter(Boolean);
+
   let doctorMap = {};
   let patientMap = {};
+  let prescriptionMap = {};
   const authHeader = req.headers.authorization;
 
   await Promise.all([
@@ -205,6 +208,18 @@ const getAllAppointments = asyncHandler(async (req, res) => {
           doctorMap = m;
         })
       : Promise.resolve(),
+
+    // ── Bulk prescription fetch ─────────────────────────────────────────────────────
+    appointmentIds.length > 0
+      ? fetchProfilesBulk(
+          appointmentIds,
+          `${baseUrl}prescriptions/appointments/bulk`,
+          authHeader,
+          "prescription",
+        ).then((m) => {
+          prescriptionMap = m;
+        })
+      : Promise.resolve(),
   ]);
 
   const transformedAppointments = result.appointments
@@ -212,6 +227,7 @@ const getAllAppointments = asyncHandler(async (req, res) => {
       ...appointment,
       doctor: doctorMap[appointment.doctorId] || null,
       patient: patientMap[appointment.patientId] || null,
+      prescription: prescriptionMap[appointment.id] || null,
     }))
     .filter(
       (appointment) =>
@@ -232,6 +248,18 @@ const getAppointmentById = asyncHandler(async (req, res) => {
 
   if (!appointment) {
     throw ApiError.notFound("Appointment not found");
+  }
+
+  // Augment with prescription
+  const authHeader = req.headers.authorization;
+  if (authHeader) {
+    const prescriptionMap = await fetchProfilesBulk(
+      [appointment.id],
+      `${baseUrl}prescriptions/appointments/bulk`,
+      authHeader,
+      "prescription",
+    );
+    appointment.prescription = prescriptionMap[appointment.id] || null;
   }
 
   res.status(200).json({

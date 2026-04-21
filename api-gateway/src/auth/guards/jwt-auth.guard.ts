@@ -111,6 +111,7 @@ const DEV_BYPASSABLE_PATH_SEGMENTS = [
   '/chat',
   '/search',
   '/agora',
+  '/notifications',
 ] as const;
 
 // ─────────────────────────────────────────────────────────────────────────────

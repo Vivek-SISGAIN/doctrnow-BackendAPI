@@ -7,6 +7,36 @@ const chatClient = require('../utils/chat-client');
 const profileClient = require('../utils/profile-client');
 const appointmentClient = require('../utils/appointment-client');
 
+const baseUrl = process.env.BASE_URL;
+
+async function fetchBulk(ids, bulkUrl, authHeader, entityName) {
+  if (ids.length === 0) return {};
+
+  try {
+    const response = await fetch(bulkUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: authHeader
+      },
+      body: JSON.stringify({ ids })
+    });
+    
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    return data?.data || {};
+  } catch (err) {
+    console.error(
+      `[consultation] Bulk ${entityName} fetch failed:`,
+      err.message
+    );
+    return {};
+  }
+}
+
 const buildChatSessionPayload = async (consultation, patientId, doctorId) => {
   const [patientProfile, appointment] = await Promise.all([
     profileClient.getPatientProfile(consultation.patientId),
@@ -61,6 +91,13 @@ const getConsultationById = asyncHandler(async (req, res) => {
     throw ApiError.notFound('Consultation not found');
   }
 
+  // Augment with prescription
+  const authHeader = req.headers.authorization;
+  if (consultation.appointmentId && authHeader) {
+    const prescriptionMap = await fetchBulk([consultation.appointmentId], `${baseUrl}prescriptions/appointments/bulk`, authHeader, 'prescription');
+    consultation.prescription = prescriptionMap[consultation.appointmentId] || null;
+  }
+
   res.status(200).json({
     success: true,
     data: consultation
@@ -72,6 +109,15 @@ const getConsultationByAppointment = asyncHandler(async (req, res) => {
   const consultation = await consultationService.findByAppointmentId(appointmentId);
 
   // No consultation yet = patient has not joined the lobby; return 200 with null so UI can show "Patient not in lobby" instead of an error
+  
+  if (consultation && consultation.appointmentId) {
+    const authHeader = req.headers.authorization;
+    if (authHeader) {
+      const prescriptionMap = await fetchBulk([consultation.appointmentId], `${baseUrl}prescriptions/appointments/bulk`, authHeader, 'prescription');
+      consultation.prescription = prescriptionMap[consultation.appointmentId] || null;
+    }
+  }
+
   res.status(200).json({
     success: true,
     data: consultation || null
@@ -256,9 +302,22 @@ const getHistoryByPatient = asyncHandler(async (req, res) => {
     limit
   });
 
+  const appointmentIds = result.consultations.map(c => c.appointmentId).filter(Boolean);
+  const authHeader = req.headers.authorization;
+
+  let prescriptionMap = {};
+  if (appointmentIds.length > 0 && authHeader) {
+    prescriptionMap = await fetchBulk(appointmentIds, `${baseUrl}prescriptions/appointments/bulk`, authHeader, 'prescription');
+  }
+
+  const enhancedConsultations = result.consultations.map(c => ({
+    ...c,
+    prescription: prescriptionMap[c.appointmentId] || null
+  }));
+
   res.status(200).json({
     success: true,
-    data: result.consultations,
+    data: enhancedConsultations,
     pagination: result.pagination
   });
 });
@@ -275,9 +334,22 @@ const getHistoryByDoctor = asyncHandler(async (req, res) => {
     endDate
   });
 
+  const appointmentIds = result.consultations.map(c => c.appointmentId).filter(Boolean);
+  const authHeader = req.headers.authorization;
+
+  let prescriptionMap = {};
+  if (appointmentIds.length > 0 && authHeader) {
+    prescriptionMap = await fetchBulk(appointmentIds, `${baseUrl}prescriptions/appointments/bulk`, authHeader, 'prescription');
+  }
+
+  const enhancedConsultations = result.consultations.map(c => ({
+    ...c,
+    prescription: prescriptionMap[c.appointmentId] || null
+  }));
+
   res.status(200).json({
     success: true,
-    data: result.consultations,
+    data: enhancedConsultations,
     pagination: result.pagination
   });
 });

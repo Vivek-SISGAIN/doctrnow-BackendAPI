@@ -39,6 +39,7 @@ const {
  *                   items:
  *                     $ref: '#/components/schemas/HospitalAdmin'
  */
+router.get('/hospital/id/:hospitalId', getHospitalAdminsByHospital);
 router.get('/hospital/:hospitalName', getHospitalAdminsByHospital);
 
 /**

@@ -70,13 +70,13 @@ export class SuperAdminController {
   }
 
   @Post('*')
-  @Roles(UserRole.SUPER_ADMIN, UserRole.HOSPITAL_ADMIN)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.HOSPITAL_ADMIN, UserRole.PATIENT, UserRole.DOCTOR)
   async proxyRequestPost(@Req() req: Request, @Res() res: Response): Promise<void> {
     return this.proxyRequest(req, res);
   }
 
   @Put('*')
-  @Roles(UserRole.SUPER_ADMIN)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.PATIENT, UserRole.DOCTOR)
   async proxyRequestPut(@Req() req: Request, @Res() res: Response): Promise<void> {
     return this.proxyRequest(req, res);
   }
@@ -107,11 +107,12 @@ export class SuperAdminController {
     const userId = user?.userId ?? user?.sub;
 
     try {
+      const isMultipart = req.headers['content-type']?.startsWith('multipart/');
       const response = await this.httpProxyService.proxyRequest('SUPER_ADMIN', {
         method: req.method,
         url: path,
         headers: this.extractHeaders(req),
-        body: req.body,
+        body: isMultipart ? req : req.body,
         query: req.query as Record<string, any>,
         correlationId,
         userId,

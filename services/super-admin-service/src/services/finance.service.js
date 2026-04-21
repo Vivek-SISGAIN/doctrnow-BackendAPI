@@ -2,6 +2,7 @@ import prisma from "../prisma/client.js";
 
 class FinanceService {
   async createFinance(data) {
+    console.log("is this executed")
     const finance = await prisma.finance.create({
       data: {
         platformCommission: data.platformCommission,

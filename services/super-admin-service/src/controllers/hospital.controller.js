@@ -61,6 +61,16 @@ class HospitalController {
 
   });
 
+  getHospitalsBulk = asyncHandler(async (req, res) => {
+    const { ids } = req.body;
+    const hospitalMap = await hospitalService.getHospitalByIds(ids);
+
+    res.status(200).json({
+      success: true,
+      data: hospitalMap
+    });
+  });
+
   updateHospital = asyncHandler(async (req, res) => {
 
     const hospital = await hospitalService.updateHospital(
@@ -83,6 +93,37 @@ class HospitalController {
     res.status(200).json({
       success: true,
       ...result
+    });
+
+  });
+
+  /**
+   * POST /hospital/:id/documents
+   * Accepts multipart/form-data with fields:
+   *   tradeLicenseDocument      (single file)
+   *   dhaLicenseDocument        (single file)
+   *   insuranceDocuments        (up to 5 files)
+   *   establishmentCard         (single file)
+   *   accreditationCertificates (up to 5 files)
+   */
+  uploadDocuments = asyncHandler(async (req, res) => {
+
+    if (!req.files || Object.keys(req.files).length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "No files were uploaded. Please attach at least one document.",
+      });
+    }
+
+    const hospital = await hospitalService.uploadDocuments(
+      req.params.id,
+      req.files
+    );
+
+    res.status(200).json({
+      success: true,
+      message: "Documents uploaded successfully",
+      data: hospital,
     });
 
   });

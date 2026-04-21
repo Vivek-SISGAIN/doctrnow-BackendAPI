@@ -1,25 +1,118 @@
 import { ServiceType, ServiceStatus } from '@prisma/client';
 import prisma from '../prisma/prisma';
+import axios from 'axios';
 
 export class HealthServiceService {
+  private getApiBaseUrl() {
+    return process.env.API_BASE_URL || 'http://localhost:8080/';
+  }
+
+  private buildForwardHeaders(context?: {
+    authorization?: string;
+    tenantId?: string;
+    actorUserId?: string;
+  }) {
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+
+    if (context?.authorization) headers.Authorization = context.authorization;
+    if (context?.tenantId) headers['X-Tenant-ID'] = context.tenantId;
+    if (context?.actorUserId) headers['X-User-ID'] = context.actorUserId;
+
+    return headers;
+  }
+
+  private async notifyHospitalAdminsOnServiceCreate(
+    service: {
+      id: string;
+      name: string;
+      type: ServiceType;
+      originalPrice: any;
+      finalPrice: any;
+      hospitalId: string;
+      status: ServiceStatus;
+      createdAt: Date;
+    },
+    context?: {
+      authorization?: string;
+      tenantId?: string;
+      actorUserId?: string;
+    },
+  ) {
+    const baseUrl = this.getApiBaseUrl();
+    const headers = this.buildForwardHeaders(context);
+
+    try {
+      const hospitalAdminsResponse = await axios.get(
+        `${baseUrl}api/v1/profiles/hospital-admins/hospital/id/${service.hospitalId}`,
+        { headers },
+      );
+
+      const hospitalAdmins = hospitalAdminsResponse?.data?.data ?? [];
+      const targetUserIds = [...new Set(hospitalAdmins
+        .map((admin: { userId?: string }) => admin?.userId)
+        .filter(Boolean))];
+
+      if (!targetUserIds.length) {
+        return;
+      }
+
+      await axios.post(
+        `${baseUrl}api/v1/notifications/bulk`,
+        {
+          userIds: targetUserIds,
+          channels: ['IN_APP'],
+          title: 'New Health Service Created',
+          body: `${service.name} has been added for your hospital.`,
+          payload: {
+            type: 'HEALTH_SERVICE_CREATED',
+            hospitalId: service.hospitalId,
+            healthService: {
+              id: service.id,
+              name: service.name,
+              type: service.type,
+              originalPrice: service.originalPrice,
+              finalPrice: service.finalPrice,
+              status: service.status,
+              createdAt: service.createdAt,
+            },
+          },
+        },
+        { headers },
+      );
+    } catch (error) {
+      console.error('[HealthServiceService] Failed to send hospital-admin notifications:', error);
+    }
+  }
+
   async createService(data: {
     name: string;
     type: ServiceType;
     originalPrice: number;
+    userId: string;
     finalPrice: number;
     hospitalId: string;
     status?: ServiceStatus;
+  }, context?: {
+    authorization?: string;
+    tenantId?: string;
+    actorUserId?: string;
   }) {
-    return await prisma.healthService.create({
+    const service = await prisma.healthService.create({
       data: {
         name: data.name,
         type: data.type,
         originalPrice: data.originalPrice,
         finalPrice: data.finalPrice,
-        hospitalId : data.hospitalId,
-        status: data.status || ServiceStatus.ACTIVE
-      }
+        hospitalId: data.hospitalId,
+        status: data.status || ServiceStatus.ACTIVE,
+      },
     });
+
+    await this.notifyHospitalAdminsOnServiceCreate(service, context);
+
+    return service;
   }
 
   async getAllServices(filters?: { type?: ServiceType; status?: ServiceStatus }) {
@@ -110,7 +203,7 @@ export class HealthServiceService {
     data: {
       name?: string;
       type?: ServiceType;
-      originalPrice?: number;
+      originalPrice?: any;
       finalPrice?: number;
       status?: ServiceStatus;
     }

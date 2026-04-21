@@ -18,9 +18,10 @@ const getHospitalAdminById = asyncHandler(async (req, res) => {
 });
 
 const getHospitalAdminsByHospital = asyncHandler(async (req, res) => {
-  const { hospitalName } = req.params;
-
-  const hospitalAdmins = await hospitalAdminService.findByHospitalName(hospitalName);
+  const { hospitalName, hospitalId } = req.params;
+  const hospitalAdmins = hospitalId
+    ? await hospitalAdminService.findByHospitalId(hospitalId)
+    : await hospitalAdminService.findByHospitalName(hospitalName);
 
   res.status(200).json({
     success: true,

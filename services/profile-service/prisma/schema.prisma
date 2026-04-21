@@ -20,6 +20,7 @@ model Patient {
   emiratesId    String         @unique
   nationality   String
   bloodGroup    BloodGroup?
+  status        String         @default("ACTIVE")
   maritalStatus MaritalStatus?
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
@@ -73,8 +74,8 @@ model Specialty {
   id           String   @id @default(uuid())
   name         String   @unique
   slug         String   @unique
-  imageKey     String?  // e.g. "general-physician" for UI asset mapping
-  bgColor      String?  // e.g. "bg-purple-100" for UI
+  imageKey     String?
+  bgColor      String?
   displayOrder Int      @default(0)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
@@ -86,17 +87,15 @@ model Doctor {
   id                      String             @id @default(uuid())
   userId                  String             @unique
   status                  DoctorStatus       @default(PENDING)
-  availabilityStatus      AvailabilityStatus @default(OFFLINE)
   fullName                String
-  email                   String       @unique
+  email                   String             @unique
   mobile                  String
   gender                  Gender
   nationality             String
-  emiratesId              String       @unique
+  emiratesId              String             @unique
   primarySpecialization   String
-  hospitalId              String
   subSpecialization       String?
-  licenseNumber           String       @unique
+  licenseNumber           String             @unique
   licenseType             LicenseType
   licenseExpiry           DateTime
   yearsOfExperience       Int
@@ -108,14 +107,17 @@ model Doctor {
   certifications          String[]
   professionalMemberships String[]
   professionalBio         String
-  schedule                Json
-  videoConsultationFee    Decimal      @db.Decimal(10, 2)
-  phoneConsultationFee    Decimal      @db.Decimal(10, 2)
-  followUpFee             Decimal      @db.Decimal(10, 2)
+  videoConsultationFee    Decimal            @db.Decimal(10, 2)
+  phoneConsultationFee    Decimal            @db.Decimal(10, 2)
+  followUpFee             Decimal            @db.Decimal(10, 2)
   hospitalSharePercent    Int
   platformSharePercent    Int
-  createdAt               DateTime     @default(now())
-  updatedAt               DateTime     @updatedAt
+  createdAt               DateTime           @default(now())
+  updatedAt               DateTime           @updatedAt
+  availabilityStatus      AvailabilityStatus @default(OFFLINE)
+  schedule                Json
+  hospitalId              String
+  assignedHospitalIds     String[]           @default([])
 
   @@map("doctor")
 }
@@ -154,6 +156,25 @@ model SuperAdmin {
   profileImage String
 
   @@map("super_admin")
+}
+
+model InsuranceProvider {
+  id                    String                @id @default(uuid())
+  providerName          String
+  providerType          ProviderType
+  contactEmail          String
+  contactPhone          String
+  website               String?
+  networkType           NetworkType
+  claimSubmissionMethod ClaimSubmissionMethod
+  avgProcessingDays     Int?
+  address               String
+  supportedServices     SupportedService[]
+  note                  String?
+  createdAt             DateTime              @default(now())
+  updatedAt             DateTime              @updatedAt
+
+  @@map("insurance_provider")
 }
 
 enum Gender {
@@ -221,35 +242,6 @@ enum WorkingDay {
   FRIDAY
   SATURDAY
   SUNDAY
-}
-
-model InsuranceProvider {
-  id String @id @default(uuid())
-
-  providerName String
-
-  providerType ProviderType
-
-  contactEmail String
-  contactPhone String
-  website      String?
-
-  networkType NetworkType
-
-  claimSubmissionMethod ClaimSubmissionMethod
-
-  avgProcessingDays Int?
-
-  address String
-
-  supportedServices SupportedService[]
-
-  note String?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@map("insurance_provider")
 }
 
 enum ProviderType {
