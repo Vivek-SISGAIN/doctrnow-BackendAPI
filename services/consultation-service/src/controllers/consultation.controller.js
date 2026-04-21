@@ -557,6 +557,70 @@ const getDoctorRating = asyncHandler(async (req, res) => {
   });
 });
 
+const getDoctorsRatingsBulk = asyncHandler(async (req, res) => {
+  const { doctorIds } = req.body;
+
+  if (!doctorIds || !Array.isArray(doctorIds)) {
+    return res.status(400).json({ success: false, message: 'doctorIds must be an array.' });
+  }
+
+  if (doctorIds.length === 0) {
+    return res.status(200).json({ success: true, data: {} });
+  }
+
+  // 1. Get average and total count per doctor
+  const aggregates = await prisma.consultation.groupBy({
+    by: ['doctorId'],
+    where: {
+      doctorId: { in: doctorIds },
+      rating: { not: null },
+    },
+    _avg: { rating: true },
+    _count: { rating: true },
+  });
+
+  // 2. Get star breakdown per doctor
+  const breakdowns = await prisma.consultation.groupBy({
+    by: ['doctorId', 'rating'],
+    where: {
+      doctorId: { in: doctorIds },
+      rating: { not: null },
+    },
+    _count: { rating: true },
+  });
+
+  const ratingMap = {};
+  
+  // Initialize for all requested IDs
+  doctorIds.forEach(id => {
+    ratingMap[id] = { 
+      averageRating: 0, 
+      totalReviews: 0,
+      ratingBreakdown: { '1': 0, '2': 0, '3': 0, '4': 0, '5': 0 }
+    };
+  });
+
+  // Map aggregates
+  aggregates.forEach((row) => {
+    if (ratingMap[row.doctorId]) {
+      ratingMap[row.doctorId].averageRating = row._avg.rating ? Math.round(row._avg.rating * 10) / 10 : 0;
+      ratingMap[row.doctorId].totalReviews = row._count.rating;
+    }
+  });
+
+  // Map breakdowns
+  breakdowns.forEach((row) => {
+    if (ratingMap[row.doctorId] && row.rating !== null) {
+      ratingMap[row.doctorId].ratingBreakdown[String(row.rating)] = row._count.rating;
+    }
+  });
+
+  res.status(200).json({
+    success: true,
+    data: ratingMap,
+  });
+});
+
 const getConsultationReviews = asyncHandler(async (req, res) => {
   const { doctorId } = req.params;
   const page = parseInt(req.query.page || '1', 10);
@@ -623,6 +687,38 @@ const getConsultationReviews = asyncHandler(async (req, res) => {
   });
 });
 
+const getConsultationsByBulkIds = asyncHandler(async (req, res) => {
+  const { ids } = req.body;
+
+  if (!ids || !Array.isArray(ids) || ids.length === 0) {
+    throw ApiError.badRequest('ids must be a non-empty array');
+  }
+
+  const uniqueIds = [...new Set(ids)];
+
+  if (uniqueIds.length > 100) {
+    throw ApiError.badRequest('Maximum 100 ids allowed per request');
+  }
+
+  const consultations = await consultationService.findByIds(uniqueIds);
+
+  const consultationMap = {};
+
+  consultations.forEach((consultation) => {
+    // Map by both ID and appointmentId for flexible lookup
+    consultationMap[consultation.id] = consultation;
+    if (consultation.appointmentId) {
+      consultationMap[consultation.appointmentId] = consultation;
+    }
+  });
+
+  res.status(200).json({
+    success: true,
+    data: consultationMap,
+    count: consultations.length
+  });
+});
+
 module.exports = {
   createConsultation,
   getConsultationById,
@@ -642,5 +738,7 @@ module.exports = {
   broadcastExtension,
   submitReview,
   getDoctorRating,
+  getDoctorsRatingsBulk,
   getConsultationReviews,
+  getConsultationsByBulkIds,
 };

@@ -8,24 +8,22 @@ datasource db {
 }
 
 model Patient {
-  id            String         @id @default(uuid())
-  userId        String         @unique
-  mobileNumber  String         @unique
+  id            String                @id @default(uuid())
+  userId        String                @unique
+  mobileNumber  String                @unique
   profileImage  String
-  email         String         @unique
+  email         String                @unique
   firstName     String
   lastName      String
   dateOfBirth   DateTime
   gender        Gender
-  emiratesId    String         @unique
+  emiratesId    String                @unique
   nationality   String
   bloodGroup    BloodGroup?
-  status        String         @default("ACTIVE")
   maritalStatus MaritalStatus?
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
-  lastVisit DateTime?
-
+  createdAt     DateTime              @default(now())
+  updatedAt     DateTime              @updatedAt
+  lastVisit     DateTime?
   healthProfile PatientHealthProfile?
 
   @@map("patient")
@@ -41,11 +39,10 @@ model PatientHealthProfile {
   allergies       String[]
   conditions      String[]
   medications     String[]
-  lifestyleHabits String?  @db.Text
+  lifestyleHabits String?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
-
-  patient Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  patient         Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
 
   @@map("patient_health_profile")
 }
@@ -87,6 +84,7 @@ model Doctor {
   id                      String             @id @default(uuid())
   userId                  String             @unique
   status                  DoctorStatus       @default(PENDING)
+  availabilityStatus      AvailabilityStatus @default(OFFLINE)
   fullName                String
   email                   String             @unique
   mobile                  String
@@ -94,6 +92,7 @@ model Doctor {
   nationality             String
   emiratesId              String             @unique
   primarySpecialization   String
+  hospitalId              String
   subSpecialization       String?
   licenseNumber           String             @unique
   licenseType             LicenseType
@@ -107,6 +106,7 @@ model Doctor {
   certifications          String[]
   professionalMemberships String[]
   professionalBio         String
+  schedule                Json
   videoConsultationFee    Decimal            @db.Decimal(10, 2)
   phoneConsultationFee    Decimal            @db.Decimal(10, 2)
   followUpFee             Decimal            @db.Decimal(10, 2)
@@ -114,9 +114,6 @@ model Doctor {
   platformSharePercent    Int
   createdAt               DateTime           @default(now())
   updatedAt               DateTime           @updatedAt
-  availabilityStatus      AvailabilityStatus @default(OFFLINE)
-  schedule                Json
-  hospitalId              String
   assignedHospitalIds     String[]           @default([])
 
   @@map("doctor")

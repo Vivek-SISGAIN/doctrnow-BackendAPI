@@ -492,6 +492,29 @@ class ConsultationService {
 
     return updated;
   }
+  /**
+   * Find consultations by an array of IDs or appointment IDs
+   */
+  async findByIds(ids) {
+    if (!ids || !Array.isArray(ids) || ids.length === 0) return [];
+
+    return prisma.consultation.findMany({
+      where: {
+        OR: [
+          { id: { in: ids } },
+          { appointmentId: { in: ids } }
+        ]
+      },
+      include: {
+        notes: {
+          orderBy: {
+            createdAt: 'desc'
+          }
+        },
+        vitals: true
+      }
+    });
+  }
 }
 
 module.exports = new ConsultationService();
