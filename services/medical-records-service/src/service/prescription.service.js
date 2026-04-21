@@ -2,6 +2,7 @@ const prisma = require('../prisma/prisma');
 const prescriptionDocumentService = require('./prescription-document.service');
 const prescriptionPdfService = require('./prescription-pdf.service');
 const prescriptionNotificationService = require('./prescription-notification.service');
+const s3Service = require('./s3.service');
 
 class PrescriptionService {
   /**
@@ -300,18 +301,26 @@ class PrescriptionService {
       throw new Error('Only signed prescriptions can be sent');
     }
 
+    console.log(`[PrescriptionService] Building document model for prescription ${id}...`);
+    const documentModel = await prescriptionDocumentService.buildDocumentModel(id);
+    console.log(`[PrescriptionService] Document model built successfully for Rx ${documentModel.prescription.rxId}`);
+
+    console.log(`[PrescriptionService] Generating PDF buffer for Rx ${documentModel.prescription.rxId}...`);
+    const pdfBuffer = await prescriptionPdfService.generate(documentModel);
+    console.log(`[PrescriptionService] PDF buffer generated (${pdfBuffer.length} bytes)`);
+
+    console.log(`[PrescriptionService] Uploading PDF to S3 for Rx ${documentModel.prescription.rxId}...`);
+    let s3Key = null;
+    try {
+      s3Key = await s3Service.uploadPdf(documentModel.prescription.rxId, pdfBuffer);
+    } catch (uploadObjErr) {
+      console.error(`[PrescriptionService] S3 Upload failed but continuing:`, uploadObjErr);
+    }
+
     const emailEnabled = String(process.env.PRESCRIPTION_EMAIL_ENABLED || 'false').trim().toLowerCase() === 'true';
     console.log(`[PrescriptionService] Prescription email enabled: ${emailEnabled}`);
 
     if (emailEnabled) {
-      console.log(`[PrescriptionService] Building document model for prescription ${id}...`);
-      const documentModel = await prescriptionDocumentService.buildDocumentModel(id);
-      console.log(`[PrescriptionService] Document model built successfully for Rx ${documentModel.prescription.rxId}`);
-
-      console.log(`[PrescriptionService] Generating PDF buffer for Rx ${documentModel.prescription.rxId}...`);
-      const pdfBuffer = await prescriptionPdfService.generate(documentModel);
-      console.log(`[PrescriptionService] PDF buffer generated (${pdfBuffer.length} bytes)`);
-
       if (!documentModel.patient.email) {
         console.error(`[PrescriptionService] Send failed: Patient email is missing for Rx ${documentModel.prescription.rxId}`);
         throw new Error('Patient email is missing; cannot send prescription email');
@@ -338,12 +347,20 @@ class PrescriptionService {
     }
 
     console.log(`[PrescriptionService] Updating prescription ${id} status to SENT...`);
+    
+    // Build update data, conditionally add s3Key
+    const updateData = {
+      lifecycle: 'SENT',
+      sentAt: new Date()
+    };
+    
+    if (s3Key) {
+      updateData.s3Key = s3Key;
+    }
+
     return await prisma.prescription.update({
       where: { id },
-      data: {
-        lifecycle: 'SENT',
-        sentAt: new Date()
-      },
+      data: updateData,
       include: {
         medications: true,
         precautions: true,
@@ -399,6 +416,37 @@ class PrescriptionService {
     });
 
     return { message: 'Prescription deleted successfully' };
+  }
+
+  /**
+   * Find prescriptions by a list of appointment IDs
+   */
+  async findByAppointmentIds(appointmentIds) {
+    if (!appointmentIds || appointmentIds.length === 0) return {};
+
+    const prescriptions = await prisma.prescription.findMany({
+      where: {
+        appointmentId: { in: appointmentIds },
+        lifecycle: { not: 'DRAFT' } // we only expose finalized prescriptions with S3 keys typically
+      },
+      select: {
+        id: true,
+        appointmentId: true,
+        lifecycle: true,
+        s3Key: true,
+        createdAt: true,
+        rxId: true,
+        diagnosis: true
+      }
+    });
+
+    const map = {};
+    for (const rx of prescriptions) {
+      if (rx.appointmentId) {
+        map[rx.appointmentId] = rx;
+      }
+    }
+    return map;
   }
 }
 

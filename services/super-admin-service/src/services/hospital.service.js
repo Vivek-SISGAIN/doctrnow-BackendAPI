@@ -50,6 +50,31 @@ class HospitalService {
     return hospital;
   }
 
+  async getHospitalByIds(ids) {
+    if (!ids || !Array.isArray(ids) || ids.length === 0) return {};
+
+    const hospitals = await prisma.hospital.findMany({
+      where: {
+        id: { in: ids }
+      },
+      select: {
+        id: true,
+        officialName: true,
+        shortName: true,
+        hospitalType: true,
+        emirate: true,
+        area: true,
+        fullAddress: true
+      }
+    });
+
+    const map = {};
+    hospitals.forEach(h => {
+      map[h.id] = h;
+    });
+    return map;
+  }
+
   async updateHospital(id, data) {
     const hospital = await prisma.hospital.update({
       where: { id },

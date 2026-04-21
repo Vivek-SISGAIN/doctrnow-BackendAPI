@@ -29,8 +29,10 @@ const saveHealthDetailsSchema = Joi.object({
   spo2: Joi.string().allow('').optional(),
   sugarLevel: Joi.string().allow('').optional(),
   consultationReason: Joi.string().max(1000).allow('').optional(),
-  allergies: Joi.string().max(1000).allow('').optional(),
-  criticalConditions: Joi.string().max(1000).allow('').optional()
+  allergies: Joi.alternatives().try(Joi.array().items(Joi.string()), Joi.string()).optional(),
+  criticalConditions: Joi.alternatives().try(Joi.array().items(Joi.string()), Joi.string()).optional(),
+  medications: Joi.alternatives().try(Joi.array().items(Joi.string()), Joi.string()).optional(),
+  lifestyleHabits: Joi.string().max(1000).allow('').optional(),
 });
 
 const updateConsultationSchema = Joi.object({
@@ -59,7 +61,11 @@ const createVitalsSchema = Joi.object({
   spo2: Joi.string().optional(),
   weight: Joi.string().optional(),
   height: Joi.string().optional(),
-  notes: Joi.string().max(1000).optional()
+  notes: Joi.string().max(1000).optional(),
+  allergies: Joi.alternatives().try(Joi.array().items(Joi.string()), Joi.string()).optional(),
+  criticalConditions: Joi.alternatives().try(Joi.array().items(Joi.string()), Joi.string()).optional(),
+  medications: Joi.alternatives().try(Joi.array().items(Joi.string()), Joi.string()).optional(),
+  lifestyleHabits: Joi.string().max(1000).allow('').optional(),
 });
 
 module.exports = {

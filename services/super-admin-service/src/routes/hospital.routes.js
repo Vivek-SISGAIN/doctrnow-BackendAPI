@@ -7,6 +7,7 @@ import { hospitalDocumentsUpload } from "../middlewares/upload.middleware.js";
 const router = Router();
 
 router.post("/hospital", hospitalController.createHospital);
+router.post("/hospital/bulk", hospitalController.getHospitalsBulk);
 router.get("/hospital", hospitalController.getHospitals);
 router.get("/hospital/:id", hospitalController.getHospitalById);
 router.patch("/hospital/:id", hospitalController.updateHospital);

@@ -70,13 +70,13 @@ export class SuperAdminController {
   }
 
   @Post('*')
-  @Roles(UserRole.SUPER_ADMIN, UserRole.HOSPITAL_ADMIN)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.HOSPITAL_ADMIN, UserRole.PATIENT, UserRole.DOCTOR)
   async proxyRequestPost(@Req() req: Request, @Res() res: Response): Promise<void> {
     return this.proxyRequest(req, res);
   }
 
   @Put('*')
-  @Roles(UserRole.SUPER_ADMIN)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.PATIENT, UserRole.DOCTOR)
   async proxyRequestPut(@Req() req: Request, @Res() res: Response): Promise<void> {
     return this.proxyRequest(req, res);
   }

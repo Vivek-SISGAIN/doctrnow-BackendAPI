@@ -8,98 +8,99 @@ datasource db {
 }
 
 model Prescription {
-  id                String            @id @default(uuid())
-  appointmentId     String?
-  consultationId    String?
-  patientId         String
-  doctorId         String
-  rxId              String            @unique // Format: RX-YYYY-MMDD-XXX
-  diagnosis         String?
-  lifecycle         PrescriptionLifecycle @default(DRAFT)
-  signedAt          DateTime?
-  sentAt            DateTime?
-  viewedAt          DateTime?
-  createdAt         DateTime          @default(now())
-  updatedAt         DateTime          @updatedAt
+  id             String                @id @default(uuid())
+  appointmentId  String?
+  consultationId String?
+  patientId      String
+  doctorId       String
+  rxId           String                @unique // Format: RX-YYYY-MMDD-XXX
+  diagnosis      String?
+  lifecycle      PrescriptionLifecycle @default(DRAFT)
+  signedAt       DateTime?
+  sentAt         DateTime?
+  viewedAt       DateTime?
+  s3Key          String?
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
 
-  medications       PrescriptionMedication[]
-  precautions       PrescriptionPrecaution[]
+  medications         PrescriptionMedication[]
+  precautions         PrescriptionPrecaution[]
   dietRecommendations PrescriptionDiet[]
 
-  @@map("prescriptions")
   @@index([patientId])
   @@index([doctorId])
   @@index([appointmentId])
   @@index([consultationId])
   @@index([lifecycle])
   @@index([rxId])
+  @@map("prescriptions")
 }
 
 model PrescriptionMedication {
-  id              String       @id @default(uuid())
-  prescriptionId  String
-  name            String
-  strength        String
-  dosage          String       // e.g., "1", "1.5", "2"
-  frequency       String       // e.g., "Once daily", "Twice daily"
-  duration        String       // e.g., "30 days", "90 days"
-  isControlled    Boolean      @default(false)
-  type            String?      // e.g., "Tablet", "Capsule", "Syrup"
-  instructions    String?
-  createdAt       DateTime     @default(now())
+  id             String   @id @default(uuid())
+  prescriptionId String
+  name           String
+  strength       String
+  dosage         String // e.g., "1", "1.5", "2"
+  frequency      String // e.g., "Once daily", "Twice daily"
+  duration       String // e.g., "30 days", "90 days"
+  isControlled   Boolean  @default(false)
+  type           String? // e.g., "Tablet", "Capsule", "Syrup"
+  instructions   String?
+  createdAt      DateTime @default(now())
 
-  prescription    Prescription @relation(fields: [prescriptionId], references: [id], onDelete: Cascade)
+  prescription Prescription @relation(fields: [prescriptionId], references: [id], onDelete: Cascade)
 
-  @@map("prescription_medications")
   @@index([prescriptionId])
+  @@map("prescription_medications")
 }
 
 model PrescriptionPrecaution {
-  id              String       @id @default(uuid())
-  prescriptionId  String
-  text            String
-  createdAt       DateTime     @default(now())
+  id             String   @id @default(uuid())
+  prescriptionId String
+  text           String
+  createdAt      DateTime @default(now())
 
-  prescription    Prescription @relation(fields: [prescriptionId], references: [id], onDelete: Cascade)
+  prescription Prescription @relation(fields: [prescriptionId], references: [id], onDelete: Cascade)
 
-  @@map("prescription_precautions")
   @@index([prescriptionId])
+  @@map("prescription_precautions")
 }
 
 model PrescriptionDiet {
-  id              String       @id @default(uuid())
-  prescriptionId  String
-  text            String
-  createdAt       DateTime     @default(now())
+  id             String   @id @default(uuid())
+  prescriptionId String
+  text           String
+  createdAt      DateTime @default(now())
 
-  prescription    Prescription @relation(fields: [prescriptionId], references: [id], onDelete: Cascade)
+  prescription Prescription @relation(fields: [prescriptionId], references: [id], onDelete: Cascade)
 
-  @@map("prescription_diet")
   @@index([prescriptionId])
+  @@map("prescription_diet")
 }
 
 model MedicalDocument {
-  id              String            @id @default(uuid())
-  patientId       String
-  doctorId        String?
+  id             String       @id @default(uuid())
+  patientId      String
+  doctorId       String?
   appointmentId  String?
   consultationId String?
-  name            String
-  type            DocumentType
-  filePath        String
-  fileSize        Int               // in bytes
-  mimeType        String?
-  uploadedBy      String            // User ID who uploaded
-  description     String?
-  createdAt       DateTime          @default(now())
-  updatedAt       DateTime          @updatedAt
+  name           String
+  type           DocumentType
+  filePath       String
+  fileSize       Int // in bytes
+  mimeType       String?
+  uploadedBy     String // User ID who uploaded
+  description    String?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
 
-  @@map("medical_documents")
   @@index([patientId])
   @@index([doctorId])
   @@index([appointmentId])
   @@index([consultationId])
   @@index([type])
+  @@map("medical_documents")
 }
 
 enum PrescriptionLifecycle {
@@ -120,33 +121,33 @@ enum DocumentType {
 
 // Lab reports - schema matches doctor portal UI (LabReportDetail + TestResult)
 model LabReport {
-  id                String           @id @default(uuid())
-  patientId         String
-  doctorId          String
-  appointmentId     String?
-  consultationId    String?
-  reportId          String           @unique  // e.g. LAB-2024-001234-001
-  consultationDate  DateTime?        // date of order/consultation
-  consultationTime  String?          // e.g. "09:00 AM"
-  orderedTests      String[]         // test names ordered
-  status            LabReportStatus  @default(PENDING)
-  priority          LabReportPriority @default(ROUTINE)
-  resultDate        DateTime?
-  notes             String?
-  results           Json?            // array of { name, value, unit, referenceRange, flag, previousValue?, previousDate? }
-  isReviewed        Boolean          @default(false)
-  reviewedAt        DateTime?
-  reviewComments    String?
-  sentToPatient     Boolean          @default(false)
-  sentAt            DateTime?
-  createdAt         DateTime         @default(now())
-  updatedAt         DateTime         @updatedAt
+  id               String            @id @default(uuid())
+  patientId        String
+  doctorId         String
+  appointmentId    String?
+  consultationId   String?
+  reportId         String            @unique // e.g. LAB-2024-001234-001
+  consultationDate DateTime? // date of order/consultation
+  consultationTime String? // e.g. "09:00 AM"
+  orderedTests     String[] // test names ordered
+  status           LabReportStatus   @default(PENDING)
+  priority         LabReportPriority @default(ROUTINE)
+  resultDate       DateTime?
+  notes            String?
+  results          Json? // array of { name, value, unit, referenceRange, flag, previousValue?, previousDate? }
+  isReviewed       Boolean           @default(false)
+  reviewedAt       DateTime?
+  reviewComments   String?
+  sentToPatient    Boolean           @default(false)
+  sentAt           DateTime?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
 
-  @@map("lab_reports")
   @@index([patientId])
   @@index([doctorId])
   @@index([status])
   @@index([createdAt])
+  @@map("lab_reports")
 }
 
 enum LabReportStatus {

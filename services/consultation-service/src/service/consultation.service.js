@@ -161,7 +161,7 @@ class ConsultationService {
       });
     }
 
-    const { weight, height, bloodPressure, temperature, pulse, spo2, sugarLevel, consultationReason, allergies, criticalConditions } = vitalsData;
+    const { weight, height, bloodPressure, temperature, pulse, spo2, sugarLevel, consultationReason, allergies, criticalConditions, medications, lifestyleHabits } = vitalsData;
     const notesParts = [];
     if (sugarLevel) notesParts.push(`Blood sugar: ${sugarLevel} mg/dL`);
     if (consultationReason) notesParts.push(`Reason for consultation: ${consultationReason}`);
@@ -176,7 +176,9 @@ class ConsultationService {
       spo2: spo2 || null,
       notes,
       allergies: allergies || null,
-      criticalConditions: criticalConditions || null
+      criticalConditions: criticalConditions || null,
+      medications: medications || null,
+      lifestyleHabits: lifestyleHabits || null
     });
 
     return { consultation: { ...consultation, vitals }, vitals };

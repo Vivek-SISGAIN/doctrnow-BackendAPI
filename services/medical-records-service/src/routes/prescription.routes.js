@@ -11,7 +11,9 @@ const {
   signPrescription,
   sendPrescription,
   markPrescriptionAsViewed,
-  deletePrescription
+  deletePrescription,
+  getPrescriptionPdfUrl,
+  getPrescriptionsBulkByAppointments
 } = require('../controllers/prescription.controller');
 const {
   createPrescriptionSchema,
@@ -152,6 +154,29 @@ router.get('/doctor/:doctorId', getPrescriptionsByDoctor);
 
 /**
  * @swagger
+ * /api/prescriptions/appointments/bulk:
+ *   post:
+ *     summary: Get multiple prescriptions by their appointment IDs
+ *     tags: [Prescriptions]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               ids:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *     responses:
+ *       200:
+ *         description: A map of appointment ID to prescription object
+ */
+router.post('/appointments/bulk', getPrescriptionsBulkByAppointments);
+
+/**
+ * @swagger
  * /api/prescriptions/{id}:
  *   get:
  *     summary: Get prescription by ID
@@ -289,5 +314,31 @@ router.post('/:id/view', markPrescriptionAsViewed);
  *         description: Prescription not found
  */
 router.delete('/:id', deletePrescription);
+
+/**
+ * @swagger
+ * /api/prescriptions/{id}/pdf:
+ *   get:
+ *     summary: Get pre-signed S3 URL for viewing or downloading the PDF
+ *     tags: [Prescriptions]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *       - in: query
+ *         name: action
+ *         schema:
+ *           type: string
+ *           enum: [view, download]
+ *     responses:
+ *       200:
+ *         description: Successfully returned the pre-signed URL
+ *       404:
+ *         description: Prescription PDF not found or not generated
+ */
+router.get('/:id/pdf', getPrescriptionPdfUrl);
 
 module.exports = router;

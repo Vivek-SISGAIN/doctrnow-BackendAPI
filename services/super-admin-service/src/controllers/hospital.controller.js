@@ -61,6 +61,16 @@ class HospitalController {
 
   });
 
+  getHospitalsBulk = asyncHandler(async (req, res) => {
+    const { ids } = req.body;
+    const hospitalMap = await hospitalService.getHospitalByIds(ids);
+
+    res.status(200).json({
+      success: true,
+      data: hospitalMap
+    });
+  });
+
   updateHospital = asyncHandler(async (req, res) => {
 
     const hospital = await hospitalService.updateHospital(

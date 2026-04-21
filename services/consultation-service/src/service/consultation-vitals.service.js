@@ -9,36 +9,32 @@ class ConsultationVitalsService {
       where: { consultationId }
     });
 
+    const payload = {
+      bloodPressure: data.bloodPressure,
+      pulse: data.pulse,
+      temperature: data.temperature,
+      spo2: data.spo2,
+      weight: data.weight,
+      height: data.height,
+      notes: data.notes || data.consultationReason,
+      allergies: Array.isArray(data.allergies) ? data.allergies : [],
+      criticalConditions: Array.isArray(data.criticalConditions) ? data.criticalConditions : [],
+      medications: Array.isArray(data.medications) ? data.medications : [],
+      lifestyleHabits: data.lifestyleHabits
+    };
+
     if (existing) {
       // Update existing vitals
       return await prisma.consultationVitals.update({
         where: { consultationId },
-        data: {
-          bloodPressure: data.bloodPressure,
-          pulse: data.pulse,
-          temperature: data.temperature,
-          spo2: data.spo2,
-          weight: data.weight,
-          height: data.height,
-          notes: data.notes,
-          allergies: data.allergies,
-          criticalConditions: data.criticalConditions
-        }
+        data: payload
       });
     } else {
       // Create new vitals
       return await prisma.consultationVitals.create({
         data: {
           consultationId,
-          bloodPressure: data.bloodPressure,
-          pulse: data.pulse,
-          temperature: data.temperature,
-          spo2: data.spo2,
-          weight: data.weight,
-          height: data.height,
-          notes: data.notes,
-          allergies: data.allergies,
-          criticalConditions: data.criticalConditions
+          ...payload
         }
       });
     }

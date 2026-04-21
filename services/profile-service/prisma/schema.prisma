@@ -24,9 +24,30 @@ model Patient {
   maritalStatus MaritalStatus?
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
-  lastVisit     DateTime?
+  lastVisit DateTime?
+
+  healthProfile PatientHealthProfile?
 
   @@map("patient")
+}
+
+model PatientHealthProfile {
+  id              String   @id @default(uuid())
+  patientId       String   @unique
+  weight          String?
+  height          String?
+  bloodPressure   String?
+  sugarLevel      String?
+  allergies       String[]
+  conditions      String[]
+  medications     String[]
+  lifestyleHabits String?  @db.Text
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  patient Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@map("patient_health_profile")
 }
 
 model FamilyMember {

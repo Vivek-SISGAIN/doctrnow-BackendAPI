@@ -1,6 +1,35 @@
 const prescriptionService = require('../service/prescription.service');
+const s3Service = require('../service/s3.service');
 const ApiError = require('../utils/ApiError');
 const asyncHandler = require('../utils/asyncHandler');
+
+const API_GATEWAY_URL = process.env.API_GATEWAY_URL || 'http://localhost:8080/api/v1';
+
+async function fetchBulk(ids, bulkUrl, authHeader) {
+  if (!ids || ids.length === 0) return {};
+  try {
+    const response = await fetch(bulkUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: authHeader,
+      },
+      body: JSON.stringify({ ids }),
+    });
+
+    if (!response.ok) {
+      console.error(`[Medical-Records] Bulk fetch failed: ${response.status} from ${bulkUrl}`);
+      return {};
+    }
+
+    const json = await response.json();
+    console.log(`[Medical-Records] Bulk fetch SUCCESS from ${bulkUrl} - items: ${Object.keys(json.data || {}).length}`);
+    return json.data || {};
+  } catch (err) {
+    console.error(`[Medical-Records] Bulk fetch error for ${bulkUrl}:`, err.message);
+    return {};
+  }
+}
 
 const createPrescription = asyncHandler(async (req, res) => {
   try {
@@ -21,6 +50,27 @@ const getPrescriptionById = asyncHandler(async (req, res) => {
 
   if (!prescription) {
     throw ApiError.notFound('Prescription not found');
+  }
+
+  // Aggregation
+  const authHeader = req.headers.authorization;
+  if (authHeader) {
+    // 1. Fetch Doctor
+    const doctorMap = await fetchBulk([prescription.doctorId], `${API_GATEWAY_URL}/profiles/doctors/bulk`, authHeader);
+    const doctor = doctorMap[prescription.doctorId] || null;
+    prescription.doctor = doctor;
+
+    // 2. Fetch Patient
+    const patientMap = await fetchBulk([prescription.patientId], `${API_GATEWAY_URL}/profiles/patients/bulk`, authHeader);
+    prescription.patient = patientMap[prescription.patientId] || null;
+
+    // 3. Fetch Hospital if doctor found
+    if (doctor && doctor.hospitalId) {
+      const hospitalMap = await fetchBulk([doctor.hospitalId], `${API_GATEWAY_URL}/super-admins/hospital/bulk`, authHeader);
+      prescription.hospital = hospitalMap[doctor.hospitalId] || null;
+    } else {
+      prescription.hospital = null;
+    }
   }
 
   res.status(200).json({
@@ -53,9 +103,37 @@ const getPrescriptionsByPatient = asyncHandler(async (req, res) => {
     limit
   });
 
+  const prescriptions = result.prescriptions;
+  const authHeader = req.headers.authorization;
+
+  if (prescriptions.length > 0 && authHeader) {
+    const doctorIds = [...new Set(prescriptions.map(p => p.doctorId))];
+    const patientIds = [...new Set(prescriptions.map(p => p.patientId))];
+
+    // Bulk fetch Doctor and Patient
+    const [doctorMap, patientMap] = await Promise.all([
+      fetchBulk(doctorIds, `${API_GATEWAY_URL}/profiles/doctors/bulk`, authHeader),
+      fetchBulk(patientIds, `${API_GATEWAY_URL}/profiles/patients/bulk`, authHeader)
+    ]);
+
+    // Extract Hospital IDs from doctor profiles
+    const hospitalIds = [...new Set(Object.values(doctorMap).map(d => d.hospitalId).filter(Boolean))];
+    const hospitalMap = hospitalIds.length > 0 
+      ? await fetchBulk(hospitalIds, `${API_GATEWAY_URL}/super-admins/hospital/bulk`, authHeader)
+      : {};
+
+    // Merge everything
+    for (const rx of prescriptions) {
+      const doc = doctorMap[rx.doctorId] || null;
+      rx.doctor = doc;
+      rx.patient = patientMap[rx.patientId] || null;
+      rx.hospital = doc && doc.hospitalId ? (hospitalMap[doc.hospitalId] || null) : null;
+    }
+  }
+
   res.status(200).json({
     success: true,
-    data: result.prescriptions,
+    data: prescriptions,
     pagination: result.pagination
   });
 });
@@ -173,6 +251,49 @@ const deletePrescription = asyncHandler(async (req, res) => {
   }
 });
 
+const getPrescriptionPdfUrl = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const { action = 'view' } = req.query; // 'view' or 'download'
+
+  console.log(`[PrescriptionController] Fetching PDF URL for Rx ID: ${id} (action: ${action})`);
+
+  const prescription = await prescriptionService.findById(id);
+  if (!prescription) {
+    throw ApiError.notFound('Prescription not found');
+  }
+
+  if (!prescription.s3Key) {
+    console.error(`[PrescriptionController] Prescription PDF has not been uploaded to S3 for: ${id}`);
+    throw ApiError.notFound('Prescription PDF has not been generated or uploaded to S3 yet');
+  }
+
+  // Generate the pre-signed URL
+  const url = await s3Service.getPresignedUrl(prescription.s3Key, action);
+  console.log(`[PrescriptionController] Successfully returned ${action} URL for Rx ${id}`);
+
+  res.status(200).json({
+    success: true,
+    data: {
+      url,
+      action
+    }
+  });
+});
+
+const getPrescriptionsBulkByAppointments = asyncHandler(async (req, res) => {
+  const { ids } = req.body;
+  if (!Array.isArray(ids)) {
+    throw ApiError.badRequest('ids must be an array of appointment IDs');
+  }
+
+  const map = await prescriptionService.findByAppointmentIds(ids);
+
+  res.status(200).json({
+    success: true,
+    data: map
+  });
+});
+
 module.exports = {
   createPrescription,
   getPrescriptionById,
@@ -184,5 +305,7 @@ module.exports = {
   signPrescription,
   sendPrescription,
   markPrescriptionAsViewed,
-  deletePrescription
+  deletePrescription,
+  getPrescriptionPdfUrl,
+  getPrescriptionsBulkByAppointments
 };

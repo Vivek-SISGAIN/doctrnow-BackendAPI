@@ -70,8 +70,10 @@ model ConsultationVitals {
   weight             String?      // e.g., "70 kg"
   height             String?      // e.g., "170 cm"
   notes              String?
-  allergies          String?      // e.g., "Penicillin, NSAIDs"
-  criticalConditions String?      // e.g., "Diabetes Type 2, Hypertension"
+  allergies          String[]     // e.g. ["Penicillin", "NSAIDs"]
+  criticalConditions String[]     // e.g. ["Diabetes Type 2", "Hypertension"]
+  medications        String[]     // e.g. ["Aspirin", "Metformin"]
+  lifestyleHabits    String?      @db.Text
   recordedAt         DateTime     @default(now())
 
   consultation      Consultation @relation(fields: [consultationId], references: [id], onDelete: Cascade)
