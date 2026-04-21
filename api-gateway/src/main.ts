@@ -6,8 +6,14 @@ import { ConfigService } from '@nestjs/config';
 import { Logger, LoggerErrorInterceptor } from 'nestjs-pino';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import helmet from 'helmet';
+import { connectDB } from './config/database';
+import { auditMiddleware } from './middleware/auditMiddleware';
+import * as express from 'express';
 
 async function bootstrap(): Promise<void> {
+  // Connect to DB before any processing
+  await connectDB();
+  
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     bufferLogs: true,
   });
@@ -30,6 +36,14 @@ async function bootstrap(): Promise<void> {
     const parsed = parseInt(val ?? '', 10);
     return isNaN(parsed) ? fallback : parsed;
   };
+
+  // We need to parse request bodies to log them in the auditMiddleware
+  app.use(express.json({ limit: '10mb' }));
+  app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+  // ─── AUDIT MIDDLEWARE ─────────────────────────────────────────────────────────
+  // Registered before proxy routes so every request is captured
+  app.use(auditMiddleware);
 
   // ─── WebSocket proxy for consultation-service SSE/WS ─────────────────────────
   const { createProxyMiddleware } = require('http-proxy-middleware');

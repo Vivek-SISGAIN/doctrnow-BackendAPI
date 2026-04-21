@@ -71,6 +71,13 @@ export class NotificationController {
     return this.proxyRequest(req, res, '/api/notifications/broadcast');
   }
 
+  @Public()
+  @Post('notifications/banner-broadcast')
+  @ApiOperation({ summary: 'Broadcast a banner socket event (socket-only)' })
+  async broadcastBannerNotification(@Req() req: Request, @Res() res: Response): Promise<void> {
+    return this.proxyRequest(req, res, '/api/notifications/banner-broadcast');
+  }
+
   @Get('notifications')
   @Roles(UserRole.PATIENT, UserRole.DOCTOR, UserRole.HOSPITAL_ADMIN, UserRole.SUPER_ADMIN)
   @ApiOperation({ summary: 'List notifications for the authenticated user' })
