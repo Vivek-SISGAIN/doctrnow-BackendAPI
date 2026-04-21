@@ -687,6 +687,38 @@ const getConsultationReviews = asyncHandler(async (req, res) => {
   });
 });
 
+const getConsultationsByBulkIds = asyncHandler(async (req, res) => {
+  const { ids } = req.body;
+
+  if (!ids || !Array.isArray(ids) || ids.length === 0) {
+    throw ApiError.badRequest('ids must be a non-empty array');
+  }
+
+  const uniqueIds = [...new Set(ids)];
+
+  if (uniqueIds.length > 100) {
+    throw ApiError.badRequest('Maximum 100 ids allowed per request');
+  }
+
+  const consultations = await consultationService.findByIds(uniqueIds);
+
+  const consultationMap = {};
+
+  consultations.forEach((consultation) => {
+    // Map by both ID and appointmentId for flexible lookup
+    consultationMap[consultation.id] = consultation;
+    if (consultation.appointmentId) {
+      consultationMap[consultation.appointmentId] = consultation;
+    }
+  });
+
+  res.status(200).json({
+    success: true,
+    data: consultationMap,
+    count: consultations.length
+  });
+});
+
 module.exports = {
   createConsultation,
   getConsultationById,
@@ -708,4 +740,5 @@ module.exports = {
   getDoctorRating,
   getDoctorsRatingsBulk,
   getConsultationReviews,
+  getConsultationsByBulkIds,
 };

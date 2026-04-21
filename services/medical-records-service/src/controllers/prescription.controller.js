@@ -55,16 +55,22 @@ const getPrescriptionById = asyncHandler(async (req, res) => {
   // Aggregation
   const authHeader = req.headers.authorization;
   if (authHeader) {
-    // 1. Fetch Doctor
-    const doctorMap = await fetchBulk([prescription.doctorId], `${API_GATEWAY_URL}/profiles/doctors/bulk`, authHeader);
-    const doctor = doctorMap[prescription.doctorId] || null;
+    const consultationLookupIds = [prescription.consultationId, prescription.appointmentId].filter(Boolean);
+
+    // 1. Fetch Doctor, Patient, and Consultations
+    const [doctorMapRaw, patientMapRaw, consultationMapRaw] = await Promise.all([
+      fetchBulk([prescription.doctorId], `${API_GATEWAY_URL}/profiles/doctors/bulk`, authHeader),
+      fetchBulk([prescription.patientId], `${API_GATEWAY_URL}/profiles/patients/bulk`, authHeader),
+      fetchBulk(consultationLookupIds, `${API_GATEWAY_URL}/consultations/bulk`, authHeader)
+    ]);
+
+    // Robust mapping
+    const doctor = Object.values(doctorMapRaw).find(d => d.id === prescription.doctorId || d.userId === prescription.doctorId) || null;
     prescription.doctor = doctor;
+    prescription.patient = Object.values(patientMapRaw).find(p => p.id === prescription.patientId || p.userId === prescription.patientId) || null;
+    prescription.consultation = consultationMapRaw[prescription.consultationId] || consultationMapRaw[prescription.appointmentId] || null;
 
-    // 2. Fetch Patient
-    const patientMap = await fetchBulk([prescription.patientId], `${API_GATEWAY_URL}/profiles/patients/bulk`, authHeader);
-    prescription.patient = patientMap[prescription.patientId] || null;
-
-    // 3. Fetch Hospital if doctor found
+    // 2. Fetch Hospital if doctor found
     if (doctor && doctor.hospitalId) {
       const hospitalMap = await fetchBulk([doctor.hospitalId], `${API_GATEWAY_URL}/super-admins/hospital/bulk`, authHeader);
       prescription.hospital = hospitalMap[doctor.hospitalId] || null;
@@ -106,15 +112,38 @@ const getPrescriptionsByPatient = asyncHandler(async (req, res) => {
   const prescriptions = result.prescriptions;
   const authHeader = req.headers.authorization;
 
+  console.log(`[Medical-Records] Patient ${patientId}: found ${prescriptions.length} prescriptions. Auth header: ${authHeader ? 'PRESENT' : 'MISSING'}`);
+
   if (prescriptions.length > 0 && authHeader) {
     const doctorIds = [...new Set(prescriptions.map(p => p.doctorId))];
     const patientIds = [...new Set(prescriptions.map(p => p.patientId))];
+    const consultationIds = [...new Set(prescriptions.map(p => p.consultationId).filter(Boolean))];
+    const appointmentIds = [...new Set(prescriptions.map(p => p.appointmentId).filter(Boolean))];
 
-    // Bulk fetch Doctor and Patient
-    const [doctorMap, patientMap] = await Promise.all([
+    // Combine consultation and appointment IDs for bulk lookup
+    const allConsultationLookupIds = [...new Set([...consultationIds, ...appointmentIds])];
+
+    // Bulk fetch Doctor, Patient, and Consultations
+    const [doctorMapRaw, patientMapRaw, consultationMapRaw] = await Promise.all([
       fetchBulk(doctorIds, `${API_GATEWAY_URL}/profiles/doctors/bulk`, authHeader),
-      fetchBulk(patientIds, `${API_GATEWAY_URL}/profiles/patients/bulk`, authHeader)
+      fetchBulk(patientIds, `${API_GATEWAY_URL}/profiles/patients/bulk`, authHeader),
+      fetchBulk(allConsultationLookupIds, `${API_GATEWAY_URL}/consultations/bulk`, authHeader)
     ]);
+
+    // Robust ID mapping: create maps that look up by both .id and .userId
+    const doctorMap = {};
+    Object.values(doctorMapRaw).forEach(d => {
+      if (d.id) doctorMap[d.id] = d;
+      if (d.userId) doctorMap[d.userId] = d;
+    });
+
+    const patientMap = {};
+    Object.values(patientMapRaw).forEach(p => {
+      if (p.id) patientMap[p.id] = p;
+      if (p.userId) patientMap[p.userId] = p;
+    });
+
+    const consultationMap = consultationMapRaw; // consultationMapRaw is already keyed by both id and appointmentId
 
     // Extract Hospital IDs from doctor profiles
     const hospitalIds = [...new Set(Object.values(doctorMap).map(d => d.hospitalId).filter(Boolean))];
@@ -128,6 +157,9 @@ const getPrescriptionsByPatient = asyncHandler(async (req, res) => {
       rx.doctor = doc;
       rx.patient = patientMap[rx.patientId] || null;
       rx.hospital = doc && doc.hospitalId ? (hospitalMap[doc.hospitalId] || null) : null;
+      
+      // Try lookup consultation by id or appointmentId
+      rx.consultation = consultationMap[rx.consultationId] || consultationMap[rx.appointmentId] || null;
     }
   }
 
