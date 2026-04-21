@@ -1,7 +1,8 @@
 import prisma from "../prisma/client.js";
+import axios from "axios";
 
 class BannerService {
-  // ✅ Create Banner
+  // Create Banner
   async createBanner(data) {
     const banner = await prisma.banners.create({
       data: {
@@ -10,14 +11,48 @@ class BannerService {
         title: data.title,
         description: data.description,
         hospitalId: data.hospitalId,
-        portal: data.portal, // ✅ REQUIRED NOW
+        portal: data.portal,
       },
     });
+
+    // Broadcast a real-time banner:new socket event to all connected portals
+    // via the API Gateway (no direct service-to-service call).
+    // Non-blocking – banner creation succeeds even if notifications are down.
+    const apiGatewayBase =
+      process.env.API_GATEWAY || process.env.API_GATEWAY_URL;
+    const gatewayUrl = apiGatewayBase?.replace(/\/+$/, "");
+
+    if (gatewayUrl) {
+      const headers = {};
+      const internalKey =
+        process.env.INTERNAL_SERVICE_KEY || process.env.INTERNAL_SERVICE_SECRET;
+      if (internalKey) headers["x-internal-service-key"] = internalKey;
+
+      axios
+        .post(
+          `${gatewayUrl}/notifications/banner-broadcast`,
+          { banner },
+          { headers },
+        )
+        .catch((err) => {
+          const status = err?.response?.status;
+          const data = err?.response?.data;
+          console.error(
+            "[BannerService] Failed to broadcast banner notification via API gateway:",
+            status ? `HTTP ${status}` : err?.message,
+            data ?? "",
+          );
+        });
+    } else {
+      console.warn(
+        "[BannerService] API_GATEWAY (or API_GATEWAY_URL) is not set – banner broadcast skipped.",
+      );
+    }
 
     return banner;
   }
 
-  // ✅ Get Banner by ID
+  // Get Banner by ID
   async getBannerById(id) {
     const banner = await prisma.banners.findMany({
       where: { hospitalId: id },
@@ -30,7 +65,7 @@ class BannerService {
     return banner;
   }
 
-  // ✅ Update Banner (Partial Update ✅)
+  // Update Banner (Partial Update)
   async updateBanner(id, data) {
     const banner = await prisma.banners.update({
       where: { id },
@@ -46,7 +81,7 @@ class BannerService {
     return banner;
   }
 
-  // ✅ Delete Banner
+  // Delete Banner
   async deleteBanner(id) {
     await prisma.banners.delete({
       where: { id },
@@ -55,7 +90,7 @@ class BannerService {
     return { message: "Banner deleted successfully" };
   }
 
-  // ✅ Get All Banners (with search + portal filter)
+  // Get All Banners (with search + portal filter)
   async getBanners(filters = {}, pagination = {}) {
     const { search, portal } = filters;
     const { page = 1, limit = 20 } = pagination;
@@ -63,7 +98,7 @@ class BannerService {
     const skip = (page - 1) * limit;
     const where = {};
 
-    // ✅ Search filter
+    // Search filter
     if (search) {
       where.OR = [
         { title: { contains: search, mode: "insensitive" } },
@@ -72,7 +107,7 @@ class BannerService {
       ];
     }
 
-    // ✅ Portal filter
+    // Portal filter
     if (portal) {
       where.portal = portal;
     }
@@ -80,7 +115,7 @@ class BannerService {
     const [banners, total] = await Promise.all([
       prisma.banners.findMany({
         where,
-        orderBy: { createdAt: "desc" }, // ✅ better sorting
+        orderBy: { createdAt: "desc" },
         skip,
         take: parseInt(limit, 10),
       }),

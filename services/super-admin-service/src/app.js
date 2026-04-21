@@ -19,7 +19,7 @@ app.use(hpp());
  * Rate Limiting
  */
 const limiter = rateLimit({
-  windowMs:60 * 1000,
+  windowMs:60 * 100,
   max: 10000,
   message: "Too many requests from this IP, please try again later.",
 });

@@ -1,6 +1,8 @@
 import { Request, Response } from 'express';
 import { NotificationService } from '../services/notification.service';
 import { emailService } from '../services/email.service';
+import { emitBannerEvent } from '../sockets';
+
 
 const normalizeUserIds = (value: unknown): string[] => {
   if (!Array.isArray(value)) return [];
@@ -277,3 +279,39 @@ export const sendPrescriptionEmail = async (req: Request, res: Response) => {
     res.status(500).json({ error: 'Failed to send prescription email' });
   }
 };
+
+/**
+ * POST /notifications/banner-broadcast
+ *
+ * Lightweight socket-only broadcast – no DB write per user.
+ * Called by the super-admin service whenever a banner is created.
+ *
+ * Body: { banner: { id, title, description, portal, createdAt?, ... } }
+ *
+ * The server emits three events to the relevant role rooms:
+ *   notification | notification:new | banner:new
+ *
+ * Any portal whose socket client joins the correct role room will receive it.
+ */
+export const broadcastBannerNotification = (req: Request, res: Response) => {
+  try {
+    const { banner } = req.body;
+
+    if (!banner || !banner.id || !banner.title) {
+      return res
+        .status(400)
+        .json({ error: 'banner object with id and title is required' });
+    }
+
+    emitBannerEvent(banner);
+
+    return res.status(200).json({
+      success: true,
+      message: 'Banner event broadcast initiated',
+    });
+  } catch (error) {
+    console.error('[NotificationController] broadcastBannerNotification error:', error);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
