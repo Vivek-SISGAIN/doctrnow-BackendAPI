@@ -68,8 +68,11 @@ class DoctorService {
       prisma.doctor.count({ where })
     ]);
 
+    const populatedDoctors = await this._populatePresignedUrls(doctors);
+    const enrichedDoctors = await this._attachRatings(populatedDoctors);
+
     return {
-      doctors: await this._populatePresignedUrls(doctors),
+      doctors: enrichedDoctors,
       pagination: {
         page: parseInt(page, 10),
         limit: parseInt(limit, 10),
@@ -339,8 +342,11 @@ class DoctorService {
       prisma.doctor.count({ where })
     ]);
 
+    const populatedDoctors = await this._populatePresignedUrls(doctors);
+    const enrichedDoctors = await this._attachRatings(populatedDoctors);
+
     return {
-      doctors: await this._populatePresignedUrls(doctors),
+      doctors: enrichedDoctors,
       pagination: {
         page: parseInt(page, 10),
         limit: parseInt(limit, 10),
@@ -475,6 +481,55 @@ class DoctorService {
     );
 
     return isArray ? populated : populated[0];
+  }
+
+  async _attachRatings(doctors) {
+    if (!doctors || (Array.isArray(doctors) && doctors.length === 0)) return doctors;
+    const isArray = Array.isArray(doctors);
+    const doctorList = isArray ? doctors : [doctors];
+    const doctorIds = doctorList.map((d) => d.id);
+
+    const baseUrl = process.env.API_BASE_URL || 'http://localhost:8080/api/v1';
+    const internalSecret = process.env.INTERNAL_SERVICE_SECRET;
+
+    try {
+      const response = await axios.post(`${baseUrl}/consultations/doctors/rating/bulk`, 
+        { doctorIds },
+        {
+          headers: {
+            'X-Internal-Sig': internalSecret,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      const ratingMap = response.data?.data || {};
+
+      doctorList.forEach((doc) => {
+        const ratingInfo = ratingMap[doc.id] || { 
+          averageRating: 0, 
+          totalReviews: 0, 
+          ratingBreakdown: { '1': 0, '2': 0, '3': 0, '4': 0, '5': 0 } 
+        };
+        doc.rating = {
+          averageRating: ratingInfo.averageRating,
+          totalReviews: ratingInfo.totalReviews,
+          ratingBreakdown: ratingInfo.ratingBreakdown
+        };
+      });
+    } catch (err) {
+      console.error('[ProfileService] Failed to fetch bulk ratings:', err.message);
+      // Fallback to zeros if rating service is down
+      doctorList.forEach((doc) => {
+        doc.rating = doc.rating || { 
+          averageRating: 0, 
+          totalReviews: 0, 
+          ratingBreakdown: { '1': 0, '2': 0, '3': 0, '4': 0, '5': 0 } 
+        };
+      });
+    }
+
+    return isArray ? doctorList : doctorList[0];
   }
 }
 

@@ -19,6 +19,7 @@ const {
   broadcastExtension,
   submitReview,
   getDoctorRating,
+  getDoctorsRatingsBulk,
   getConsultationReviews,
 } = require('../controllers/consultation.controller');
 const {
@@ -452,6 +453,7 @@ router.post('/:id/no-show', markNoShow);
  *         description: Doctor rating stats retrieved successfully
  */
 router.get('/doctors/:doctorId/rating', getDoctorRating);
+router.post('/doctors/rating/bulk', getDoctorsRatingsBulk);
 
 /**
  * @swagger

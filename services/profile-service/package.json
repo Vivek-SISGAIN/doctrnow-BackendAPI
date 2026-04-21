@@ -56,7 +56,7 @@
     "prisma": "^6.19.2",
     "swagger-jsdoc": "^6.2.8",
     "swagger-ui-express": "^5.0.1",
-    "uuid": "^13.0.0"
+    "uuid": "^9.0.0"
   },
   "devDependencies": {
     "copyfiles": "^2.4.1",
