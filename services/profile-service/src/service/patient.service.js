@@ -1,4 +1,5 @@
 const prisma = require('../prisma/prisma');
+const axios = require('axios');
 
 class PatientService {
   /**
@@ -145,9 +146,10 @@ class PatientService {
    * Returns all patient fields
    */
   findById(id) {
-    return prisma.patient.findUnique({
-      where: { id }
-      // Returns all fields by default
+    return prisma.patient.findFirst({
+      where: {
+        OR: [{ id }, { userId: id }]
+      }
     });
   }
 
@@ -169,6 +171,10 @@ class PatientService {
     if (existing) {
       throw new Error('Patient profile already exists for this user');
     }
+
+    await axios.post(`${process.env.API_BASE_URL}/auth/users/${userId}/status`, {
+      status: 'ACTIVE'
+    });
     return prisma.patient.create({
       data: {
         userId,
@@ -182,7 +188,8 @@ class PatientService {
         emiratesId: data.emiratesId,
         nationality: data.nationality,
         bloodGroup: data.bloodGroup || null,
-        maritalStatus: data.maritalStatus || null
+        maritalStatus: data.maritalStatus || null,
+        status: 'ACTIVE'
       }
     });
   }
@@ -222,15 +229,15 @@ class PatientService {
    * Update patient by ID
    */
   update(id, data) {
-    return prisma.patient.update({
-      where: { id },
+    return prisma.patient.updateMany({
+      where: {
+        OR: [{ id }, { userId: id }]
+      },
       data: {
-        ...data,
-        dateOfBirth: new Date(data.dateOfBirth)
+        ...data
       }
     });
   }
-
   /**
    * Delete patient by ID
    */

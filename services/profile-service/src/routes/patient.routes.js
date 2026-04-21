@@ -7,10 +7,11 @@ const {
   createCurrentPatient,
   updatePatient,
   deletePatient,
-  getPatientsByBulkIds
+  getPatientsByBulkIds,
+  updatePatientStatus
   // getPatientsByBulkIds
 } = require('../controllers/patient.controller');
-const { createPatientSchema, updatePatientSchema } = require('../validations/patient.validation');
+const { createPatientSchema } = require('../validations/patient.validation');
 const validate = require('../middleware/validation');
 
 /**
@@ -244,7 +245,7 @@ router.get('/:id', getPatientById);
  *       404:
  *         description: Patient not found
  */
-router.patch('/:id', validate(updatePatientSchema), updatePatient);
+router.patch('/:id', updatePatient);
 
 /**
  * @swagger
@@ -280,5 +281,7 @@ router.patch('/:id', validate(updatePatientSchema), updatePatient);
 router.delete('/:id', deletePatient);
 
 router.post('/bulk', getPatientsByBulkIds);
+
+router.patch('/:id/status', updatePatientStatus);
 
 module.exports = router;
