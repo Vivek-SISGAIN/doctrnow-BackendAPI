@@ -3,6 +3,7 @@ import {
   HttpStatus,
   UseGuards,
   Get,
+  Post,
   Param,
   Req,
   Res,
@@ -36,6 +37,15 @@ export class ConsultationController {
   @Public()
   @Get('doctors/:doctorId/rating')
   async getRating(@Param('doctorId') doctorId: string, @Req() req: Request, @Res() res: Response): Promise<void> {
+    return this.proxyRequest(req, res);
+  }
+
+  /**
+   * Public endpoint to get bulk doctor ratings
+   */
+  @Public()
+  @Post('doctors/rating/bulk')
+  async getRatingsBulk(@Req() req: Request, @Res() res: Response): Promise<void> {
     return this.proxyRequest(req, res);
   }
 

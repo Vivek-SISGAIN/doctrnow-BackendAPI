@@ -68,8 +68,12 @@ class DoctorService {
       prisma.doctor.count({ where })
     ]);
 
+    const populatedDoctors = await this._populatePresignedUrls(doctors);
+    const ratedDoctors = await this._attachRatings(populatedDoctors);
+    const enrichedDoctors = await this._attachHospitalDetails(ratedDoctors);
+
     return {
-      doctors: await this._populatePresignedUrls(doctors),
+      doctors: enrichedDoctors,
       pagination: {
         page: parseInt(page, 10),
         limit: parseInt(limit, 10),
@@ -277,7 +281,8 @@ class DoctorService {
     const doctor = await prisma.doctor.findUnique({
       where: { id }
     });
-    return this._populatePresignedUrls(doctor);
+    const populatedDoctor = await this._populatePresignedUrls(doctor);
+    return this._attachHospitalDetails(populatedDoctor);
   }
 
   /**
@@ -288,7 +293,8 @@ class DoctorService {
     if (!doctor) {
       doctor = await prisma.doctor.findUnique({ where: { userId: id } });
     }
-    return this._populatePresignedUrls(doctor);
+    const populatedDoctor = await this._populatePresignedUrls(doctor);
+    return this._attachHospitalDetails(populatedDoctor);
   }
 
   async getAvailability(id) {
@@ -339,8 +345,12 @@ class DoctorService {
       prisma.doctor.count({ where })
     ]);
 
+    const populatedDoctors = await this._populatePresignedUrls(doctors);
+    const ratedDoctors = await this._attachRatings(populatedDoctors);
+    const enrichedDoctors = await this._attachHospitalDetails(ratedDoctors);
+
     return {
-      doctors: await this._populatePresignedUrls(doctors),
+      doctors: enrichedDoctors,
       pagination: {
         page: parseInt(page, 10),
         limit: parseInt(limit, 10),
@@ -475,6 +485,107 @@ class DoctorService {
     );
 
     return isArray ? populated : populated[0];
+  }
+
+  async _attachRatings(doctors) {
+    if (!doctors || (Array.isArray(doctors) && doctors.length === 0)) return doctors;
+    const isArray = Array.isArray(doctors);
+    const doctorList = isArray ? doctors : [doctors];
+    const doctorIds = doctorList.map((d) => d.id);
+
+    const baseUrl = process.env.API_BASE_URL || 'http://localhost:8080/api/v1';
+    const internalSecret = process.env.INTERNAL_SERVICE_SECRET;
+
+    try {
+      const response = await axios.post(`${baseUrl}/consultations/doctors/rating/bulk`, 
+        { doctorIds },
+        {
+          headers: {
+            'x-internal-service-key': internalSecret,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      const ratingMap = response.data?.data || {};
+
+      doctorList.forEach((doc) => {
+        const ratingInfo = ratingMap[doc.id] || { 
+          averageRating: 0, 
+          totalReviews: 0, 
+          ratingBreakdown: { '1': 0, '2': 0, '3': 0, '4': 0, '5': 0 } 
+        };
+        doc.rating = {
+          averageRating: ratingInfo.averageRating,
+          totalReviews: ratingInfo.totalReviews,
+          ratingBreakdown: ratingInfo.ratingBreakdown
+        };
+      });
+    } catch (err) {
+      console.error('[ProfileService] Failed to fetch bulk ratings:', err.message);
+      // Fallback to zeros if rating service is down
+      doctorList.forEach((doc) => {
+        doc.rating = doc.rating || { 
+          averageRating: 0, 
+          totalReviews: 0, 
+          ratingBreakdown: { '1': 0, '2': 0, '3': 0, '4': 0, '5': 0 } 
+        };
+      });
+    }
+
+    return isArray ? doctorList : doctorList[0];
+  }
+
+  async _attachHospitalDetails(doctors) {
+    if (!doctors || (Array.isArray(doctors) && doctors.length === 0)) return doctors;
+    const isArray = Array.isArray(doctors);
+    const doctorList = isArray ? doctors : [doctors];
+
+    // Collect all unique hospital IDs
+    const hospitalIds = new Set();
+    doctorList.forEach((doc) => {
+      if (doc.hospitalId) hospitalIds.add(doc.hospitalId);
+      if (doc.assignedHospitalIds && Array.isArray(doc.assignedHospitalIds)) {
+        doc.assignedHospitalIds.forEach((id) => hospitalIds.add(id));
+      }
+    });
+
+    if (hospitalIds.size === 0) return doctors;
+
+    const baseUrl = process.env.API_BASE_URL || 'http://localhost:8080/api/v1';
+    const internalSecret = process.env.INTERNAL_SERVICE_SECRET;
+
+    try {
+      const response = await axios.post(
+        `${baseUrl}/super-admins/hospital/bulk`,
+        { ids: Array.from(hospitalIds) },
+        {
+          headers: {
+            'x-internal-service-key': internalSecret,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      const hospitalMap = response.data?.data || {};
+
+      doctorList.forEach((doc) => {
+        // Preference to primary hospitalId if available in map, else first assigned
+        const hId = doc.hospitalId || (doc.assignedHospitalIds && doc.assignedHospitalIds[0]);
+        if (hId && hospitalMap[hId]) {
+          doc.hospital = {
+            id: hId,
+            name: hospitalMap[hId].officialName || hospitalMap[hId].shortName,
+            address: hospitalMap[hId].fullAddress,
+            location: hospitalMap[hId].area || hospitalMap[hId].emirate
+          };
+        }
+      });
+    } catch (err) {
+      console.error('[ProfileService] Failed to fetch bulk hospitals:', err.message);
+    }
+
+    return isArray ? doctorList : doctorList[0];
   }
 }
 
