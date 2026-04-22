@@ -69,6 +69,8 @@ export class HttpProxyService {
     if (typeof contentType === 'string' && contentType.startsWith('multipart/')) {
       axiosConfig.maxBodyLength = Infinity;
       axiosConfig.maxContentLength = Infinity;
+      // Increase timeout for file uploads (60 seconds)
+      axiosConfig.timeout = this.configService.get<number>('HTTP_UPLOAD_TIMEOUT', 60000);
     }
 
     const doRequest = async () => client.request(axiosConfig);

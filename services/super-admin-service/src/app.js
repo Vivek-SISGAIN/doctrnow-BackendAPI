@@ -26,15 +26,28 @@ const limiter = rateLimit({
 
 app.use("/api", limiter);
 
-/**
- * CORS
- */
-app.use(
-  cors({
-    origin: "http://localhost:8080",
-    credentials: true,
-  })
-);
+
+const corsOptions = {
+  origin: "*", 
+  credentials: true,
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  allowedHeaders: [
+    "Content-Type",
+    "Authorization",
+    "X-Correlation-ID",
+    "X-User-ID",
+    "X-User-Role",
+    "X-Tenant-ID",
+    "X-Request-ID",
+    "x-client",
+  ],
+};
+
+app.use(cors(corsOptions));
+
+// Respond to pre-flight requests immediately so they never reach
+// Multer or other middleware that could throw before CORS headers are set.
+app.options("/{*path}", cors(corsOptions));
 
 /**
  * Body Parsing
