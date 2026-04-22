@@ -1,6 +1,7 @@
 import {
   Injectable,
   ExecutionContext,
+  HttpException,
   UnauthorizedException,
   Logger,
 } from '@nestjs/common';
@@ -108,6 +109,7 @@ const DEV_BYPASSABLE_PATH_SEGMENTS = [
   '/hospital',
   '/profiles',
   '/super-admins',
+  '/audit',
   '/chat',
   '/search',
   '/agora',
@@ -222,11 +224,18 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
   // ───────────────────────────────────────────────────────────────────────────
 
   handleRequest<T = NormalizedUser>(err: Error | null, user: T, info: { message?: string } | null): T {
-    if (err || !user) {
-      // Throw UnauthorizedException — NOT a plain Error.
-      // This ensures the response is a proper 401 JSON that the frontend
-      // interceptor can detect and use to trigger a token refresh.
-      throw err ?? new UnauthorizedException(info?.message ?? 'Unauthorized');
+    if (err) {
+      // Passport/JWKS failures can surface as plain Errors. Throwing them
+      // directly results in a 500 and makes it look like the route is broken.
+      // Always convert unknown errors into a 401.
+      if (err instanceof HttpException) {
+        throw err;
+      }
+      throw new UnauthorizedException(err.message ?? info?.message ?? 'Unauthorized');
+    }
+
+    if (!user) {
+      throw new UnauthorizedException(info?.message ?? 'Unauthorized');
     }
     return user;
   }

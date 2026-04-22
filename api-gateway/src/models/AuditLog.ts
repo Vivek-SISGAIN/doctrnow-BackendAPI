@@ -40,4 +40,22 @@ const AuditLogSchema: Schema = new Schema({
   metadata: { type: Schema.Types.Mixed },
 });
 
+AuditLogSchema.set('toJSON', {
+  versionKey: false,
+  transform: (_doc, ret) => {
+    ret.id = ret.eventId ?? ret._id?.toString?.();
+    delete ret._id;
+    return ret;
+  },
+});
+
+AuditLogSchema.set('toObject', {
+  versionKey: false,
+  transform: (_doc, ret) => {
+    ret.id = ret.eventId ?? ret._id?.toString?.();
+    delete ret._id;
+    return ret;
+  },
+});
+
 export const AuditLog = mongoose.model<AuditLogDocument>('AuditLog', AuditLogSchema);
