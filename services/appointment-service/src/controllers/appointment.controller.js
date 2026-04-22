@@ -4,6 +4,7 @@ const asyncHandler = require("../utils/asyncHandler");
 const axios = require("axios");
 
 const baseUrl = process.env.BASE_URL;
+const INTERNAL_SECRET = process.env.INTERNAL_SECRET || '';
 
 async function fetchProfilesBulk(ids, bulkUrl, authHeader, entityName) {
   if (ids.length === 0) return {};
@@ -222,12 +223,38 @@ const getAllAppointments = asyncHandler(async (req, res) => {
       : Promise.resolve(),
   ]);
 
+  // ── Bulk document count fetch (list endpoint — count only) ─────────────────
+  let documentCountMap = {};
+  if (appointmentIds.length > 0) {
+    try {
+      const docRes = await axios.post(
+        `${baseUrl}documents/appointments/bulk`,
+        { ids: appointmentIds },
+        {
+          headers: {
+            Authorization: authHeader,
+            'x-internal-secret': INTERNAL_SECRET,
+          },
+          timeout: 5000,
+        },
+      );
+      const docData = docRes.data?.data || {};
+      // Extract count only for list performance
+      Object.entries(docData).forEach(([aptId, docs]) => {
+        documentCountMap[aptId] = Array.isArray(docs) ? docs.length : 0;
+      });
+    } catch (err) {
+      console.warn('[appointments] Document count fetch failed:', err.message);
+    }
+  }
+
   const transformedAppointments = result.appointments
     .map((appointment) => ({
       ...appointment,
       doctor: doctorMap[appointment.doctorId] || null,
       patient: patientMap[appointment.patientId] || null,
       prescription: prescriptionMap[appointment.id] || null,
+      documentCount: documentCountMap[appointment.id] ?? 0,
     }))
     .filter(
       (appointment) =>
@@ -250,9 +277,9 @@ const getAppointmentById = asyncHandler(async (req, res) => {
     throw ApiError.notFound("Appointment not found");
   }
 
-  // Augment with prescription
   const authHeader = req.headers.authorization;
   if (authHeader) {
+    // Augment with prescription
     const prescriptionMap = await fetchProfilesBulk(
       [appointment.id],
       `${baseUrl}prescriptions/appointments/bulk`,
@@ -260,6 +287,25 @@ const getAppointmentById = asyncHandler(async (req, res) => {
       "prescription",
     );
     appointment.prescription = prescriptionMap[appointment.id] || null;
+
+    // Augment with full documents array (detail endpoint)
+    try {
+      const docRes = await axios.post(
+        `${baseUrl}documents/appointments/bulk`,
+        { ids: [appointment.id] },
+        {
+          headers: {
+            Authorization: authHeader,
+            'x-internal-secret': INTERNAL_SECRET,
+          },
+          timeout: 5000,
+        },
+      );
+      appointment.documents = docRes.data?.data?.[appointment.id] || [];
+    } catch (err) {
+      console.warn('[appointments] Document fetch failed for detail:', err.message);
+      appointment.documents = [];
+    }
   }
 
   res.status(200).json({

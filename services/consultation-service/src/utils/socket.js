@@ -15,6 +15,7 @@ const CONSULTATION_EVENTS = {
   CONSENT_REJECTED: 'consent_rejected',
   CALL_ENDED: 'call_ended',
   CALL_EXTENDED: 'call_extended',
+  DOCUMENT_UPLOADED: 'document_uploaded',
 };
 
 let io;
@@ -149,9 +150,20 @@ const emitToDoctorRoom = (doctorId, event, data) => {
   io.to(room).emit(event, data);
 };
 
+/**
+ * Emit DOCUMENT_UPLOADED to the consultation's appointment room.
+ * This notifies the doctor in real-time that a patient has uploaded a document.
+ * @param {string} appointmentId  The appointment room to target
+ * @param {{ consultationId: string, patientId: string, documentId: string }} payload
+ */
+const emitDocumentUploaded = (appointmentId, payload) => {
+  emitToRoom(appointmentId, CONSULTATION_EVENTS.DOCUMENT_UPLOADED, payload);
+};
+
 module.exports = {
   initializeSocket,
   emitToRoom,
   emitToDoctorRoom,
+  emitDocumentUploaded,
   CONSULTATION_EVENTS,
 };

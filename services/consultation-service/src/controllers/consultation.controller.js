@@ -2,12 +2,13 @@ const consultationService = require('../service/consultation.service');
 const prisma = require('../prisma/prisma');
 const ApiError = require('../utils/ApiError');
 const asyncHandler = require('../utils/asyncHandler');
-const { emitToRoom, emitToDoctorRoom, CONSULTATION_EVENTS } = require('../utils/socket');
+const { emitToRoom, emitToDoctorRoom, emitDocumentUploaded, CONSULTATION_EVENTS } = require('../utils/socket');
 const chatClient = require('../utils/chat-client');
 const profileClient = require('../utils/profile-client');
 const appointmentClient = require('../utils/appointment-client');
 
 const baseUrl = process.env.BASE_URL;
+const INTERNAL_SECRET = process.env.INTERNAL_SECRET || '';
 
 async function fetchBulk(ids, bulkUrl, authHeader, entityName) {
   if (ids.length === 0) return {};
@@ -91,11 +92,15 @@ const getConsultationById = asyncHandler(async (req, res) => {
     throw ApiError.notFound('Consultation not found');
   }
 
-  // Augment with prescription
   const authHeader = req.headers.authorization;
   if (consultation.appointmentId && authHeader) {
+    // Augment with prescription
     const prescriptionMap = await fetchBulk([consultation.appointmentId], `${baseUrl}prescriptions/appointments/bulk`, authHeader, 'prescription');
     consultation.prescription = prescriptionMap[consultation.appointmentId] || null;
+
+    // Augment with full documents array (Aggregated via Service)
+    const [enriched] = await consultationService._attachDocuments([consultation]);
+    consultation.documents = enriched.documents || [];
   }
 
   res.status(200).json({
@@ -108,13 +113,16 @@ const getConsultationByAppointment = asyncHandler(async (req, res) => {
   const { appointmentId } = req.params;
   const consultation = await consultationService.findByAppointmentId(appointmentId);
 
-  // No consultation yet = patient has not joined the lobby; return 200 with null so UI can show "Patient not in lobby" instead of an error
-  
   if (consultation && consultation.appointmentId) {
     const authHeader = req.headers.authorization;
     if (authHeader) {
+      // Augment with prescription
       const prescriptionMap = await fetchBulk([consultation.appointmentId], `${baseUrl}prescriptions/appointments/bulk`, authHeader, 'prescription');
       consultation.prescription = prescriptionMap[consultation.appointmentId] || null;
+
+      // Augment with full documents array (Aggregated via Service)
+      const [enriched] = await consultationService._attachDocuments([consultation]);
+      consultation.documents = enriched.documents || [];
     }
   }
 
@@ -303,16 +311,45 @@ const getHistoryByPatient = asyncHandler(async (req, res) => {
   });
 
   const appointmentIds = result.consultations.map(c => c.appointmentId).filter(Boolean);
+  const doctorIds = [...new Set(result.consultations.map(c => c.doctorId).filter(Boolean))];
   const authHeader = req.headers.authorization;
 
   let prescriptionMap = {};
-  if (appointmentIds.length > 0 && authHeader) {
-    prescriptionMap = await fetchBulk(appointmentIds, `${baseUrl}prescriptions/appointments/bulk`, authHeader, 'prescription');
+  let doctorMap = {};
+
+  if (authHeader) {
+    const promises = [];
+    
+    // Fetch prescriptions
+    if (appointmentIds.length > 0) {
+      promises.push(fetchBulk(appointmentIds, `${baseUrl}prescriptions/appointments/bulk`, authHeader, 'prescription'));
+    } else {
+      promises.push(Promise.resolve({}));
+    }
+
+    // Fetch doctors via Gateway
+    if (doctorIds.length > 0) {
+      promises.push(profileClient.getDoctorsByBulkIds(doctorIds, authHeader));
+    } else {
+      promises.push(Promise.resolve({}));
+    }
+
+    const [pMap, dMap] = await Promise.all(promises);
+    prescriptionMap = pMap;
+    doctorMap = dMap;
   }
 
-  const enhancedConsultations = result.consultations.map(c => ({
+  // documentCount only for list performance
+  let enhancedConsultations = result.consultations;
+  if (enhancedConsultations.length > 0 && authHeader) {
+    enhancedConsultations = await consultationService._attachDocuments(enhancedConsultations);
+  }
+
+  enhancedConsultations = enhancedConsultations.map(c => ({
     ...c,
-    prescription: prescriptionMap[c.appointmentId] || null
+    prescription: prescriptionMap[c.appointmentId] || null,
+    doctor: doctorMap[c.doctorId] || { id: c.doctorId, fullName: "Medical Practitioner" },
+    documentCount: c.documents?.length ?? 0,
   }));
 
   res.status(200).json({
@@ -335,6 +372,7 @@ const getHistoryByDoctor = asyncHandler(async (req, res) => {
   });
 
   const appointmentIds = result.consultations.map(c => c.appointmentId).filter(Boolean);
+  const consultationIds = result.consultations.map(c => c.id).filter(Boolean);
   const authHeader = req.headers.authorization;
 
   let prescriptionMap = {};
@@ -342,9 +380,16 @@ const getHistoryByDoctor = asyncHandler(async (req, res) => {
     prescriptionMap = await fetchBulk(appointmentIds, `${baseUrl}prescriptions/appointments/bulk`, authHeader, 'prescription');
   }
 
-  const enhancedConsultations = result.consultations.map(c => ({
+  // documentCount only for list performance
+  let enhancedConsultations = result.consultations;
+  if (enhancedConsultations.length > 0 && authHeader) {
+    enhancedConsultations = await consultationService._attachDocuments(enhancedConsultations);
+  }
+
+  enhancedConsultations = enhancedConsultations.map(c => ({
     ...c,
-    prescription: prescriptionMap[c.appointmentId] || null
+    prescription: prescriptionMap[c.appointmentId] || null,
+    documentCount: c.documents?.length ?? 0,
   }));
 
   res.status(200).json({
@@ -719,6 +764,23 @@ const getConsultationsByBulkIds = asyncHandler(async (req, res) => {
   });
 });
 
+const notifyDocumentUploaded = asyncHandler(async (req, res) => {
+  const secret = process.env.INTERNAL_SECRET;
+  const provided = req.headers['x-internal-secret'];
+  if (!secret || !provided || provided !== secret) {
+    return res.status(401).json({ success: false, message: 'Unauthorized' });
+  }
+
+  const { consultationId, patientId, documentId, appointmentId } = req.body;
+  if (!consultationId || !patientId || !documentId || !appointmentId) {
+    return res.status(400).json({ success: false, message: 'consultationId, patientId, documentId, and appointmentId are required' });
+  }
+
+  emitDocumentUploaded(appointmentId, { consultationId, patientId, documentId });
+
+  res.status(200).json({ success: true, message: 'Document upload event emitted' });
+});
+
 module.exports = {
   createConsultation,
   getConsultationById,
@@ -741,4 +803,5 @@ module.exports = {
   getDoctorsRatingsBulk,
   getConsultationReviews,
   getConsultationsByBulkIds,
-};
+  notifyDocumentUploaded,
+};

@@ -29,8 +29,11 @@ class AppointmentService {
       prisma.appointment.count({ where }),
     ]);
 
+    // Aggregate medical documents
+    const enrichedAppointments = await this._attachDocuments(appointments);
+
     return {
-      appointments,
+      appointments: enrichedAppointments,
       pagination: {
         page: parseInt(page, 10),
         limit: parseInt(limit, 10),
@@ -109,13 +112,91 @@ class AppointmentService {
   /**
    * Find appointment by ID
    */
-  findById(id) {
-    return prisma.appointment.findUnique({
+  async findById(id) {
+    const appointment = await prisma.appointment.findUnique({
       where: { id },
       include: {
         slot: true,
       },
     });
+
+    if (!appointment) return null;
+
+    const [enriched] = await this._attachDocuments([appointment]);
+    return enriched;
+  }
+
+  /**
+   * Internal: Aggregates medical documents for multiple appointments via API Gateway.
+   * Routes through Gateway to medical-records-service.
+   */
+  async _attachDocuments(appointments) {
+    if (!appointments || appointments.length === 0) return appointments;
+
+    const ids = appointments.map((a) => a.id);
+    const GATEWAY_URL = process.env.BASE_URL; // e.g. http://localhost:8080/api/v1/
+    const GATEWAY_SECRET = process.env.INTERNAL_SERVICE_SECRET;
+    const TARGET_SECRET = process.env.INTERNAL_SECRET;
+
+    if (!GATEWAY_URL || !GATEWAY_SECRET) {
+      console.warn("[AppointmentService] Document aggregation skipped: BASE_URL or INTERNAL_SERVICE_SECRET not configured");
+      return appointments.map((a) => ({ ...a, documents: [] }));
+    }
+
+    try {
+      const baseUrl = GATEWAY_URL.endsWith("/") ? GATEWAY_URL : GATEWAY_URL + "/";
+      
+      // 1. Fetch Consultation Mappings (AppointmentID -> ConsultationID)
+      let mappings = {};
+      try {
+        const consultUrl = `${baseUrl}consultations/bulk`;
+        const consultRes = await axios.post(
+          consultUrl,
+          { ids },
+          {
+            headers: {
+              "Content-Type": "application/json",
+              "x-internal-service-key": GATEWAY_SECRET,
+              "x-internal-secret": TARGET_SECRET,
+            },
+            timeout: 3000,
+          }
+        );
+        
+        const consultMap = consultRes.data?.data || {};
+        Object.entries(consultMap).forEach(([key, consult]) => {
+          if (consult && consult.appointmentId && consult.id) {
+            mappings[consult.appointmentId] = consult.id;
+          }
+        });
+      } catch (err) {
+        console.warn("[AppointmentService] Failed to fetch consultation mappings:", err.message);
+      }
+
+      // 2. Fetch Aggregated Documents
+      const docUrl = `${baseUrl}documents/appointments/bulk`;
+      const response = await axios.post(
+        docUrl,
+        { ids, mappings },
+        {
+          headers: {
+            "Content-Type": "application/json",
+            "x-internal-service-key": GATEWAY_SECRET,
+            "x-internal-secret": TARGET_SECRET,
+          },
+          timeout: 5000,
+        }
+      );
+
+      const documentMap = response.data?.data || {};
+      return appointments.map((a) => ({
+        ...a,
+        documents: documentMap[a.id] || [],
+      }));
+    } catch (error) {
+      console.error(`[AppointmentService] Error fetching documents from ${GATEWAY_URL}:`, error.message);
+      return appointments.map((a) => ({ ...a, documents: [] }));
+    }
   }
 
   /**
