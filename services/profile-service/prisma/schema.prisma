@@ -12,6 +12,7 @@ model Patient {
   userId        String                @unique
   mobileNumber  String                @unique
   profileImage  String
+  status        String       @default("ACTIVE")
   email         String                @unique
   firstName     String
   lastName      String
