@@ -172,7 +172,7 @@ class PatientService {
       throw new Error('Patient profile already exists for this user');
     }
 
-    await axios.post(`${process.env.API_BASE_URL}/auth/users/${userId}/status`, {
+    await axios.patch(`${process.env.API_BASE_URL}/auth/users/${userId}/status`, {
       status: 'ACTIVE'
     });
     return prisma.patient.create({
