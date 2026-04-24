@@ -341,7 +341,7 @@ const checkExists = asyncHandler(async (req, res) => {
 });
 
 const getDoctorsByBulkIds = asyncHandler(async (req, res) => {
-  const { ids } = req.body;
+  const { ids, search } = req.body;
 
   if (!ids || !Array.isArray(ids) || ids.length === 0) {
     throw ApiError.badRequest('ids must be a non-empty array');
@@ -353,7 +353,7 @@ const getDoctorsByBulkIds = asyncHandler(async (req, res) => {
     throw ApiError.badRequest('Maximum 100 ids allowed per request');
   }
 
-  const doctors = await doctorService.findByIdsOrUserIds(uniqueIds);
+  const doctors = await doctorService.findByIdsOrUserIds(uniqueIds, search);
 
   const doctorMap = {};
 

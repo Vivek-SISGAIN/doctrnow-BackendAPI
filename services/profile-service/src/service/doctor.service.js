@@ -68,9 +68,7 @@ class DoctorService {
       prisma.doctor.count({ where })
     ]);
 
-    const populatedDoctors = await this._populatePresignedUrls(doctors);
-    const ratedDoctors = await this._attachRatings(populatedDoctors);
-    const enrichedDoctors = await this._attachHospitalDetails(ratedDoctors);
+    const enrichedDoctors = await this._enrichDoctorProfiles(doctors);
 
     return {
       doctors: enrichedDoctors,
@@ -281,8 +279,7 @@ class DoctorService {
     const doctor = await prisma.doctor.findUnique({
       where: { id }
     });
-    const populatedDoctor = await this._populatePresignedUrls(doctor);
-    return this._attachHospitalDetails(populatedDoctor);
+    return this._enrichDoctorProfiles(doctor);
   }
 
   /**
@@ -293,8 +290,7 @@ class DoctorService {
     if (!doctor) {
       doctor = await prisma.doctor.findUnique({ where: { userId: id } });
     }
-    const populatedDoctor = await this._populatePresignedUrls(doctor);
-    return this._attachHospitalDetails(populatedDoctor);
+    return this._enrichDoctorProfiles(doctor);
   }
 
   async getAvailability(id) {
@@ -345,9 +341,7 @@ class DoctorService {
       prisma.doctor.count({ where })
     ]);
 
-    const populatedDoctors = await this._populatePresignedUrls(doctors);
-    const ratedDoctors = await this._attachRatings(populatedDoctors);
-    const enrichedDoctors = await this._attachHospitalDetails(ratedDoctors);
+    const enrichedDoctors = await this._enrichDoctorProfiles(doctors);
 
     return {
       doctors: enrichedDoctors,
@@ -448,13 +442,27 @@ class DoctorService {
     });
   }
 
-  async findByIdsOrUserIds(ids) {
+  async findByIdsOrUserIds(ids, search = "") {
+    const where = {
+      OR: [{ id: { in: ids } }, { userId: { in: ids } }]
+    };
+
+    if (search) {
+      where.AND = [
+        {
+          OR: [
+            { fullName: { contains: search, mode: "insensitive" } },
+            { primarySpecialization: { contains: search, mode: "insensitive" } },
+            { mobile: { contains: search, mode: "insensitive" } }
+          ]
+        }
+      ];
+    }
+
     const doctors = await prisma.doctor.findMany({
-      where: {
-        OR: [{ id: { in: ids } }, { userId: { in: ids } }]
-      }
+      where
     });
-    return this._populatePresignedUrls(doctors);
+    return this._enrichDoctorProfiles(doctors);
   }
 
   /**
@@ -466,7 +474,14 @@ class DoctorService {
         id: { in: ids }
       }
     });
-    return this._populatePresignedUrls(doctors);
+    return this._enrichDoctorProfiles(doctors);
+  }
+
+  async _enrichDoctorProfiles(doctors) {
+    if (!doctors) return doctors;
+    const populated = await this._populatePresignedUrls(doctors);
+    const rated = await this._attachRatings(populated);
+    return this._attachHospitalDetails(rated);
   }
 
   async _populatePresignedUrls(data) {
@@ -497,11 +512,11 @@ class DoctorService {
     const internalSecret = process.env.INTERNAL_SERVICE_SECRET;
 
     try {
-      const response = await axios.post(`${baseUrl}/consultations/doctors/rating/bulk`, 
+      const response = await axios.post(`${baseUrl}/consultations/doctors/rating/bulk`,
         { doctorIds },
         {
           headers: {
-            'x-internal-service-key': internalSecret,
+            'x-internal-secret': internalSecret,
             'Content-Type': 'application/json'
           }
         }
@@ -510,10 +525,10 @@ class DoctorService {
       const ratingMap = response.data?.data || {};
 
       doctorList.forEach((doc) => {
-        const ratingInfo = ratingMap[doc.id] || { 
-          averageRating: 0, 
-          totalReviews: 0, 
-          ratingBreakdown: { '1': 0, '2': 0, '3': 0, '4': 0, '5': 0 } 
+        const ratingInfo = ratingMap[doc.id] || {
+          averageRating: 0,
+          totalReviews: 0,
+          ratingBreakdown: { '1': 0, '2': 0, '3': 0, '4': 0, '5': 0 }
         };
         doc.rating = {
           averageRating: ratingInfo.averageRating,
@@ -525,10 +540,10 @@ class DoctorService {
       console.error('[ProfileService] Failed to fetch bulk ratings:', err.message);
       // Fallback to zeros if rating service is down
       doctorList.forEach((doc) => {
-        doc.rating = doc.rating || { 
-          averageRating: 0, 
-          totalReviews: 0, 
-          ratingBreakdown: { '1': 0, '2': 0, '3': 0, '4': 0, '5': 0 } 
+        doc.rating = doc.rating || {
+          averageRating: 0,
+          totalReviews: 0,
+          ratingBreakdown: { '1': 0, '2': 0, '3': 0, '4': 0, '5': 0 }
         };
       });
     }
@@ -553,7 +568,7 @@ class DoctorService {
     if (hospitalIds.size === 0) return doctors;
 
     const baseUrl = process.env.API_BASE_URL || 'http://localhost:8080/api/v1';
-    const internalSecret = process.env.INTERNAL_SERVICE_SECRET;
+    const internalSecret = process.env.INTERNAL_SERVICE_SECRET || 'super_secret_internal_key_123';
 
     try {
       const response = await axios.post(
@@ -573,11 +588,14 @@ class DoctorService {
         // Preference to primary hospitalId if available in map, else first assigned
         const hId = doc.hospitalId || (doc.assignedHospitalIds && doc.assignedHospitalIds[0]);
         if (hId && hospitalMap[hId]) {
+          const h = hospitalMap[hId];
           doc.hospital = {
             id: hId,
-            name: hospitalMap[hId].officialName || hospitalMap[hId].shortName,
-            address: hospitalMap[hId].fullAddress,
-            location: hospitalMap[hId].area || hospitalMap[hId].emirate
+            name: h.shortName || h.officialName || 'Hospital',
+            officialName: h.officialName,
+            shortName: h.shortName,
+            address: h.fullAddress,
+            location: h.area || h.emirate
           };
         }
       });

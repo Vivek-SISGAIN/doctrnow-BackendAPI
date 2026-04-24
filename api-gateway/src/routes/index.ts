@@ -273,7 +273,7 @@ router.use(
   createServiceProxy(
     {
       target: config.services.superAdmin,
-      pathRewrite: { '^/api/v1/admin': '/api' },
+      pathRewrite: { '^/api/v1/admin': '/api/super-admins' },
     },
     'super-admin-service'
   )
