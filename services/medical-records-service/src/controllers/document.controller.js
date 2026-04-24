@@ -45,12 +45,15 @@ const getDocumentById = asyncHandler(async (req, res) => {
 
 const getDocumentsByPatient = asyncHandler(async (req, res) => {
   const { patientId } = req.params;
-  const { type, page, limit } = req.query;
+  const { type, page, limit, search, startDate, endDate } = req.query;
 
   const result = await documentService.findByPatientId(patientId, {
     type,
     page,
-    limit
+    limit,
+    search,
+    startDate,
+    endDate
   });
 
   res.status(200).json({
@@ -62,12 +65,15 @@ const getDocumentsByPatient = asyncHandler(async (req, res) => {
 
 const getDocumentsByDoctor = asyncHandler(async (req, res) => {
   const { doctorId } = req.params;
-  const { type, page, limit } = req.query;
+  const { type, page, limit, search, startDate, endDate } = req.query;
 
   const result = await documentService.findByDoctorId(doctorId, {
     type,
     page,
-    limit
+    limit,
+    search,
+    startDate,
+    endDate
   });
 
   res.status(200).json({

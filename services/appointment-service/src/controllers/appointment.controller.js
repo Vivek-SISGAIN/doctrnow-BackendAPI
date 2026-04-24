@@ -6,13 +6,13 @@ const axios = require("axios");
 const baseUrl = process.env.BASE_URL;
 const INTERNAL_SECRET = process.env.INTERNAL_SECRET || '';
 
-async function fetchProfilesBulk(ids, bulkUrl, authHeader, entityName) {
+async function fetchProfilesBulk(ids, bulkUrl, authHeader, entityName, search) {
   if (ids.length === 0) return {};
 
   try {
     const response = await axios.post(
       bulkUrl,
-      { ids },
+      { ids, search },
       {
         headers: {
           Authorization: authHeader,
@@ -623,19 +623,24 @@ const getPreviouslyConsultedDoctors = asyncHandler(async (req, res) => {
 
   const doctorIds = doctors.map((d) => d.doctorId).filter(Boolean);
 
+  const { search } = req.query;
+
   // 🔥 Bulk fetch doctor profiles
   const doctorProfiles = await fetchProfilesBulk(
     doctorIds,
     `${baseUrl}profiles/doctors/bulk`,
     authHeader,
     "doctor",
+    search,
   );
 
-  const result = doctors.map((doc) => ({
-    doctorId: doc.doctorId,
-    lastConsultedAt: doc.lastConsultedAt,
-    profile: doctorProfiles[doc.doctorId] || null,
-  }));
+  const result = doctors
+    .map((doc) => ({
+      doctorId: doc.doctorId,
+      lastConsultedAt: doc.lastConsultedAt,
+      profile: doctorProfiles[doc.doctorId] || null,
+    }))
+    .filter((entry) => (search ? entry.profile !== null : true));
 
   res.status(200).json({
     success: true,

@@ -52,6 +52,12 @@ model HealthPackage {
   active        Boolean @default(true)
 
   validityDays Int
+  
+  image        String?
+  rating       Float?   @default(0)
+  reviews      Int?     @default(0)
+  duration     String?
+  popular      Boolean? @default(false)
 
   services PackageService[]
 

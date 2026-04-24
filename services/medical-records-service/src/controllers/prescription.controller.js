@@ -101,12 +101,15 @@ const getPrescriptionByRxId = asyncHandler(async (req, res) => {
 
 const getPrescriptionsByPatient = asyncHandler(async (req, res) => {
   const { patientId } = req.params;
-  const { lifecycle, page, limit } = req.query;
+  const { lifecycle, page, limit, search, startDate, endDate } = req.query;
 
   const result = await prescriptionService.findByPatientId(patientId, {
     lifecycle,
     page,
-    limit
+    limit,
+    search,
+    startDate,
+    endDate
   });
 
   const prescriptions = result.prescriptions;

@@ -5,7 +5,11 @@ import healthServiceService from '../services/healthService.service';
 export class HealthPackageController {
   
   async createPackage(req: Request, res: Response) {
-    const { name, description, hospitalId,  originalPrice, finalPrice, discountPct, validityDays, serviceIds } = req.body;
+    const { 
+      name, description, hospitalId, originalPrice, finalPrice, 
+      discountPct, validityDays, image, rating, reviews, 
+      duration, popular, serviceIds 
+    } = req.body;
 
     // Validate required fields
     if (!name || !description || !originalPrice || !finalPrice || discountPct === undefined || !validityDays) {
@@ -42,7 +46,7 @@ export class HealthPackageController {
     // Validate service IDs if provided
     if (serviceIds && Array.isArray(serviceIds) && serviceIds.length > 0) {
       for (const serviceId of serviceIds) {
-        const service = await healthServiceService.getServiceById(serviceId);
+        const service = await (healthServiceService as any).getServiceById(serviceId);
         if (!service) {
           return res.status(404).json({
             success: false,
@@ -60,8 +64,13 @@ export class HealthPackageController {
       finalPrice: parseFloat(finalPrice),
       discountPct: parseInt(discountPct),
       validityDays: parseInt(validityDays),
+      image,
+      rating: rating ? parseFloat(rating) : undefined,
+      reviews: reviews ? parseInt(reviews) : undefined,
+      duration,
+      popular: popular === true || popular === 'true',
       serviceIds
-    });
+    } as any);
 
     return res.status(201).json({
       success: true,
@@ -126,7 +135,11 @@ export class HealthPackageController {
    */
   async updatePackage(req: Request, res: Response) {
     const { id } = req.params;
-    const { name, description, originalPrice, finalPrice, discountPct, validityDays } = req.body;
+    const { 
+      name, description, originalPrice, finalPrice, 
+      discountPct, validityDays, image, rating, 
+      reviews, duration, popular 
+    } = req.body;
 
     // Check if package exists
     const existingPackage = await healthPackageService.getPackageById(id);
@@ -175,6 +188,11 @@ export class HealthPackageController {
     if (finalPrice !== undefined) updateData.finalPrice = parseFloat(finalPrice);
     if (discountPct !== undefined) updateData.discountPct = parseInt(discountPct);
     if (validityDays !== undefined) updateData.validityDays = parseInt(validityDays);
+    if (image !== undefined) updateData.image = image;
+    if (rating !== undefined) updateData.rating = parseFloat(rating);
+    if (reviews !== undefined) updateData.reviews = parseInt(reviews);
+    if (duration !== undefined) updateData.duration = duration;
+    if (popular !== undefined) updateData.popular = popular === true || popular === 'true';
 
     const healthPackage = await healthPackageService.updatePackage(id, updateData);
 
@@ -235,7 +253,7 @@ export class HealthPackageController {
     }
 
     // Check if service exists
-    const existingService = await healthServiceService.getServiceById(serviceId);
+    const existingService = await (healthServiceService as any).getServiceById(serviceId);
     if (!existingService) {
       return res.status(404).json({
         success: false,
