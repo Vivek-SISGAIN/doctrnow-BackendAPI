@@ -22,6 +22,8 @@ const {
   getDoctorsRatingsBulk,
   getConsultationReviews,
   getConsultationsByBulkIds,
+  notifyDocumentUploaded,
+  getDoctorPatientIds
 } = require('../controllers/consultation.controller');
 const {
   createConsultationSchema,
@@ -485,5 +487,14 @@ router.post('/bulk', getConsultationsByBulkIds);
  *         description: Doctor reviews retrieved successfully
  */
 router.get('/doctors/:doctorId/reviews', getConsultationReviews);
+router.get('/doctors/:doctorId/patients', getDoctorPatientIds);
+
+/**
+ * POST /api/consultations/notify/document-uploaded
+ * Internal-only endpoint: emits the document_uploaded socket event to the appointment room.
+ * Called by medical-records-service after confirming a document upload during a live consultation.
+ * Requires x-internal-secret header.
+ */
+router.post('/notify/document-uploaded', notifyDocumentUploaded);
 
 module.exports = router;

@@ -29,57 +29,55 @@ function createServiceProxy(serviceConfig: ServiceConfig, serviceName: string) {
     target: serviceConfig.target,
     changeOrigin: serviceConfig.changeOrigin ?? true,
     pathRewrite: serviceConfig.pathRewrite,
-    onProxyReq: (proxyReq, req: AuthRequest) => {
-      // Add correlation ID
-      const correlationId = req.headers['x-correlation-id'] || req.id || `req-${Date.now()}`;
-      proxyReq.setHeader('x-correlation-id', correlationId);
+    on: {
+      proxyReq: (proxyReq: any, req: any) => {
+        // Add correlation ID
+        const correlationId = req.headers['x-correlation-id'] || req.id || `req-${Date.now()}`;
+        proxyReq.setHeader('x-correlation-id', correlationId);
 
-      // Forward user information
-      if (req.user) {
-        proxyReq.setHeader('x-user-id', req.user.userId);
-        proxyReq.setHeader('x-user-role', req.user.role);
-        if (req.user.tenantId) {
-          proxyReq.setHeader('x-tenant-id', req.user.tenantId);
+        // Forward user information
+        if (req.user) {
+          proxyReq.setHeader('x-user-id', req.user.userId);
+          proxyReq.setHeader('x-user-role', req.user.role);
+          if (req.user.tenantId) {
+            proxyReq.setHeader('x-tenant-id', req.user.tenantId);
+          }
         }
-      }
 
-      // Forward original IP
-      proxyReq.setHeader('x-forwarded-for', req.ip);
-      proxyReq.setHeader('x-forwarded-proto', req.protocol);
+        // Forward original IP
+        proxyReq.setHeader('x-forwarded-for', req.ip || req.connection?.remoteAddress);
+        proxyReq.setHeader('x-forwarded-proto', req.protocol);
 
-      if (serviceConfig.onProxyReq) {
-        serviceConfig.onProxyReq(proxyReq, req, null as any);
-      }
-    },
-    onProxyRes: (proxyRes, req: AuthRequest) => {
-      // Add correlation ID to response
-      const correlationId = req.headers['x-correlation-id'] || req.id;
-      if (correlationId) {
-        proxyRes.headers['x-correlation-id'] = correlationId;
-      }
+        if (serviceConfig.onProxyReq) {
+          serviceConfig.onProxyReq(proxyReq, req, null as any);
+        }
+      },
+      proxyRes: (proxyRes: any, req: any) => {
+        // Add correlation ID to response
+        const correlationId = req.headers['x-correlation-id'] || req.id;
+        if (correlationId) {
+          proxyRes.headers['x-correlation-id'] = correlationId;
+        }
+      },
+      error: (err: any, req: any, res: any) => {
+        console.error(`Proxy error for ${serviceName}:`, err);
 
-      if (serviceConfig.onProxyRes) {
-        serviceConfig.onProxyRes(proxyRes, req, null as any);
-      }
-    },
-    onError: (err, req: AuthRequest, res: Response) => {
-      console.error(`Proxy error for ${serviceName}:`, err);
-      
-      // Record failure in circuit breaker
-      breaker.fire(() => Promise.reject(err)).catch(() => {});
-      
-      if (!res.headersSent) {
-        res.status(503).json({
-          error: {
-            code: 'SERVICE_UNAVAILABLE',
-            message: `${serviceName} is currently unavailable`,
-          },
-        });
-      }
+        // Record failure in circuit breaker
+        breaker.fire(() => Promise.reject(err)).catch(() => { });
 
-      if (serviceConfig.onError) {
-        serviceConfig.onError(err, req, res);
-      }
+        if (!res.headersSent) {
+          res.status(503).json({
+            error: {
+              code: 'SERVICE_UNAVAILABLE',
+              message: `${serviceName} is currently unavailable`,
+            },
+          });
+        }
+
+        if (serviceConfig.onError) {
+          serviceConfig.onError(err, req, res);
+        }
+      },
     },
   });
 
@@ -148,7 +146,7 @@ router.use(
   createServiceProxy(
     {
       target: config.services.profile,
-      pathRewrite: { '^/api/v1/profile': '' },
+      pathRewrite: { '^/api/v1/profile': '/api' },
     },
     'profile-service'
   )
@@ -162,7 +160,7 @@ router.use(
   createServiceProxy(
     {
       target: config.services.appointment,
-      pathRewrite: { '^/api/v1/appointments': '' },
+      pathRewrite: { '^/api/v1/appointments': '/api/appointments' },
     },
     'appointment-service'
   )
@@ -176,7 +174,7 @@ router.use(
   createServiceProxy(
     {
       target: config.services.consultation,
-      pathRewrite: { '^/api/v1/consultations': '' },
+      pathRewrite: { '^/api/v1/consultations': '/api/consultations' },
     },
     'consultation-service'
   )
@@ -190,7 +188,7 @@ router.use(
   createServiceProxy(
     {
       target: config.services.videoChat,
-      pathRewrite: { '^/api/v1/video': '' },
+      pathRewrite: { '^/api/v1/video': '/api' },
     },
     'video-chat-service'
   )
@@ -204,7 +202,7 @@ router.use(
   createServiceProxy(
     {
       target: config.services.payment,
-      pathRewrite: { '^/api/v1/payments': '' },
+      pathRewrite: { '^/api/v1/payments': '/api/payments' },
     },
     'payment-service'
   )
@@ -218,7 +216,20 @@ router.use(
   createServiceProxy(
     {
       target: config.services.medicalRecords,
-      pathRewrite: { '^/api/v1/prescriptions': '' },
+      pathRewrite: { '^/api/v1/prescriptions': '/api/prescriptions' },
+    },
+    'medical-records-service'
+  )
+);
+
+router.use(
+  '/documents',
+  authenticateJWT,
+  userRateLimiter,
+  createServiceProxy(
+    {
+      target: config.services.medicalRecords,
+      pathRewrite: { '^/api/v1/documents': '/api/documents' },
     },
     'medical-records-service'
   )
@@ -232,7 +243,7 @@ router.use(
   createServiceProxy(
     {
       target: config.services.notification,
-      pathRewrite: { '^/api/v1/notifications': '' },
+      pathRewrite: { '^/api/v1/notifications': '/api/notifications' },
     },
     'notification-service'
   )
@@ -247,7 +258,7 @@ router.use(
   createServiceProxy(
     {
       target: config.services.hospitalAdmin,
-      pathRewrite: { '^/api/v1/hospital': '' },
+      pathRewrite: { '^/api/v1/hospital': '/api' },
     },
     'hospital-admin-service'
   )
@@ -262,7 +273,7 @@ router.use(
   createServiceProxy(
     {
       target: config.services.superAdmin,
-      pathRewrite: { '^/api/v1/admin': '' },
+      pathRewrite: { '^/api/v1/admin': '/api' },
     },
     'super-admin-service'
   )
@@ -277,7 +288,7 @@ router.use(
   createServiceProxy(
     {
       target: config.services.audit,
-      pathRewrite: { '^/api/v1/audit': '' },
+      pathRewrite: { '^/api/v1/audit': '/api' },
     },
     'audit-service'
   )

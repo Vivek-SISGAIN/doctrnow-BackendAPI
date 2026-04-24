@@ -1,4 +1,5 @@
 const patientService = require('../service/patient.service');
+const doctorService = require('../service/doctor.service');
 const familyMemberService = require('../service/familyMember.service');
 const ApiError = require('../utils/ApiError');
 const asyncHandler = require('../utils/asyncHandler');
@@ -14,11 +15,44 @@ const getAllPatients = asyncHandler(async (req, res) => {
     followUpStatus,
     page = 1,
     limit = 20,
-    sortBy = 'recent'
+    sortBy = 'recent',
+    doctorId
   } = req.query;
 
+  let effectiveDoctorId = doctorId;
+  const userRole = req.headers['x-user-role'];
+  const userId = req.headers['x-user-id'];
+
+  if (userRole === 'DOCTOR' && userId) {
+    const doctor = await doctorService.findByIdOrUserId(userId);
+    if (doctor) {
+      effectiveDoctorId = doctor.id;
+    }
+  }
+
+  let ids = [];
+  if (effectiveDoctorId) {
+    try {
+      const response = await axios.get(`${process.env.API_BASE_URL}/consultations/doctors/${effectiveDoctorId}/patients`, {
+        headers: {
+          'x-internal-secret': process.env.INTERNAL_SERVICE_SECRET
+        }
+      });
+      ids = response.data?.data || [];
+      if (ids.length === 0) {
+        return res.status(200).json({
+          success: true,
+          data: [],
+          pagination: { page: parseInt(page, 10), limit: parseInt(limit, 10), total: 0, totalPages: 0 }
+        });
+      }
+    } catch (err) {
+      console.error('Failed to fetch patient IDs from consultation service:', err.message);
+    }
+  }
+
   const result = await patientService.findAll(
-    { search, gender, bloodGroup, riskCategory, patientType, followUpStatus },
+    { search, gender, bloodGroup, riskCategory, patientType, followUpStatus, ids },
     { page: parseInt(page, 10), limit: parseInt(limit, 10) },
     sortBy
   );

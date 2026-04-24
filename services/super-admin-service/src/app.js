@@ -19,8 +19,8 @@ app.use(hpp());
  * Rate Limiting
  */
 const limiter = rateLimit({
-  windowMs:60 * 100,
-  max: 10000,
+  windowMs: 60 * 100,
+  max: 100000,
   message: "Too many requests from this IP, please try again later.",
 });
 
@@ -28,7 +28,7 @@ app.use("/api", limiter);
 
 
 const corsOptions = {
-  origin: "*", 
+  origin: "*",
   credentials: true,
   methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
   allowedHeaders: [

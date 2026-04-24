@@ -359,6 +359,9 @@ const getDoctorsByBulkIds = asyncHandler(async (req, res) => {
 
   doctors.forEach((doctor) => {
     doctorMap[doctor.id] = doctor;
+    if (doctor.userId) {
+      doctorMap[doctor.userId] = doctor;
+    }
   });
 
   res.status(200).json({

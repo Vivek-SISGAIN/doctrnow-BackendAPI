@@ -44,9 +44,14 @@ class PatientService {
     maritalStatus,
     riskCategory,
     patientType,
-    followUpStatus
+    followUpStatus,
+    ids
   }) {
     const where = {};
+    
+    if (ids && Array.isArray(ids) && ids.length > 0) {
+      where.id = { in: ids };
+    }
 
     if (search) {
       where.OR = [
@@ -188,8 +193,7 @@ class PatientService {
         emiratesId: data.emiratesId,
         nationality: data.nationality,
         bloodGroup: data.bloodGroup || null,
-        maritalStatus: data.maritalStatus || null,
-        status: 'ACTIVE'
+        maritalStatus: data.maritalStatus || null
       }
     });
   }
@@ -229,13 +233,21 @@ class PatientService {
    * Update patient by ID
    */
   update(id, data) {
+    const updateData = { ...data };
+    if (updateData.dateOfBirth) {
+      const d = new Date(updateData.dateOfBirth);
+      if (!isNaN(d.getTime())) {
+        updateData.dateOfBirth = d;
+      } else {
+        delete updateData.dateOfBirth; // Remove if invalid to avoid Prisma error
+      }
+    }
+
     return prisma.patient.updateMany({
       where: {
         OR: [{ id }, { userId: id }]
       },
-      data: {
-        ...data
-      }
+      data: updateData
     });
   }
   /**
