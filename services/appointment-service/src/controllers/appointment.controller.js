@@ -139,13 +139,41 @@ const getAllAppointments = asyncHandler(async (req, res) => {
     consultationType,
     startDate,
     endDate,
+    specialty,
     page = 1,
     limit = 20,
   } = req.query;
 
+  let finalDoctorId = doctorId;
+  const authHeader = req.headers.authorization;
+
+  if (specialty) {
+    try {
+      const docsRes = await axios.get(`${baseUrl}profiles/doctors/`, {
+        params: { specialization: specialty, limit: 1000 },
+        headers: { Authorization: authHeader },
+      });
+      const matchedDoctorIds = docsRes.data?.data?.map((d) => d.id) || [];
+
+      if (doctorId) {
+        if (!matchedDoctorIds.includes(doctorId)) {
+          return res.status(200).json({ success: true, data: [], pagination: {} });
+        }
+      } else {
+        finalDoctorId = matchedDoctorIds;
+        if (finalDoctorId.length === 0) {
+          return res.status(200).json({ success: true, data: [], pagination: {} });
+        }
+      }
+    } catch (err) {
+      console.error("[appointments] Failed to fetch specialty doctors:", err.message);
+      return res.status(200).json({ success: true, data: [], pagination: {} });
+    }
+  }
+
   const filters = {
     patientId,
-    doctorId,
+    doctorId: finalDoctorId,
     hospitalId,
     search,
     status,
@@ -183,7 +211,6 @@ const getAllAppointments = asyncHandler(async (req, res) => {
   let doctorMap = {};
   let patientMap = {};
   let prescriptionMap = {};
-  const authHeader = req.headers.authorization;
 
   await Promise.all([
     // ── Bulk patient fetch ────────────────────────────────────────────────────

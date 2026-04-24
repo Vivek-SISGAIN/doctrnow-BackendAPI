@@ -2,6 +2,7 @@ import axios from 'axios';
 import { PrismaClient, Channel, Notification, Prisma } from '@prisma/client';
 import { QueueService } from './queue.service';
 import { emitToUser } from '../sockets';
+import { randomUUID } from 'crypto';
 
 const prisma = new PrismaClient();
 
@@ -34,22 +35,31 @@ export class NotificationService {
       },
     });
 
+    const eventPayload = {
+      id: notification.id,
+      userId: notification.userId,
+      channel: notification.channel,
+      status: notification.status,
+      title: notification.title,
+      body: notification.body,
+      payload: notification.payload,
+      createdAt: notification.createdAt,
+    };
+
     // In-app notifications should be real-time even if RabbitMQ/worker is delayed.
     // Emit immediately and skip queueing to avoid duplicates.
     if (data.channel === 'IN_APP') {
-      const eventPayload = {
-        id: notification.id,
-        userId: notification.userId,
-        channel: notification.channel,
-        status: notification.status,
-        title: notification.title,
-        body: notification.body,
-        payload: notification.payload,
-        createdAt: notification.createdAt,
-      };
       emitToUser(notification.userId, 'notification', eventPayload);
       emitToUser(notification.userId, 'notification:new', eventPayload);
       return notification;
+    }
+
+    // When the user is currently online, also push the notification into the portal
+    // UI in real time. This is especially useful for PUSH channel: browser/system
+    // notifications can be missed in foreground, but the portal should still update.
+    if (data.channel === 'PUSH') {
+      emitToUser(notification.userId, 'notification', eventPayload);
+      emitToUser(notification.userId, 'notification:new', eventPayload);
     }
 
     await QueueService.publishMessage(this.channelToRoutingKey(data.channel), notification);
@@ -240,40 +250,68 @@ export class NotificationService {
     roles: string[],
     hospitalId?: string,
   ): Promise<string[]> {
+    const apiGateway = process.env.API_GATEWAY;
     const profileServiceUrl = process.env.PROFILE_SERVICE_URL;
-    if (!profileServiceUrl) {
-      throw new Error('PROFILE_SERVICE_URL is not configured');
+
+    // Prefer routing through the API Gateway when configured.
+    // Falls back to direct service URL for backward compatibility.
+    const baseUrl = apiGateway ?? profileServiceUrl;
+    if (!baseUrl) {
+      throw new Error('API_GATEWAY (preferred) or PROFILE_SERVICE_URL must be configured');
     }
+
+    // If we go through the gateway, authenticate as an internal service so JwtAuthGuard can bypass.
+    const internalSecret = process.env.INTERNAL_SERVICE_SECRET;
+    const commonHeaders: Record<string, string> = {
+      'X-Correlation-ID': randomUUID(),
+      ...(internalSecret ? { 'x-internal-service-key': internalSecret } : {}),
+    };
+
+    const isGateway = !!apiGateway;
+    const prefix = isGateway ? '' : ''; // keep for clarity
 
     const normalizedRoles = roles.map((role) => role.toUpperCase());
     const userIds = new Set<string>();
 
     for (const role of normalizedRoles) {
-      if (role === 'HOSPITAL_ADMIN') {
+      const resolvedRole = role === 'HOSPITAL' ? 'HOSPITAL_ADMIN' : role;
+      if (role === 'HOSPITAL') {
+        console.warn('[NotificationService] Role "HOSPITAL" is deprecated; use "HOSPITAL_ADMIN". Treating as HOSPITAL_ADMIN.');
+      }
+
+      if (resolvedRole === 'HOSPITAL_ADMIN') {
         const path = hospitalId
-          ? `/api/hospital-admins/hospital/id/${hospitalId}`
-          : '/api/hospital-admins';
-        const response = await axios.get(`${profileServiceUrl}${path}`);
+          ? (isGateway
+            ? `/profiles/hospital-admins/hospital/id/${hospitalId}`
+            : `/api/hospital-admins/hospital/id/${hospitalId}`)
+          : (isGateway ? '/profiles/hospital-admins' : '/api/hospital-admins');
+        const response = await axios.get(`${baseUrl}${prefix}${path}`, { headers: commonHeaders });
         const records = response?.data?.data ?? response?.data ?? [];
         for (const admin of records) {
           if (admin?.userId) userIds.add(admin.userId);
         }
       }
 
-      if (role === 'DOCTOR') {
-        const response = await axios.get(`${profileServiceUrl}/api/doctors`);
+      if (resolvedRole === 'DOCTOR') {
+        const path = isGateway ? '/profiles/doctors' : '/api/doctors';
+        const response = await axios.get(`${baseUrl}${prefix}${path}`, { headers: commonHeaders });
         const records = response?.data?.data ?? response?.data ?? [];
         for (const doctor of records) {
           if (doctor?.userId) userIds.add(doctor.userId);
         }
       }
 
-      if (role === 'PATIENT') {
-        const response = await axios.get(`${profileServiceUrl}/api/patients`);
+      if (resolvedRole === 'PATIENT') {
+        const path = isGateway ? '/profiles/patients' : '/api/patients';
+        const response = await axios.get(`${baseUrl}${prefix}${path}`, { headers: commonHeaders });
         const records = response?.data?.data ?? response?.data ?? [];
         for (const patient of records) {
           if (patient?.userId) userIds.add(patient.userId);
         }
+      }
+
+      if (!['HOSPITAL_ADMIN', 'DOCTOR', 'PATIENT', 'HOSPITAL'].includes(role)) {
+        console.warn(`[NotificationService] Unsupported role "${role}" ignored.`);
       }
     }
 

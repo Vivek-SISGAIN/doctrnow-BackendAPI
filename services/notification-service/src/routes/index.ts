@@ -13,6 +13,7 @@ import {
 } from '../controllers/notification.controller';
 
 import { registerDevice } from '../controllers/device.controller';
+import { listDevicesForUser } from '../controllers/device.controller';
 import { sendOtp } from '../controllers/otp.controller';
 
 const router = Router();
@@ -28,6 +29,10 @@ router.patch('/notifications/:id/read', markNotificationAsRead);
 router.delete('/notifications/:id', deleteNotification);
 router.post('/emails/prescription', sendPrescriptionEmail);
 router.post('/devices', registerDevice);
+router.get('/devices/:userId', listDevicesForUser);
+// Backward/forward-compatible alias (most clients call under /notifications)
+router.post('/notifications/devices', registerDevice);
+router.get('/notifications/devices/:userId', listDevicesForUser);
 router.post('/otp/send', sendOtp);
 
 export default router;

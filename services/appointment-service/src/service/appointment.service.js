@@ -64,7 +64,11 @@ class AppointmentService {
     }
 
     if (doctorId) {
-      where.doctorId = doctorId;
+      if (Array.isArray(doctorId)) {
+        where.doctorId = { in: doctorId };
+      } else {
+        where.doctorId = doctorId;
+      }
     }
 
     if (hospitalId) {
