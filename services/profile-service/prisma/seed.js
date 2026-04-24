@@ -10,8 +10,10 @@ const prisma = new PrismaClient();
 
 const DOCTOR_USER_ID = '11111111-1111-1111-1111-111111111111';
 const PATIENT_USER_ID = '22222222-2222-2222-2222-222222222222';
+const TEST_PATIENT_USER_ID = '33333333-3333-3333-3333-333333333333';
 const SEED_DOCTOR_ID = '00000000-0000-0000-0000-000000000001';
 const SEED_PATIENT_ID = '00000000-0000-0000-0000-000000000101';
+const SEED_TEST_PATIENT_ID = '00000000-0000-0000-0000-000000000103';
 
 const HOSPITAL_ADMIN_USER_ID = '44444444-4444-4444-4444-444444444444';
 const SUPER_ADMIN_USER_ID = '55555555-5555-5555-5555-555555555555';
@@ -184,6 +186,26 @@ async function main() {
     }
   });
 
+  const testPatient = await prisma.patient.upsert({
+    where: { userId: TEST_PATIENT_USER_ID },
+    update: {},
+    create: {
+      id: SEED_TEST_PATIENT_ID,
+      userId: TEST_PATIENT_USER_ID,
+      mobileNumber: '+971501112233',
+      profileImage: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Nitin',
+      email: 'nitin.sisgain@gmail.com',
+      firstName: 'Nitin',
+      lastName: 'User',
+      dateOfBirth: new Date('1995-01-01'),
+      gender: 'MALE',
+      emiratesId: '784-1995-1111111-1',
+      nationality: 'India',
+      bloodGroup: 'B_POS',
+      maritalStatus: 'SINGLE'
+    }
+  });
+
   const hospitalAdmin = await prisma.hospitalAdmin.upsert({
     where: { userId: HOSPITAL_ADMIN_USER_ID },
     update: {},
@@ -232,134 +254,135 @@ async function main() {
 
   console.log(superAdmin, 'superAdmin');
 
-  // const doctor = await prisma.doctor.upsert({
-  //   where: { userId: DOCTOR_USER_ID },
-  //   update: { primarySpecialization: 'General Physician' },
-  //   create: {
-  //     id: SEED_DOCTOR_ID,
-  //     userId: DOCTOR_USER_ID,
-  //     status: 'ACTIVE',
-  //     fullName: 'Dr. Sarah Doctor',
-  //     email: 'doctor@doctornow.com',
-  //     mobile: '+971501234567',
-  //     gender: 'FEMALE',
-  //     nationality: 'UAE',
-  //     emiratesId: '784-1985-7654321-2',
-  //     primarySpecialization: 'General Physician',
-  //     subSpecialization: 'Family Medicine',
-  //     licenseNumber: 'DHA-GP-2020-001',
-  //     licenseType: 'DHA',
-  //     licenseExpiry: new Date('2026-12-31'),
-  //     yearsOfExperience: 8,
-  //     hospitalId: '7a8b9c0d-1e2f-4a3b-8c9d-0e1f2a3b4c5d',
+  const doctor = await prisma.doctor.upsert({
+    where: { userId: DOCTOR_USER_ID },
+    update: { primarySpecialization: 'General Physician' },
+    create: {
+      id: SEED_DOCTOR_ID,
+      userId: DOCTOR_USER_ID,
+      status: 'ACTIVE',
+      fullName: 'Dr. Sarah Doctor',
+      email: 'doctor@doctornow.com',
+      mobile: '+971501234567',
+      gender: 'FEMALE',
+      nationality: 'UAE',
+      emiratesId: '784-1985-7654321-2',
+      primarySpecialization: 'General Physician',
+      subSpecialization: 'Family Medicine',
+      licenseNumber: 'DHA-GP-2020-001',
+      licenseType: 'DHA',
+      licenseExpiry: new Date('2026-12-31'),
+      yearsOfExperience: 8,
+      hospitalId: '7a8b9c0d-1e2f-4a3b-8c9d-0e1f2a3b4c5d',
 
-  //     medicalDegree: 'MBBS',
-  //     university: 'Dubai Medical College',
-  //     profileImage: 'https://api.dicebear.com/7.x/avataaars/svg?seed=doctor',
-  //     languagesSpoken: ['English', 'Arabic'],
-  //     servicesOffered: ['VIDEO', 'PHONE', 'CHAT'],
-  //     certifications: ['DHA', 'MOH'],
-  //     professionalMemberships: ['EMA'],
-  //     professionalBio: 'Experienced general practitioner with focus on family medicine.',
-  //     schedule: FULL_WEEK_SCHEDULE, // ← replaces workingDays, workingHoursFrom, workingHoursTo
-  //     consultationDuration: 30,
-  //     videoConsultationFee: 150,
-  //     phoneConsultationFee: 100,
-  //     followUpFee: 75,
-  //     hospitalSharePercent: 70,
-  //     platformSharePercent: 30
-  //   }
-  // });
+      medicalDegree: 'MBBS',
+      university: 'Dubai Medical College',
+      profileImage: 'https://api.dicebear.com/7.x/avataaars/svg?seed=doctor',
+      languagesSpoken: ['English', 'Arabic'],
+      servicesOffered: ['VIDEO', 'PHONE', 'CHAT'],
+      certifications: ['DHA', 'MOH'],
+      professionalMemberships: ['EMA'],
+      professionalBio: 'Experienced general practitioner with focus on family medicine.',
+      schedule: FULL_WEEK_SCHEDULE,
+      consultationDuration: 30,
+      videoConsultationFee: 150,
+      phoneConsultationFee: 100,
+      followUpFee: 75,
+      hospitalSharePercent: 70,
+      platformSharePercent: 30
+    }
+  });
 
-  // const baseDoctor = {
-  //   status: 'ACTIVE',
-  //   gender: 'MALE',
-  //   nationality: 'UAE',
-  //   subSpecialization: null,
-  //   licenseType: 'DHA',
-  //   licenseExpiry: new Date('2026-12-31'),
-  //   yearsOfExperience: 10,
-  //   medicalDegree: 'MBBS',
-  //   university: 'Dubai Medical College',
-  //   profileImage: 'https://api.dicebear.com/7.x/avataaars/svg?seed=doc2',
-  //   languagesSpoken: ['English', 'Arabic'],
-  //   servicesOffered: ['VIDEO', 'PHONE'],
-  //   certifications: ['DHA'],
-  //   professionalMemberships: [],
-  //   professionalBio: 'Experienced specialist.',
-  //   schedule: WEEKDAY_SCHEDULE, // ← replaces workingDays, workingHoursFrom, workingHoursTo
-  //   consultationDuration: 30,
-  //   videoConsultationFee: 200,
-  //   phoneConsultationFee: 150,
-  //   followUpFee: 100,
-  //   hospitalSharePercent: 70,
-  //   hospitalId: '7a8b9c0d-1e2f-4a3b-8c9d-0e1f2a3b4c5d',
-  //   platformSharePercent: 30
-  // };
+  const baseDoctor = {
+    status: 'ACTIVE',
+    gender: 'MALE',
+    nationality: 'UAE',
+    subSpecialization: null,
+    licenseType: 'DHA',
+    licenseExpiry: new Date('2026-12-31'),
+    yearsOfExperience: 10,
+    medicalDegree: 'MBBS',
+    university: 'Dubai Medical College',
+    profileImage: 'https://api.dicebear.com/7.x/avataaars/svg?seed=doc2',
+    languagesSpoken: ['English', 'Arabic'],
+    servicesOffered: ['VIDEO', 'PHONE'],
+    certifications: ['DHA'],
+    professionalMemberships: [],
+    professionalBio: 'Experienced specialist.',
+    schedule: WEEKDAY_SCHEDULE,
+    consultationDuration: 30,
+    videoConsultationFee: 200,
+    phoneConsultationFee: 150,
+    followUpFee: 100,
+    hospitalSharePercent: 70,
+    hospitalId: '7a8b9c0d-1e2f-4a3b-8c9d-0e1f2a3b4c5d',
+    platformSharePercent: 30
+  };
 
-  // const extraDoctors = [
-  //   {
-  //     userId: '11111111-1111-1111-1111-111111111112',
-  //     hospitalId: '7a8b9c0d-1e2f-4a3b-8c9d-0e1f2a3b4c5d',
-  //     primarySpecialization: 'Cardiology',
-  //     fullName: 'Dr. Ahmed Rahman',
-  //     email: 'ahmed.rahman@doctornow.com',
-  //     mobile: '+971501234568',
-  //     licenseNumber: 'DHA-CARD-2021-002',
-  //     emiratesId: '784-1988-2222222-2'
-  //   },
-  //   {
-  //     userId: '11111111-1111-1111-1111-111111111113',
-  //     hospitalId: '7a8b9c0d-1e2f-4a3b-8c9d-0e1f2a3b4c5d',
-  //     primarySpecialization: 'Dermatology',
-  //     fullName: 'Dr. Fatima Hassan',
-  //     email: 'fatima.hassan@doctornow.com',
-  //     mobile: '+971501234569',
-  //     licenseNumber: 'DHA-DERM-2019-003',
-  //     emiratesId: '784-1988-3333333-3'
-  //   },
-  //   {
-  //     userId: '11111111-1111-1111-1111-111111111114',
-  //     hospitalId: '7a8b9c0d-1e2f-4a3b-8c9d-0e1f2a3b4c5d',
-  //     primarySpecialization: 'General Physician',
-  //     fullName: 'Dr. Mohammed Ali',
-  //     email: 'mohammed.ali@doctornow.com',
-  //     mobile: '+971501234570',
-  //     licenseNumber: 'DHA-GP-2022-004',
-  //     emiratesId: '784-1988-4444444-4'
-  //   }
-  // ];
+  const extraDoctors = [
+    {
+      userId: '11111111-1111-1111-1111-111111111112',
+      hospitalId: '7a8b9c0d-1e2f-4a3b-8c9d-0e1f2a3b4c5d',
+      primarySpecialization: 'Cardiology',
+      fullName: 'Dr. Ahmed Rahman',
+      email: 'ahmed.rahman@doctornow.com',
+      mobile: '+971501234568',
+      licenseNumber: 'DHA-CARD-2021-002',
+      emiratesId: '784-1988-2222222-2'
+    },
+    {
+      userId: '11111111-1111-1111-1111-111111111113',
+      hospitalId: '7a8b9c0d-1e2f-4a3b-8c9d-0e1f2a3b4c5d',
+      primarySpecialization: 'Dermatology',
+      fullName: 'Dr. Fatima Hassan',
+      email: 'fatima.hassan@doctornow.com',
+      mobile: '+971501234569',
+      licenseNumber: 'DHA-DERM-2019-003',
+      emiratesId: '784-1988-3333333-3'
+    },
+    {
+      userId: '11111111-1111-1111-1111-111111111114',
+      hospitalId: '7a8b9c0d-1e2f-4a3b-8c9d-0e1f2a3b4c5d',
+      primarySpecialization: 'General Physician',
+      fullName: 'Dr. Mohammed Ali',
+      email: 'mohammed.ali@doctornow.com',
+      mobile: '+971501234570',
+      licenseNumber: 'DHA-GP-2022-004',
+      emiratesId: '784-1988-4444444-4'
+    }
+  ];
 
-  // for (const d of extraDoctors) {
-  //   await prisma.doctor.upsert({
-  //     where: { userId: d.userId },
-  //     update: { primarySpecialization: d.primarySpecialization },
-  //     create: {
-  //       ...baseDoctor,
-  //       userId: d.userId,
-  //       fullName: d.fullName,
-  //       email: d.email,
-  //       mobile: d.mobile,
-  //       emiratesId: d.emiratesId,
-  //       primarySpecialization: d.primarySpecialization,
-  //       licenseNumber: d.licenseNumber
-  //     }
-  //   });
-  // }
+  for (const d of extraDoctors) {
+    await prisma.doctor.upsert({
+      where: { userId: d.userId },
+      update: { primarySpecialization: d.primarySpecialization },
+      create: {
+        ...baseDoctor,
+        userId: d.userId,
+        fullName: d.fullName,
+        email: d.email,
+        mobile: d.mobile,
+        emiratesId: d.emiratesId,
+        primarySpecialization: d.primarySpecialization,
+        licenseNumber: d.licenseNumber
+      }
+    });
+  }
 
-  // console.log('Profile seed completed:');
-  // console.log(
-  //   '  Patient:',
-  //   patient.firstName,
-  //   patient.lastName,
-  //   '(id:',
-  //   patient.id,
-  //   ', userId:',
-  //   patient.userId,
-  //   ')'
-  // );
-  // console.log('  Doctor:', doctor.fullName, '(id:', doctor.id, ', userId:', doctor.userId, ')');
-  // console.log('  Extra doctors:', extraDoctors.length);
+  console.log('Profile seed completed:');
+  console.log(
+    '  Patient:',
+    patient.firstName,
+    patient.lastName,
+    '(id:',
+    patient.id,
+    ', userId:',
+    patient.userId,
+    ')'
+  );
+  console.log('  Test patient (Nitin):', testPatient.firstName, '(userId:', testPatient.userId, ')');
+  console.log('  Doctor:', doctor.fullName, '(id:', doctor.id, ', userId:', doctor.userId, ')');
+  console.log('  Extra doctors:', extraDoctors.length);
 }
 
 main()

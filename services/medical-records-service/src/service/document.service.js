@@ -39,12 +39,29 @@ class DocumentService {
    * Find documents by patient ID
    */
   async findByPatientId(patientId, filters = {}) {
-    const { type, page = 1, limit = 20 } = filters;
+    const { type, page = 1, limit = 20, search, startDate, endDate } = filters;
     const skip = (page - 1) * limit;
 
     const where = { patientId };
     if (type) {
       where.type = type;
+    }
+
+    if (search) {
+      where.name = {
+        contains: search,
+        mode: 'insensitive'
+      };
+    }
+
+    if (startDate || endDate) {
+      where.createdAt = {};
+      if (startDate) where.createdAt.gte = new Date(startDate);
+      if (endDate) {
+        const end = new Date(endDate);
+        end.setHours(23, 59, 59, 999);
+        where.createdAt.lte = end;
+      }
     }
 
     const [documents, total] = await Promise.all([
@@ -74,12 +91,29 @@ class DocumentService {
    * Find documents by doctor ID
    */
   async findByDoctorId(doctorId, filters = {}) {
-    const { type, page = 1, limit = 20 } = filters;
+    const { type, page = 1, limit = 20, search, startDate, endDate } = filters;
     const skip = (page - 1) * limit;
 
     const where = { doctorId };
     if (type) {
       where.type = type;
+    }
+
+    if (search) {
+      where.name = {
+        contains: search,
+        mode: 'insensitive'
+      };
+    }
+
+    if (startDate || endDate) {
+      where.createdAt = {};
+      if (startDate) where.createdAt.gte = new Date(startDate);
+      if (endDate) {
+        const end = new Date(endDate);
+        end.setHours(23, 59, 59, 999);
+        where.createdAt.lte = end;
+      }
     }
 
     const [documents, total] = await Promise.all([

@@ -6,6 +6,7 @@ const asyncHandler = require('../utils/asyncHandler');
 const { emitToRoom, emitToDoctorRoom, emitDocumentUploaded, CONSULTATION_EVENTS } = require('../utils/socket');
 const chatClient = require('../utils/chat-client');
 const appointmentClient = require('../utils/appointment-client');
+const profileClient = require('../utils/profile-client');
 
 const baseUrl = (process.env.BASE_URL || 'http://localhost:8080/api/v1/').replace(/\/$/, '') + '/';
 const INTERNAL_SECRET = process.env.INTERNAL_SECRET || '';
@@ -27,11 +28,11 @@ async function fetchBulk(ids, bulkUrl, authHeader, entityName) {
         },
         timeout: 5000
       });
-      
+
       const data = response.data?.data || {};
       Object.assign(results, data);
     }
-    
+
     return results;
   } catch (err) {
     console.error(
@@ -306,12 +307,15 @@ const endByAppointment = asyncHandler(async (req, res) => {
 
 const getHistoryByPatient = asyncHandler(async (req, res) => {
   const { patientId } = req.params;
-  const { status, page, limit } = req.query;
+  const { status, page, limit, search, startDate, endDate } = req.query;
 
   const result = await consultationService.getHistoryByPatientId(patientId, {
     status,
     page,
-    limit
+    limit,
+    search,
+    startDate,
+    endDate
   });
 
   const consultations = result.consultations || [];
@@ -324,7 +328,7 @@ const getHistoryByPatient = asyncHandler(async (req, res) => {
 
   if (authHeader) {
     const promises = [];
-    
+
     // Fetch prescriptions via Gateway
     if (appointmentIds.length > 0) {
       promises.push(fetchBulk(appointmentIds, `${baseUrl}prescriptions/appointments/bulk`, authHeader, 'prescription'));
@@ -352,8 +356,8 @@ const getHistoryByPatient = asyncHandler(async (req, res) => {
     return {
       ...plain,
       prescription: prescriptionMap[String(c.appointmentId)] || null,
-      doctor: doctorMap[String(c.doctorId)] || { 
-        id: c.doctorId, 
+      doctor: doctorMap[String(c.doctorId)] || {
+        id: c.doctorId,
         fullName: "Medical Practitioner",
         specialization: "General Physician"
       },
@@ -414,12 +418,12 @@ const getHistoryByDoctor = asyncHandler(async (req, res) => {
   const enhancedConsultations = consultations.map(c => {
     // Ensure we have a plain object
     const plain = typeof c.toJSON === 'function' ? c.toJSON() : JSON.parse(JSON.stringify(c));
-    
+
     return {
       ...plain,
-      patient: patientMap[String(c.patientId)] || { 
-        id: c.patientId, 
-        firstName: "Patient", 
+      patient: patientMap[String(c.patientId)] || {
+        id: c.patientId,
+        firstName: "Patient",
         lastName: String(c.patientId).split('-')[0]
       },
       prescription: prescriptionMap[String(c.appointmentId)] || null,
@@ -670,11 +674,11 @@ const getDoctorsRatingsBulk = asyncHandler(async (req, res) => {
   });
 
   const ratingMap = {};
-  
+
   // Initialize for all requested IDs
   doctorIds.forEach(id => {
-    ratingMap[id] = { 
-      averageRating: 0, 
+    ratingMap[id] = {
+      averageRating: 0,
       totalReviews: 0,
       ratingBreakdown: { '1': 0, '2': 0, '3': 0, '4': 0, '5': 0 }
     };

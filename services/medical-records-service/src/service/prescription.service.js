@@ -89,12 +89,29 @@ class PrescriptionService {
    * Find prescriptions by patient ID
    */
   async findByPatientId(patientId, filters = {}) {
-    const { lifecycle, page = 1, limit = 20 } = filters;
+    const { lifecycle, page = 1, limit = 20, search, startDate, endDate } = filters;
     const skip = (page - 1) * limit;
 
     const where = { patientId };
     if (lifecycle) {
       where.lifecycle = lifecycle;
+    }
+
+    if (search) {
+      where.OR = [
+        { rxId: { contains: search, mode: 'insensitive' } },
+        { diagnosis: { contains: search, mode: 'insensitive' } }
+      ];
+    }
+
+    if (startDate || endDate) {
+      where.createdAt = {};
+      if (startDate) where.createdAt.gte = new Date(startDate);
+      if (endDate) {
+        const end = new Date(endDate);
+        end.setHours(23, 59, 59, 999);
+        where.createdAt.lte = end;
+      }
     }
 
     const [prescriptions, total] = await Promise.all([

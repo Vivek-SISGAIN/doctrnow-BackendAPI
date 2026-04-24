@@ -335,12 +335,35 @@ class ConsultationService {
    * Get consultation history by patient ID
    */
   async getHistoryByPatientId(patientId, filters = {}) {
-    const { status, page = 1, limit = 20 } = filters;
+    const { status, page = 1, limit = 20, search, startDate, endDate } = filters;
     const skip = (page - 1) * limit;
 
     const where = { patientId };
     if (status) {
       where.status = status;
+    }
+
+    if (search) {
+      where.OR = [
+        { diagnosis: { contains: search, mode: 'insensitive' } },
+        { 
+          notes: { 
+            some: { 
+              content: { contains: search, mode: 'insensitive' } 
+            } 
+          } 
+        }
+      ];
+    }
+
+    if (startDate || endDate) {
+      const start = startDate ? new Date(startDate) : null;
+      const end = endDate ? new Date(endDate) : null;
+      if (end) end.setHours(23, 59, 59, 999);
+
+      where.createdAt = {};
+      if (start) where.createdAt.gte = start;
+      if (end) where.createdAt.lte = end;
     }
 
     const [consultations, total] = await Promise.all([
