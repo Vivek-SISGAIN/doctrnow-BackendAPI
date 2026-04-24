@@ -1,24 +1,16 @@
 import prisma from '../prisma/prisma';
+import axios from 'axios';
 
 export class HealthPackageService {
-  async createPackage(data: {
-    name: string;
-    description: string;
-    originalPrice: number;
-    finalPrice: number;
-    discountPct: number;
-    hospitalId: string;
-    validityDays: number;
-    serviceIds?: string[];
-  }) {
+  async createPackage(data: any) {
     const { serviceIds, ...packageData } = data;
 
-    return await prisma.healthPackage.create({
+    const healthPackage = await (prisma.healthPackage as any).create({
       data: {
         ...packageData,
         ...(serviceIds && serviceIds.length > 0 && {
           services: {
-            create: serviceIds.map((serviceId) => ({
+            create: serviceIds.map((serviceId: string) => ({
               serviceId
             }))
           }
@@ -32,10 +24,12 @@ export class HealthPackageService {
         }
       }
     });
+
+    return this._attachHospitalDetails(healthPackage);
   }
 
   async getAllPackages() {
-    return await prisma.healthPackage.findMany({
+    const packages = await prisma.healthPackage.findMany({
       include: {
         services: {
           include: {
@@ -47,6 +41,8 @@ export class HealthPackageService {
         createdAt: 'desc'
       }
     });
+
+    return this._attachHospitalDetails(packages);
   }
 
   async getAllPackagesPaged(
@@ -86,8 +82,10 @@ export class HealthPackageService {
       prisma.healthPackage.count({ where })
     ]);
 
+    const enrichedPackages = await this._attachHospitalDetails(packages);
+
     return {
-      packages,
+      packages: enrichedPackages,
       pagination: {
         page: Math.max(1, page),
         limit: Math.max(1, limit),
@@ -98,7 +96,7 @@ export class HealthPackageService {
   }
 
   async getPackageById(id: string) {
-    return await prisma.healthPackage.findUnique({
+    const healthPackage = await prisma.healthPackage.findUnique({
       where: { id },
       include: {
         services: {
@@ -108,20 +106,19 @@ export class HealthPackageService {
         }
       }
     });
+
+    if (!healthPackage) return null;
+
+    return this._attachHospitalDetails(healthPackage);
   }
 
-  async updatePackage(id: string, data: {
-    name?: string;
-    description?: string;
-    originalPrice?: number;
-    finalPrice?: number;
-    discountPct?: number;
-    validityDays?: number;
-  }) {
-    return await prisma.healthPackage.update({
+  async updatePackage(id: string, data: any) {
+    const healthPackage = await (prisma.healthPackage as any).update({
       where: { id },
       data
     });
+
+    return this._attachHospitalDetails(healthPackage);
   }
 
   async deletePackage(id: string) {
@@ -157,6 +154,65 @@ export class HealthPackageService {
         service: true
       }
     });
+  }
+
+  async _attachHospitalDetails(data: any) {
+    if (!data) return data;
+    const isArray = Array.isArray(data);
+    const packages = isArray ? data : [data];
+
+    // Collect unique hospital IDs
+    const hospitalIds = Array.from(new Set(packages.map((p: any) => p.hospitalId).filter(Boolean)));
+    if (hospitalIds.length === 0) return data;
+
+    // Robust URL parsing to handle malformed .env strings like ""http://localhost:8080/"
+    let baseUrl = process.env.API_BASE_URL || 'http://localhost:8080';
+    
+    // 1. Remove all quotes
+    baseUrl = baseUrl.replace(/["']/g, '');
+    
+    // 2. Remove trailing slash
+    baseUrl = baseUrl.replace(/\/+$/, '');
+    
+    // 3. Ensure it ends with /api/v1 if we're calling gateway routes
+    if (!baseUrl.endsWith('/api/v1')) {
+      baseUrl += '/api/v1';
+    }
+
+    const internalSecret = process.env.INTERNAL_SERVICE_SECRET || 'super_secret_internal_key_123';
+
+    try {
+      const response = await axios.post(
+        `${baseUrl}/super-admins/hospital/bulk`,
+        { ids: hospitalIds },
+        {
+          headers: {
+            'x-internal-service-key': internalSecret,
+            'x-internal-secret': internalSecret,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      const hospitalMap = response.data?.data || {};
+
+      packages.forEach((pkg: any) => {
+        if (pkg.hospitalId && hospitalMap[pkg.hospitalId]) {
+          pkg.hospital = {
+            id: pkg.hospitalId,
+            officialName: hospitalMap[pkg.hospitalId].officialName,
+            shortName: hospitalMap[pkg.hospitalId].shortName,
+            fullAddress: hospitalMap[pkg.hospitalId].fullAddress,
+            area: hospitalMap[pkg.hospitalId].area,
+            emirate: hospitalMap[pkg.hospitalId].emirate
+          };
+        }
+      });
+    } catch (error: any) {
+      console.error('[HealthPackageService] Failed to fetch hospital details:', error.message);
+    }
+
+    return isArray ? packages : packages[0];
   }
 }
 
