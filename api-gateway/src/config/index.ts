@@ -50,5 +50,5 @@ export const config = {
     errorThresholdPercentage: parseInt(process.env.CIRCUIT_BREAKER_ERROR_THRESHOLD || '50', 10),
     resetTimeout: parseInt(process.env.CIRCUIT_BREAKER_RESET_TIMEOUT || '30000', 10),
   },
+  internalSecret: process.env.INTERNAL_SERVICE_SECRET || 'super_secret_internal_key_123',
 };
-

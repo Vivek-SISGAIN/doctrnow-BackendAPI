@@ -23,6 +23,7 @@ const {
   getConsultationReviews,
   getConsultationsByBulkIds,
   notifyDocumentUploaded,
+  getDoctorPatientIds
 } = require('../controllers/consultation.controller');
 const {
   createConsultationSchema,
@@ -486,6 +487,7 @@ router.post('/bulk', getConsultationsByBulkIds);
  *         description: Doctor reviews retrieved successfully
  */
 router.get('/doctors/:doctorId/reviews', getConsultationReviews);
+router.get('/doctors/:doctorId/patients', getDoctorPatientIds);
 
 /**
  * POST /api/consultations/notify/document-uploaded

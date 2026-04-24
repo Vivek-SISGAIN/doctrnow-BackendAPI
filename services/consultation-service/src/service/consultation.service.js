@@ -358,7 +358,7 @@ class ConsultationService {
         skip,
         take: parseInt(limit, 10),
         orderBy: {
-          startedAt: 'desc'
+          createdAt: 'desc'
         }
       }),
       prisma.consultation.count({ where })
@@ -416,7 +416,7 @@ class ConsultationService {
         skip,
         take: parseInt(limit, 10),
         orderBy: {
-          startedAt: 'desc'
+          createdAt: 'desc'
         }
       }),
       prisma.consultation.count({ where })
@@ -581,6 +581,23 @@ class ConsultationService {
       console.error(`[ConsultationService] Error fetching documents from ${GATEWAY_URL}:`, error.message);
       return consultations.map((c) => ({ ...c, documents: [] }));
     }
+  }
+
+  /**
+   * Get unique patient IDs who have consulted with a specific doctor.
+   * @param {string} doctorId 
+   * @returns {Promise<string[]>}
+   */
+  async getUniquePatientIdsByDoctorId(doctorId) {
+    const consultations = await prisma.consultation.findMany({
+      where: { 
+        doctorId,
+        status: 'COMPLETED'
+      },
+      select: { patientId: true },
+      distinct: ['patientId']
+    });
+    return consultations.map(c => c.patientId);
   }
 }
 

@@ -13,6 +13,7 @@ const {
   getUploadUrl,
   deleteTempFile,
   confirmUpload,
+  confirmUploadBulk,
   getDocumentsByAppointmentsBulk,
   getDocumentsByConsultationsBulk,
   getDocumentUrl,
@@ -44,6 +45,7 @@ router.delete('/temp-file', deleteTempFile);
  * Moves the uploaded file from temp/ to documents/, saves metadata in DB.
  */
 router.post('/confirm-upload', confirmUpload);
+router.post('/confirm-upload-bulk', confirmUploadBulk);
 
 // ─── New: Internal bulk endpoints (protected by x-internal-secret) ────────────
 

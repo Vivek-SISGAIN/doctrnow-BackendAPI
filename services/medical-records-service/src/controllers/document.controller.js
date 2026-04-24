@@ -234,13 +234,9 @@ const confirmUpload = asyncHandler(async (req, res) => {
     throw ApiError.badRequest('s3Key must point to a temp/ object');
   }
 
-  // Build the permanent key: replace temp/ prefix with documents/
   const destKey = s3Key.replace(/^temp\//, 'documents/');
-
-  // Move in S3
   const finalKey = await s3Service.moveObject(s3Key, destKey);
 
-  // Save metadata in DB
   const document = await documentService.create({
     patientId,
     doctorId: req.body.doctorId || undefined,
@@ -255,38 +251,8 @@ const confirmUpload = asyncHandler(async (req, res) => {
     description: req.body.description || undefined,
   });
 
-  // If this upload is tied to a live consultation, notify the doctor via socket
   if (req.body.consultationId && req.body.appointmentId) {
-    const consultationBaseUrl = process.env.CONSULTATION_SERVICE_INTERNAL_URL || process.env.CONSULTATION_SERVICE_URL || process.env.BASE_URL;
-    const internalSecret = process.env.INTERNAL_SECRET || '';
-    const notifyUrl = `${consultationBaseUrl.endsWith('/') ? consultationBaseUrl : consultationBaseUrl + '/'}consultations/notify/document-uploaded`;
-    
-    try {
-      console.log(`[DocumentController] Notifying consultation-service at: ${notifyUrl}`);
-      const notifyResponse = await fetch(notifyUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-internal-secret': internalSecret,
-        },
-        body: JSON.stringify({
-          consultationId: req.body.consultationId,
-          patientId,
-          documentId: document.id,
-          appointmentId: req.body.appointmentId,
-        }),
-      });
-
-      if (!notifyResponse.ok) {
-        const errorText = await notifyResponse.text();
-        console.warn(`[DocumentController] Socket notification failed with status ${notifyResponse.status}: ${errorText}`);
-      } else {
-        console.log('[DocumentController] Socket notification sent successfully.');
-      }
-    } catch (err) {
-      // Non-fatal: log but don't fail the upload
-      console.error('[DocumentController] Error sending socket notification:', err.message);
-    }
+    await _notifyConsultation(req.body.consultationId, patientId, document.id, req.body.appointmentId);
   }
 
   res.status(201).json({
@@ -295,6 +261,73 @@ const confirmUpload = asyncHandler(async (req, res) => {
     data: document
   });
 });
+
+/**
+ * POST /api/documents/confirm-upload-bulk
+ * Confirms multiple staged uploads in one request.
+ * Body: { documents: Array<{ patientId, doctorId, appointmentId, consultationId, name, type, s3Key, fileSize, mimeType, uploadedBy, description }> }
+ */
+const confirmUploadBulk = asyncHandler(async (req, res) => {
+  const { documents } = req.body;
+
+  if (!Array.isArray(documents) || documents.length === 0) {
+    throw ApiError.badRequest('documents must be a non-empty array');
+  }
+
+  const results = [];
+  
+  // Process all in parallel for speed
+  await Promise.all(documents.map(async (doc) => {
+    const { patientId, s3Key, name, type, uploadedBy } = doc;
+    if (!patientId || !s3Key || !name || !type || !uploadedBy) return;
+    if (!s3Key.startsWith('temp/')) return;
+
+    try {
+      const destKey = s3Key.replace(/^temp\//, 'documents/');
+      const finalKey = await s3Service.moveObject(s3Key, destKey);
+
+      const saved = await documentService.create({
+        ...doc,
+        filePath: finalKey,
+        fileSize: doc.fileSize ? parseInt(doc.fileSize, 10) : 0,
+      });
+
+      results.push(saved);
+
+      if (doc.consultationId && doc.appointmentId) {
+        _notifyConsultation(doc.consultationId, patientId, saved.id, doc.appointmentId).catch(() => {});
+      }
+    } catch (err) {
+      console.error(`[DocumentController] Bulk confirm failed for ${name}:`, err.message);
+    }
+  }));
+
+  res.status(201).json({
+    success: true,
+    message: `${results.length} documents confirmed successfully`,
+    data: results
+  });
+});
+
+// Helper for socket notifications
+async function _notifyConsultation(consultationId, patientId, documentId, appointmentId) {
+  const consultationBaseUrl = process.env.CONSULTATION_SERVICE_INTERNAL_URL || process.env.CONSULTATION_SERVICE_URL || process.env.BASE_URL;
+  const internalSecret = process.env.INTERNAL_SECRET || '';
+  const notifyUrl = `${consultationBaseUrl.endsWith('/') ? consultationBaseUrl : consultationBaseUrl + '/'}consultations/notify/document-uploaded`;
+  
+  try {
+    await fetch(notifyUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-internal-secret': internalSecret,
+      },
+      body: JSON.stringify({ consultationId, patientId, documentId, appointmentId }),
+    });
+  } catch (err) {
+    console.warn(`[DocumentController] Notify failed: ${err.message}`);
+  }
+}
 
 
 // ─── Internal Bulk Endpoints (x-internal-secret protected) ───────────────────
@@ -432,6 +465,7 @@ module.exports = {
   getUploadUrl,
   deleteTempFile,
   confirmUpload,
+  confirmUploadBulk,
   getDocumentsByAppointmentsBulk,
   getDocumentsByConsultationsBulk,
   getDocumentUrl

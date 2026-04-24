@@ -1,40 +1,44 @@
 const consultationService = require('../service/consultation.service');
+const axios = require('axios');
 const prisma = require('../prisma/prisma');
 const ApiError = require('../utils/ApiError');
 const asyncHandler = require('../utils/asyncHandler');
 const { emitToRoom, emitToDoctorRoom, emitDocumentUploaded, CONSULTATION_EVENTS } = require('../utils/socket');
 const chatClient = require('../utils/chat-client');
-const profileClient = require('../utils/profile-client');
 const appointmentClient = require('../utils/appointment-client');
 
-const baseUrl = process.env.BASE_URL;
+const baseUrl = (process.env.BASE_URL || 'http://localhost:8080/api/v1/').replace(/\/$/, '') + '/';
 const INTERNAL_SECRET = process.env.INTERNAL_SECRET || '';
 
 async function fetchBulk(ids, bulkUrl, authHeader, entityName) {
-  if (ids.length === 0) return {};
+  if (!ids || ids.length === 0) return {};
+
+  const uniqueIds = [...new Set(ids)];
+  const chunkSize = 100;
+  const results = {};
 
   try {
-    const response = await fetch(bulkUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: authHeader
-      },
-      body: JSON.stringify({ ids })
-    });
-    
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+    for (let i = 0; i < uniqueIds.length; i += chunkSize) {
+      const chunk = uniqueIds.slice(i, i + chunkSize);
+      const response = await axios.post(bulkUrl, { ids: chunk }, {
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: authHeader
+        },
+        timeout: 5000
+      });
+      
+      const data = response.data?.data || {};
+      Object.assign(results, data);
     }
     
-    const data = await response.json();
-    return data?.data || {};
+    return results;
   } catch (err) {
     console.error(
-      `[consultation] Bulk ${entityName} fetch failed:`,
-      err.message
+      `[consultation] Bulk ${entityName} fetch failed at ${bulkUrl}:`,
+      err.response?.data || err.message
     );
-    return {};
+    return results; // Return what we have so far
   }
 }
 
@@ -310,8 +314,9 @@ const getHistoryByPatient = asyncHandler(async (req, res) => {
     limit
   });
 
-  const appointmentIds = result.consultations.map(c => c.appointmentId).filter(Boolean);
-  const doctorIds = [...new Set(result.consultations.map(c => c.doctorId).filter(Boolean))];
+  const consultations = result.consultations || [];
+  const appointmentIds = consultations.map(c => c.appointmentId).filter(Boolean);
+  const doctorIds = [...new Set(consultations.map(c => c.doctorId).filter(Boolean))];
   const authHeader = req.headers.authorization;
 
   let prescriptionMap = {};
@@ -320,7 +325,7 @@ const getHistoryByPatient = asyncHandler(async (req, res) => {
   if (authHeader) {
     const promises = [];
     
-    // Fetch prescriptions
+    // Fetch prescriptions via Gateway
     if (appointmentIds.length > 0) {
       promises.push(fetchBulk(appointmentIds, `${baseUrl}prescriptions/appointments/bulk`, authHeader, 'prescription'));
     } else {
@@ -329,28 +334,32 @@ const getHistoryByPatient = asyncHandler(async (req, res) => {
 
     // Fetch doctors via Gateway
     if (doctorIds.length > 0) {
-      promises.push(profileClient.getDoctorsByBulkIds(doctorIds, authHeader));
+      promises.push(fetchBulk(doctorIds, `${baseUrl}profiles/doctors/bulk`, authHeader, 'doctor'));
     } else {
       promises.push(Promise.resolve({}));
     }
 
     const [pMap, dMap] = await Promise.all(promises);
-    prescriptionMap = pMap;
-    doctorMap = dMap;
+    prescriptionMap = pMap || {};
+    doctorMap = dMap || {};
   }
 
   // documentCount only for list performance
-  let enhancedConsultations = result.consultations;
-  if (enhancedConsultations.length > 0 && authHeader) {
-    enhancedConsultations = await consultationService._attachDocuments(enhancedConsultations);
-  }
+  const enhancedConsultations = consultations.map(c => {
+    // Ensure we have a plain object
+    const plain = typeof c.toJSON === 'function' ? c.toJSON() : JSON.parse(JSON.stringify(c));
 
-  enhancedConsultations = enhancedConsultations.map(c => ({
-    ...c,
-    prescription: prescriptionMap[c.appointmentId] || null,
-    doctor: doctorMap[c.doctorId] || { id: c.doctorId, fullName: "Medical Practitioner" },
-    documentCount: c.documents?.length ?? 0,
-  }));
+    return {
+      ...plain,
+      prescription: prescriptionMap[String(c.appointmentId)] || null,
+      doctor: doctorMap[String(c.doctorId)] || { 
+        id: c.doctorId, 
+        fullName: "Medical Practitioner",
+        specialization: "General Physician"
+      },
+      documents: Array.isArray(c.documents) ? c.documents : [],
+    };
+  });
 
   res.status(200).json({
     success: true,
@@ -371,26 +380,52 @@ const getHistoryByDoctor = asyncHandler(async (req, res) => {
     endDate
   });
 
-  const appointmentIds = result.consultations.map(c => c.appointmentId).filter(Boolean);
-  const consultationIds = result.consultations.map(c => c.id).filter(Boolean);
+  const consultations = result.consultations || [];
+  const appointmentIds = consultations.map(c => c.appointmentId).filter(Boolean);
+  const patientIds = [...new Set(consultations.map(c => c.patientId).filter(Boolean))];
   const authHeader = req.headers.authorization;
 
   let prescriptionMap = {};
-  if (appointmentIds.length > 0 && authHeader) {
-    prescriptionMap = await fetchBulk(appointmentIds, `${baseUrl}prescriptions/appointments/bulk`, authHeader, 'prescription');
+  let patientMap = {};
+
+  if (authHeader) {
+    const promises = [];
+
+    // Fetch prescriptions via Gateway
+    if (appointmentIds.length > 0) {
+      promises.push(fetchBulk(appointmentIds, `${baseUrl}prescriptions/appointments/bulk`, authHeader, 'prescription'));
+    } else {
+      promises.push(Promise.resolve({}));
+    }
+
+    // Fetch patients via Gateway
+    if (patientIds.length > 0) {
+      promises.push(fetchBulk(patientIds, `${baseUrl}profiles/patients/bulk`, authHeader, 'patient'));
+    } else {
+      promises.push(Promise.resolve({}));
+    }
+
+    const [pMap, patMap] = await Promise.all(promises);
+    prescriptionMap = pMap || {};
+    patientMap = patMap || {};
   }
 
   // documentCount only for list performance
-  let enhancedConsultations = result.consultations;
-  if (enhancedConsultations.length > 0 && authHeader) {
-    enhancedConsultations = await consultationService._attachDocuments(enhancedConsultations);
-  }
-
-  enhancedConsultations = enhancedConsultations.map(c => ({
-    ...c,
-    prescription: prescriptionMap[c.appointmentId] || null,
-    documentCount: c.documents?.length ?? 0,
-  }));
+  const enhancedConsultations = consultations.map(c => {
+    // Ensure we have a plain object
+    const plain = typeof c.toJSON === 'function' ? c.toJSON() : JSON.parse(JSON.stringify(c));
+    
+    return {
+      ...plain,
+      patient: patientMap[String(c.patientId)] || { 
+        id: c.patientId, 
+        firstName: "Patient", 
+        lastName: String(c.patientId).split('-')[0]
+      },
+      prescription: prescriptionMap[String(c.appointmentId)] || null,
+      documents: Array.isArray(c.documents) ? c.documents : [],
+    };
+  });
 
   res.status(200).json({
     success: true,
@@ -736,13 +771,13 @@ const getConsultationsByBulkIds = asyncHandler(async (req, res) => {
   const { ids } = req.body;
 
   if (!ids || !Array.isArray(ids) || ids.length === 0) {
-    throw ApiError.badRequest('ids must be a non-empty array');
+    throw ApiError.badRequest('Ids must be a non-empty array');
   }
 
   const uniqueIds = [...new Set(ids)];
 
   if (uniqueIds.length > 100) {
-    throw ApiError.badRequest('Maximum 100 ids allowed per request');
+    throw ApiError.badRequest('Maximum 100 Ids allowed per request');
   }
 
   const consultations = await consultationService.findByIds(uniqueIds);
@@ -781,6 +816,15 @@ const notifyDocumentUploaded = asyncHandler(async (req, res) => {
   res.status(200).json({ success: true, message: 'Document upload event emitted' });
 });
 
+const getDoctorPatientIds = asyncHandler(async (req, res) => {
+  const { doctorId } = req.params;
+  const patientIds = await consultationService.getUniquePatientIdsByDoctorId(doctorId);
+  res.status(200).json({
+    success: true,
+    data: patientIds
+  });
+});
+
 module.exports = {
   createConsultation,
   getConsultationById,
@@ -804,4 +848,5 @@ module.exports = {
   getConsultationReviews,
   getConsultationsByBulkIds,
   notifyDocumentUploaded,
-};
+  getDoctorPatientIds
+};
