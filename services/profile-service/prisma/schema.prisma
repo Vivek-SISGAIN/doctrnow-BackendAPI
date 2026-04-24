@@ -12,6 +12,7 @@ model Patient {
   userId        String                @unique
   mobileNumber  String                @unique
   profileImage  String
+  status        String       @default("ACTIVE")
   email         String                @unique
   firstName     String
   lastName      String
@@ -21,9 +22,15 @@ model Patient {
   nationality   String
   bloodGroup    BloodGroup?
   maritalStatus MaritalStatus?
+  mrn           String?               @unique
+  insuranceId   String?
+  riskCategory  RiskCategory?         @default(LOW)
+  patientType   PatientType?          @default(ACUTE)
+  followUpStatus FollowUpStatus?      @default(NO_FOLLOWUP)
   createdAt     DateTime              @default(now())
   updatedAt     DateTime              @updatedAt
   lastVisit     DateTime?
+  totalVisits   Int                   @default(0)
   healthProfile PatientHealthProfile?
 
   @@map("patient")
@@ -36,6 +43,9 @@ model PatientHealthProfile {
   height          String?
   bloodPressure   String?
   sugarLevel      String?
+  temperature     String?
+  pulse           String?
+  spo2            String?
   allergies       String[]
   conditions      String[]
   medications     String[]
@@ -267,4 +277,21 @@ enum SupportedService {
   HOME_CARE
   SURGERY
   EMERGENCY
+}
+
+enum RiskCategory {
+  HIGH
+  MEDIUM
+  LOW
+}
+
+enum PatientType {
+  CHRONIC
+  ACUTE
+}
+
+enum FollowUpStatus {
+  SCHEDULED
+  OVERDUE
+  NO_FOLLOWUP
 }

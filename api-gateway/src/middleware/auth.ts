@@ -37,6 +37,12 @@ export const authenticateJWT = async (
 ): Promise<void> => {
   try {
     const authHeader = req.headers.authorization;
+    const internalSecret = req.headers['x-internal-secret'];
+
+    // Bypass authentication for internal service calls
+    if (internalSecret && internalSecret === config.internalSecret) {
+      return next();
+    }
 
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       res.status(401).json({

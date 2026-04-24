@@ -1,5 +1,6 @@
 const prisma = require('../prisma/prisma');
 const consultationVitalsService = require('./consultation-vitals.service');
+const axios = require('axios');
 
 class ConsultationService {
   /**
@@ -60,7 +61,10 @@ class ConsultationService {
       }
     });
 
-    return consultation;
+    if (!consultation) return null;
+
+    const [enriched] = await this._attachDocuments([consultation]);
+    return enriched;
   }
 
   /**
@@ -79,8 +83,10 @@ class ConsultationService {
       }
     });
     if (!consultation) return null;
-    const channelName = consultation.channelName || `appointment-${appointmentId}`;
-    return { ...consultation, channelName };
+    
+    const [enriched] = await this._attachDocuments([consultation]);
+    const channelName = enriched.channelName || `appointment-${appointmentId}`;
+    return { ...enriched, channelName };
   }
 
   /**
@@ -352,14 +358,16 @@ class ConsultationService {
         skip,
         take: parseInt(limit, 10),
         orderBy: {
-          startedAt: 'desc'
+          createdAt: 'desc'
         }
       }),
       prisma.consultation.count({ where })
     ]);
 
+    const enriched = await this._attachDocuments(consultations);
+
     return {
-      consultations,
+      consultations: enriched,
       pagination: {
         page: parseInt(page, 10),
         limit: parseInt(limit, 10),
@@ -408,14 +416,16 @@ class ConsultationService {
         skip,
         take: parseInt(limit, 10),
         orderBy: {
-          startedAt: 'desc'
+          createdAt: 'desc'
         }
       }),
       prisma.consultation.count({ where })
     ]);
 
+    const enriched = await this._attachDocuments(consultations);
+
     return {
-      consultations,
+      consultations: enriched,
       pagination: {
         page: parseInt(page, 10),
         limit: parseInt(limit, 10),
@@ -498,7 +508,7 @@ class ConsultationService {
   async findByIds(ids) {
     if (!ids || !Array.isArray(ids) || ids.length === 0) return [];
 
-    return prisma.consultation.findMany({
+    const consultations = await prisma.consultation.findMany({
       where: {
         OR: [
           { id: { in: ids } },
@@ -514,6 +524,80 @@ class ConsultationService {
         vitals: true
       }
     });
+
+    return this._attachDocuments(consultations);
+  }
+
+  /**
+   * Internal: Aggregates medical documents for multiple consultations via API Gateway.
+   * Routes through Gateway to medical-records-service.
+   */
+  async _attachDocuments(consultations) {
+    if (!consultations || consultations.length === 0) return consultations;
+
+    const ids = consultations.map((c) => c.id);
+    const mappings = {};
+    consultations.forEach((c) => {
+      if (c.id && c.appointmentId) {
+        mappings[c.id] = c.appointmentId;
+      }
+    });
+
+    const GATEWAY_URL = process.env.BASE_URL; // e.g. http://localhost:8080/api/v1/
+    const GATEWAY_SECRET = process.env.INTERNAL_SERVICE_SECRET;
+    const TARGET_SECRET = process.env.INTERNAL_SECRET;
+
+    if (!GATEWAY_URL || !GATEWAY_SECRET) {
+      console.warn("[ConsultationService] Document aggregation skipped: BASE_URL or INTERNAL_SERVICE_SECRET not configured");
+      return consultations.map((c) => ({ ...c, documents: [] }));
+    }
+
+    try {
+      // url = http://localhost:8080/api/v1/documents/consultations/bulk
+      const url = `${GATEWAY_URL.endsWith("/") ? GATEWAY_URL : GATEWAY_URL + "/"}documents/consultations/bulk`;
+      
+      const response = await axios.post(
+        url,
+        { ids, mappings },
+        {
+          headers: {
+            "Content-Type": "application/json",
+            "x-internal-service-key": GATEWAY_SECRET,
+            "x-internal-secret": TARGET_SECRET,
+          },
+          timeout: 5000,
+        }
+      );
+
+      const json = response.data;
+      const documentMap = json?.data || {};
+
+      // 5. Map results back to consultations
+      return consultations.map((c) => ({
+        ...c,
+        documents: documentMap[c.id] || [],
+      }));
+    } catch (error) {
+      console.error(`[ConsultationService] Error fetching documents from ${GATEWAY_URL}:`, error.message);
+      return consultations.map((c) => ({ ...c, documents: [] }));
+    }
+  }
+
+  /**
+   * Get unique patient IDs who have consulted with a specific doctor.
+   * @param {string} doctorId 
+   * @returns {Promise<string[]>}
+   */
+  async getUniquePatientIdsByDoctorId(doctorId) {
+    const consultations = await prisma.consultation.findMany({
+      where: { 
+        doctorId,
+        status: 'COMPLETED'
+      },
+      select: { patientId: true },
+      distinct: ['patientId']
+    });
+    return consultations.map(c => c.patientId);
   }
 }
 
