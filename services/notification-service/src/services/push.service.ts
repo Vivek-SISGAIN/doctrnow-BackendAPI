@@ -5,37 +5,28 @@ import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
+
 if (!admin.apps.length) {
   try {
-    let serviceAccount: admin.ServiceAccount | null = null;
+    const projectId = process.env.FIREBASE_PROJECT_ID;
+    const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
+    const privateKey = process.env.FIREBASE_PRIVATE_KEY;
 
-    const serviceAccountPath = process.env.FIREBASE_SERVICE_ACCOUNT_PATH;
-    const serviceAccountStr  = process.env.FIREBASE_SERVICE_ACCOUNT;
-
-    if (serviceAccountPath) {
-      // Most reliable: read from a JSON file
-      // Set FIREBASE_SERVICE_ACCOUNT_PATH=./firebase-service-account.json in .env
-      const resolved = path.resolve(process.cwd(), serviceAccountPath);
-      serviceAccount = JSON.parse(fs.readFileSync(resolved, 'utf-8'));
-    } else if (serviceAccountStr) {
-      // Fallback: inline JSON string from env
-      // .env parsers often corrupt multiline values — clean it up first
-      const cleaned = serviceAccountStr
-        .trim()
-        .replace(/\\n/g, '\n'); // restore real newlines in the private_key PEM block
-      serviceAccount = JSON.parse(cleaned);
+    if (!projectId || !clientEmail || !privateKey) {
+      throw new Error("Missing Firebase environment variables");
     }
 
-    if (serviceAccount) {
-      admin.initializeApp({
-        credential: admin.credential.cert(serviceAccount),
-      });
-      console.log('✅ Firebase Admin Initialized');
-    } else {
-      console.warn('⚠️ FIREBASE_SERVICE_ACCOUNT not found in environment');
-    }
+    admin.initializeApp({
+      credential: admin.credential.cert({
+        projectId,
+        clientEmail,
+        privateKey: privateKey.replace(/\\n/g, "\n"),
+      }),
+    });
+
+    console.log("✅ Firebase Admin Initialized");
   } catch (error) {
-    console.error('❌ Error initializing Firebase Admin:', error);
+    console.error("❌ Error initializing Firebase Admin:", error);
   }
 }
 
