@@ -153,8 +153,7 @@ export const createBroadcastNotification = async (req: Request, res: Response) =
 
 export const listNotifications = async (req: Request, res: Response) => {
   try {
-    console.log('USER ID:', req.headers['x-user-id']);
-    const userId = String(req.headers['x-user-id'] || 'c282190d-e5eb-45ef-9edc-93bb41bb10b3');
+    const userId = String(req.headers['x-user-id'] || '');
     if (!userId) {
       return res.status(401).json({ error: 'x-user-id header is required' });
     }
@@ -314,4 +313,3 @@ export const broadcastBannerNotification = (req: Request, res: Response) => {
     return res.status(500).json({ error: 'Internal server error' });
   }
 };
-

@@ -35,12 +35,24 @@ export const startPushWorker = async () => {
         data: { status: 'PROCESSING' },
       });
 
-      await pushService.sendPushNotification(
+      const response: any = await pushService.sendPushNotification(
         dbNotification.userId,
         dbNotification.title,
         dbNotification.body,
         dbNotification.payload
       );
+
+      if (!response || typeof response.successCount !== 'number') {
+        const err = new Error('[PushWorker] Push send did not return a BatchResponse');
+        (err as any).code = 'PUSH_NO_RESPONSE';
+        throw err;
+      }
+
+      if (response.successCount === 0) {
+        const err = new Error('[PushWorker] Push send completed with 0 successes');
+        (err as any).code = 'PUSH_ZERO_SUCCESS';
+        throw err;
+      }
 
       await prisma.notification.update({
         where: { id: dbNotification.id },
@@ -51,12 +63,22 @@ export const startPushWorker = async () => {
       console.log(`[PushWorker] Successfully processed notification ${dbNotification.id}`);
     } catch (error) {
       console.error(`[PushWorker] Failed processing message:`, error);
-      
+
       const payload = JSON.parse(msg.content.toString());
       if (payload && payload.id) {
         const dbNotification = await prisma.notification.findUnique({ where: { id: payload.id } });
         if (dbNotification) {
-          if (dbNotification.retryCount >= dbNotification.maxRetries) {
+          // NO_DEVICES is expected when the user hasn't registered a push device yet.
+          // The in-app socket channel already delivered this notification in real-time,
+          // so we silently skip — no retry, no FAILED status to avoid polluting the queue.
+          if ((error as any)?.code === 'NO_DEVICES') {
+            await prisma.notification.update({
+              where: { id: dbNotification.id },
+              data: { status: 'SENT' }, // Mark as "handled" so it doesn't retry endlessly
+            });
+            channel.ack(msg);
+            console.log(`[PushWorker] No device for userId=${dbNotification.userId} — skipped (in-app socket already delivered).`);
+          } else if (dbNotification.retryCount >= dbNotification.maxRetries) {
             await prisma.notification.update({
               where: { id: dbNotification.id },
               data: { status: 'FAILED' },
@@ -68,7 +90,7 @@ export const startPushWorker = async () => {
               where: { id: dbNotification.id },
               data: { retryCount: dbNotification.retryCount + 1, status: 'PENDING' },
             });
-            channel.nack(msg, false, false); 
+            channel.nack(msg, false, false);
             console.log(`[PushWorker] Sent to DLX for retry. ID: ${dbNotification.id}`);
           }
         } else {

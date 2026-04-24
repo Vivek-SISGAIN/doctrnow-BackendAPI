@@ -115,6 +115,28 @@ export class NotificationController {
     return this.proxyRequest(req, res, '/api/devices');
   }
 
+  @Get('devices/*')
+  @Roles(UserRole.PATIENT, UserRole.DOCTOR, UserRole.HOSPITAL_ADMIN, UserRole.SUPER_ADMIN)
+  @ApiOperation({ summary: 'List devices for a user' })
+  async listDevices(@Req() req: Request, @Res() res: Response): Promise<void> {
+    return this.proxyToService(req, res, '/api/v1/devices', '/api/devices');
+  }
+
+  // Hospital-admin frontend historically calls /api/v1/notifications/devices
+  @Post('notifications/devices')
+  @Roles(UserRole.PATIENT, UserRole.DOCTOR, UserRole.HOSPITAL_ADMIN, UserRole.SUPER_ADMIN)
+  @ApiOperation({ summary: 'Register a device for push notifications (alias)' })
+  async registerDeviceViaNotifications(@Req() req: Request, @Res() res: Response): Promise<void> {
+    return this.proxyRequest(req, res, '/api/devices');
+  }
+
+  @Get('notifications/devices/*')
+  @Roles(UserRole.PATIENT, UserRole.DOCTOR, UserRole.HOSPITAL_ADMIN, UserRole.SUPER_ADMIN)
+  @ApiOperation({ summary: 'List devices for a user (alias)' })
+  async listDevicesViaNotifications(@Req() req: Request, @Res() res: Response): Promise<void> {
+    return this.proxyToService(req, res, '/api/v1/notifications/devices', '/api/devices');
+  }
+
   @Delete('devices/*')
   @Roles(UserRole.PATIENT, UserRole.DOCTOR, UserRole.HOSPITAL_ADMIN, UserRole.SUPER_ADMIN)
   @ApiOperation({ summary: 'Unregister a push-notification device' })

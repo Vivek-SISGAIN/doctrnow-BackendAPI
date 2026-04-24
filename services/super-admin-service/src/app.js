@@ -27,8 +27,27 @@ const limiter = rateLimit({
 app.use("/api", limiter);
 
 
+const allowedOrigins = process.env.CORS_ORIGINS
+  ? process.env.CORS_ORIGINS.split(",").map((o) => o.trim()).filter(Boolean)
+  : null;
+
+// NOTE: When `credentials: true`, CORS cannot use `Access-Control-Allow-Origin: *`.
+// If no allowlist is provided, reflect the request origin (permissive, but works).
 const corsOptions = {
-  origin: "*",
+  origin: (origin, callback) => {
+    // Allow non-browser requests (no Origin header)
+    if (!origin) return callback(null, true);
+
+    if (!allowedOrigins || allowedOrigins.length === 0) {
+      return callback(null, true); // reflect origin
+    }
+
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, origin);
+    }
+
+    return callback(new Error(`CORS: Origin '${origin}' is not allowed`));
+  },
   credentials: true,
   methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
   allowedHeaders: [
