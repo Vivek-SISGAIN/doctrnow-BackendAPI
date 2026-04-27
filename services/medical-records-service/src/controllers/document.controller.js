@@ -257,8 +257,8 @@ const confirmUpload = asyncHandler(async (req, res) => {
     description: req.body.description || undefined,
   });
 
-  if (req.body.consultationId && req.body.appointmentId) {
-    await _notifyConsultation(req.body.consultationId, patientId, document.id, req.body.appointmentId);
+  if (req.body.appointmentId) {
+    await _notifyConsultation(req.body.appointmentId, patientId, document.id, req.body.consultationId);
   }
 
   res.status(201).json({
@@ -300,8 +300,8 @@ const confirmUploadBulk = asyncHandler(async (req, res) => {
 
       results.push(saved);
 
-      if (doc.consultationId && doc.appointmentId) {
-        _notifyConsultation(doc.consultationId, patientId, saved.id, doc.appointmentId).catch(() => {});
+      if (doc.appointmentId) {
+        _notifyConsultation(doc.appointmentId, patientId, saved.id, doc.consultationId).catch(() => {});
       }
     } catch (err) {
       console.error(`[DocumentController] Bulk confirm failed for ${name}:`, err.message);
@@ -316,8 +316,8 @@ const confirmUploadBulk = asyncHandler(async (req, res) => {
 });
 
 // Helper for socket notifications
-async function _notifyConsultation(consultationId, patientId, documentId, appointmentId) {
-  const consultationBaseUrl = process.env.CONSULTATION_SERVICE_INTERNAL_URL || process.env.CONSULTATION_SERVICE_URL || process.env.BASE_URL;
+async function _notifyConsultation(appointmentId, patientId, documentId, consultationId) {
+  const consultationBaseUrl = process.env.API_GATEWAY_URL || process.env.BASE_URL || 'http://localhost:8080/api/v1';
   const internalSecret = process.env.INTERNAL_SECRET || '';
   const notifyUrl = `${consultationBaseUrl.endsWith('/') ? consultationBaseUrl : consultationBaseUrl + '/'}consultations/notify/document-uploaded`;
   

@@ -620,19 +620,30 @@ class AppointmentService {
       throw new Error("Cannot complete a cancelled appointment");
     }
 
-    const updated = await prisma.appointment.update({
-      where: { id },
+    // Atomically update the status only if it's not already COMPLETED
+    // This prevents duplicate notifications if multiple completion requests arrive simultaneously
+    const updated = await prisma.appointment.updateMany({
+      where: { 
+        id, 
+        status: { not: "COMPLETED" } 
+      },
       data: {
         status: "COMPLETED",
-      },
-      include: {
-        slot: true,
-      },
+      }
     });
 
-    schedulerService.fetchAppointmentContext(updated).then((context) => {
+    // If count is 0, it means it was already COMPLETED or doesn't exist
+    if (updated.count === 0) {
+      // Re-fetch to return the current state
+      return this.findById(id);
+    }
+
+    const finalAppointment = await this.findById(id);
+    if (!finalAppointment) return null;
+
+    schedulerService.fetchAppointmentContext(finalAppointment).then((context) => {
       schedulerService.notifyAppointmentParty(
-        updated,
+        finalAppointment,
         "DOCTOR",
         "Appointment Completed",
         `Your appointment with ${context.patientName} has been completed.`,
@@ -644,7 +655,7 @@ class AppointmentService {
         }
       );
       schedulerService.notifyAppointmentParty(
-        updated,
+        finalAppointment,
         "PATIENT",
         "Appointment Completed",
         `Your consultation with Dr. ${context.doctorName} has been completed.`,
@@ -659,7 +670,7 @@ class AppointmentService {
       console.error("[AppointmentService] Failed to send completion notifications:", err.message);
     });
 
-    return updated;
+    return finalAppointment;
   }
 
   /**

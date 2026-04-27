@@ -811,11 +811,11 @@ const notifyDocumentUploaded = asyncHandler(async (req, res) => {
   }
 
   const { consultationId, patientId, documentId, appointmentId } = req.body;
-  if (!consultationId || !patientId || !documentId || !appointmentId) {
-    return res.status(400).json({ success: false, message: 'consultationId, patientId, documentId, and appointmentId are required' });
+  if (!patientId || !documentId || !appointmentId) {
+    return res.status(400).json({ success: false, message: 'patientId, documentId, and appointmentId are required' });
   }
 
-  emitDocumentUploaded(appointmentId, { consultationId, patientId, documentId });
+  emitDocumentUploaded(appointmentId, { consultationId: consultationId || null, patientId, documentId, appointmentId });
 
   res.status(200).json({ success: true, message: 'Document upload event emitted' });
 });

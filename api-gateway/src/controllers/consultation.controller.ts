@@ -58,6 +58,12 @@ export class ConsultationController {
     return this.proxyRequest(req, res);
   }
 
+  @Public()
+  @Post('notify/document-uploaded')
+  async notifyDocumentUploaded(@Req() req: Request, @Res() res: Response): Promise<void> {
+    return this.proxyRequest(req, res);
+  }
+
   @All()
   async proxyBase(@Req() req: Request, @Res() res: Response): Promise<void> {
     return this.proxyRequest(req, res);
@@ -106,7 +112,16 @@ export class ConsultationController {
 
   private extractHeaders(req: Request): Record<string, string> {
     const headers: Record<string, string> = {};
-    const allowedHeaders = ['content-type', 'accept', 'x-tenant-id', 'authorization', 'x-user-id', 'x-user-role'];
+    const allowedHeaders = [
+      'content-type',
+      'accept',
+      'x-tenant-id',
+      'authorization',
+      'x-user-id',
+      'x-user-role',
+      'x-internal-secret',
+      'x-internal-service-key'
+    ];
 
     for (const [key, value] of Object.entries(req.headers)) {
       if (allowedHeaders.includes(key.toLowerCase())) {
