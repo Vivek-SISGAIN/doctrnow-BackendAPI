@@ -57,6 +57,13 @@ export class NotificationController {
     return this.proxyRequest(req, res, '/api/notifications/single');
   }
 
+  @Post('notifications/trigger')
+  @Roles(UserRole.PATIENT, UserRole.DOCTOR, UserRole.HOSPITAL_ADMIN, UserRole.SUPER_ADMIN)
+  @ApiOperation({ summary: 'Trigger a single in-app notification' })
+  async triggerNotification(@Req() req: Request, @Res() res: Response): Promise<void> {
+    return this.proxyRequest(req, res, '/api/notifications/trigger');
+  }
+
   @Post('notifications/bulk')
   @Roles(UserRole.PATIENT, UserRole.DOCTOR, UserRole.HOSPITAL_ADMIN, UserRole.SUPER_ADMIN)
   @ApiOperation({ summary: 'Create bulk notifications' })

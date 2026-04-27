@@ -74,7 +74,14 @@ export class ChatController {
 
   private extractHeaders(req: Request): Record<string, string> {
     const headers: Record<string, string> = {};
-    const allowedHeaders = ['content-type', 'accept', 'x-tenant-id', 'authorization'];
+    const allowedHeaders = [
+      'content-type',
+      'accept',
+      'x-tenant-id',
+      'authorization',
+      'x-internal-secret',
+      'x-internal-service-key',
+    ];
 
     for (const [key, value] of Object.entries(req.headers)) {
       if (allowedHeaders.includes(key.toLowerCase())) {

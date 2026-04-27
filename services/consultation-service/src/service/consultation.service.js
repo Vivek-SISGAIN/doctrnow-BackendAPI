@@ -2,6 +2,44 @@ const prisma = require('../prisma/prisma');
 const consultationVitalsService = require('./consultation-vitals.service');
 const axios = require('axios');
 
+const gatewayBaseUrl = () => {
+  const base = process.env.BASE_URL || 'http://localhost:8080/api/v1/';
+  return base.endsWith('/') ? base : `${base}/`;
+};
+
+const notifyAppointmentCompleted = (appointmentId) => {
+  if (!appointmentId) return;
+
+  (async () => {
+    try {
+      const response = await fetch(`${gatewayBaseUrl()}appointments/${encodeURIComponent(appointmentId)}/complete`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(process.env.INTERNAL_SERVICE_SECRET
+            ? { 'x-internal-service-key': process.env.INTERNAL_SERVICE_SECRET }
+            : {}),
+          ...(process.env.INTERNAL_SECRET ? { 'x-internal-secret': process.env.INTERNAL_SECRET } : {}),
+        },
+      });
+
+      if (!response.ok) {
+        const body = await response.text();
+        console.warn('[ConsultationService] Failed to mark appointment completed via gateway:', {
+          appointmentId,
+          status: response.status,
+          body,
+        });
+      }
+    } catch (error) {
+      console.warn('[ConsultationService] Appointment completion callback failed:', {
+        appointmentId,
+        error: error.message,
+      });
+    }
+  })();
+};
+
 class ConsultationService {
   /**
    * Create a new consultation
@@ -289,6 +327,8 @@ class ConsultationService {
       }
     });
 
+    notifyAppointmentCompleted(appointmentId);
+
     return { consultation: updated, endedBy };
   }
 
@@ -327,6 +367,8 @@ class ConsultationService {
         vitals: true
       }
     });
+
+    notifyAppointmentCompleted(updated.appointmentId);
 
     return updated;
   }

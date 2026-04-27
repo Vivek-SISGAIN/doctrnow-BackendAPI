@@ -13,7 +13,7 @@ import * as express from 'express';
 async function bootstrap(): Promise<void> {
   // Connect to DB before any processing
   await connectDB();
-  
+
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     bufferLogs: true,
   });

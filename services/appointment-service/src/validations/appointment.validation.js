@@ -76,14 +76,18 @@ const rescheduleAppointmentSchema = Joi.object({
     .messages({
       'string.guid': 'New slot ID must be a valid UUID',
       'any.required': 'New slot ID is required'
-    })
+    }),
+  actorRole: Joi.string().valid('PATIENT', 'DOCTOR', 'patient', 'doctor').optional(),
+  rescheduledBy: Joi.string().valid('PATIENT', 'DOCTOR', 'patient', 'doctor').optional()
 });
 
 const cancelAppointmentSchema = Joi.object({
   reason: Joi.string().max(500).optional()
     .messages({
       'string.max': 'Reason must not exceed 500 characters'
-    })
+    }),
+  actorRole: Joi.string().valid('PATIENT', 'DOCTOR', 'patient', 'doctor').optional(),
+  cancelledBy: Joi.string().valid('PATIENT', 'DOCTOR', 'patient', 'doctor').optional()
 });
 
 module.exports = {

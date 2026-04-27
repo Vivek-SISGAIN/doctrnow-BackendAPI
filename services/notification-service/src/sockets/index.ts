@@ -6,10 +6,10 @@ let io: SocketIOServer;
 type JoinPayload =
   | string
   | {
-      userId?: string;
-      role?: string;
-      hospitalId?: string;
-    };
+    userId?: string;
+    role?: string;
+    hospitalId?: string;
+  };
 
 export const initializeSockets = (server: HttpServer) => {
   io = new SocketIOServer(server, {
@@ -113,7 +113,7 @@ export const emitBannerEvent = (banner: {
 
   const portalRoleMap: Record<string, string[]> = {
     PATIENT: ['role:PATIENT'],
-    DOCTOR:  ['role:DOCTOR'],
+    DOCTOR: ['role:DOCTOR'],
     // GENERAL banners are shown on every portal
     GENERAL: ['role:HOSPITAL_ADMIN', 'role:PATIENT', 'role:DOCTOR'],
   };
@@ -124,9 +124,9 @@ export const emitBannerEvent = (banner: {
   portalRooms.forEach((r) => rooms.add(r));
 
   rooms.forEach((room) => {
-    io.to(room).emit('notification',     eventPayload);
+    io.to(room).emit('notification', eventPayload);
     io.to(room).emit('notification:new', eventPayload);
-    io.to(room).emit('banner:new',       eventPayload);
+    io.to(room).emit('banner:new', eventPayload);
   });
 
   console.log(

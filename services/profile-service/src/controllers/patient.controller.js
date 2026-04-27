@@ -226,11 +226,14 @@ const getPatientsByBulkIds = asyncHandler(async (req, res) => {
     throw ApiError.badRequest('Maximum 100 ids allowed per request');
   }
 
-  const patients = await patientService.findByIds(uniqueIds);
+  const patients = await patientService.findByIdsOrUserIds(uniqueIds);
 
   const patientMap = {};
   patients.forEach((patient) => {
     patientMap[patient.id] = patient;
+    if (patient.userId) {
+      patientMap[patient.userId] = patient;
+    }
   });
 
   res.status(200).json({

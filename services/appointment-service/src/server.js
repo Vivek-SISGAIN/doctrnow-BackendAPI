@@ -4,6 +4,10 @@ require('dotenv').config();
 const cron = require('node-cron');
 const app = require('./app');
 const slotService = require('./service/slot.service');
+const { startNotificationWorker } = require('./queue/notification.queue');
+
+// Initialize BullMQ notification worker
+startNotificationWorker();
 
 const PORT = process.env.PORT || 3003;
 const HOST = process.env.HOST || 'localhost';

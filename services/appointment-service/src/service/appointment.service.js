@@ -3,6 +3,8 @@ const slotService = require("./slot.service");
 const ApiError = require("../utils/ApiError");
 const axios = require("axios");
 const dayjs = require("dayjs");
+const schedulerService = require("./scheduler.service");
+const { scheduleAppointmentReminders, cancelAppointmentReminders } = require("../queue/notification.queue");
 
 class AppointmentService {
   /**
@@ -268,6 +270,38 @@ class AppointmentService {
       return newAppointment;
     });
 
+    // Schedule BullMQ reminder jobs with precise delays
+    scheduleAppointmentReminders(appointment).catch((err) => {
+      console.error("[AppointmentService] Failed to schedule BullMQ reminders:", err.message);
+    });
+
+    schedulerService.fetchAppointmentContext(appointment).then((context) => {
+      schedulerService.notifyAppointmentParty(
+        appointment,
+        "PATIENT",
+        "Appointment Booked",
+        `Your appointment with Dr. ${context.doctorName} is booked for ${context.appointmentTime}.`,
+        {
+          type: "APPOINTMENT_BOOKED",
+          doctorName: context.doctorName,
+          patientName: context.patientName,
+        }
+      );
+      schedulerService.notifyAppointmentParty(
+        appointment,
+        "DOCTOR",
+        "New Appointment Booked",
+        `${context.patientName} booked an appointment for ${context.appointmentTime}.`,
+        {
+          type: "APPOINTMENT_BOOKED",
+          doctorName: context.doctorName,
+          patientName: context.patientName,
+        }
+      );
+    }).catch((err) => {
+      console.error("[AppointmentService] Failed to send booking notifications:", err.message);
+    });
+
     return appointment;
   }
 
@@ -280,7 +314,7 @@ class AppointmentService {
       throw new Error("Appointment not found");
     }
 
-    return prisma.appointment.update({
+    const updated = await prisma.appointment.update({
       where: { id },
       data: {
         ...(data.status && { status: data.status }),
@@ -295,12 +329,33 @@ class AppointmentService {
         slot: true,
       },
     });
+
+    if (data.paymentStatus === "PAID" && appointment.paymentStatus !== "PAID") {
+      schedulerService.fetchAppointmentContext(updated).then((context) => {
+        schedulerService.notifyAppointmentParty(
+          updated,
+          "PATIENT",
+          "Payment Received",
+          `Payment is complete for your appointment with Dr. ${context.doctorName} at ${context.appointmentTime}.`,
+          {
+            type: "PAYMENT_DONE",
+            status: updated.status,
+            doctorName: context.doctorName,
+            patientName: context.patientName,
+          }
+        );
+      }).catch((err) => {
+        console.error("[AppointmentService] Failed to send payment notification:", err.message);
+      });
+    }
+
+    return updated;
   }
 
   /**
    * Cancel appointment
    */
-  async cancel(id, reason) {
+  async cancel(id, reason, actorRole = "PATIENT") {
     const appointment = await this.findById(id);
     if (!appointment) {
       throw new Error("Appointment not found");
@@ -314,7 +369,15 @@ class AppointmentService {
       throw new Error("Cannot cancel a completed appointment");
     }
 
-    return prisma.$transaction(async (tx) => {
+    // 5-minute rule: Cannot cancel within 5 minutes of start time
+    const startTime = dayjs(appointment.slot.startTime);
+    if (startTime.diff(dayjs(), "minute") < 5) {
+      throw ApiError.badRequest(
+        "Cannot cancel within 5 minutes of the appointment start time."
+      );
+    }
+
+    const result = await prisma.$transaction(async (tx) => {
       // Update appointment status
       const updatedAppointment = await tx.appointment.update({
         where: { id },
@@ -337,12 +400,38 @@ class AppointmentService {
 
       return updatedAppointment;
     });
+
+    // Remove all pending BullMQ reminder jobs for this appointment (ghost notification prevention)
+    cancelAppointmentReminders(id).catch((err) => {
+      console.error("[AppointmentService] Failed to cancel BullMQ reminders:", err.message);
+    });
+
+    schedulerService.fetchAppointmentContext(result).then((context) => {
+      const normalizedActorRole = String(actorRole || "").toUpperCase();
+      const targetRole = normalizedActorRole === "DOCTOR" ? "PATIENT" : "DOCTOR";
+      const body = targetRole === "DOCTOR"
+        ? `${context.patientName} cancelled the appointment scheduled for ${context.appointmentTime}.`
+        : `Dr. ${context.doctorName} cancelled your appointment scheduled for ${context.appointmentTime}.`;
+
+      schedulerService.notifyAppointmentParty(result, targetRole, "Appointment Cancelled", body, {
+        status: "CANCELLED",
+        type: "APPOINTMENT_CANCELLED",
+        cancelledBy: normalizedActorRole || "PATIENT",
+        reason,
+        doctorName: context.doctorName,
+        patientName: context.patientName,
+      });
+    }).catch((err) => {
+      console.error("[AppointmentService] Failed to send cancellation notification:", err.message);
+    });
+
+    return result;
   }
 
   /**
    * Reschedule appointment (cancel old and create new)
    */
-  async reschedule(appointmentId, newSlotId) {
+  async reschedule(appointmentId, newSlotId, actorRole = "PATIENT") {
     const appointment = await this.findById(appointmentId);
     if (!appointment) {
       throw new Error("Appointment not found");
@@ -356,6 +445,14 @@ class AppointmentService {
       throw new Error("Cannot reschedule a cancelled appointment");
     }
 
+    // 5-minute rule: Cannot reschedule within 5 minutes of start time
+    const startTime = dayjs(appointment.slot.startTime);
+    if (startTime.diff(dayjs(), "minute") < 5) {
+      throw ApiError.badRequest(
+        "Cannot reschedule within 5 minutes of the appointment start time."
+      );
+    }
+
     // Check new slot availability
     const newSlot = await slotService.findById(newSlotId);
     if (!newSlot) {
@@ -366,7 +463,7 @@ class AppointmentService {
       throw new Error("New slot is not available");
     }
 
-    return prisma.$transaction(async (tx) => {
+    const newAppointment = await prisma.$transaction(async (tx) => {
       // Cancel old appointment and free old slot
       await tx.appointment.update({
         where: { id: appointmentId },
@@ -409,6 +506,37 @@ class AppointmentService {
 
       return newAppointment;
     });
+
+    // Remove BullMQ reminders for the old appointment to prevent ghost notifications
+    cancelAppointmentReminders(appointmentId).catch((err) => {
+      console.error("[AppointmentService] Failed to cancel BullMQ reminders for old appointment:", err.message);
+    });
+
+    // Schedule BullMQ reminders for the new appointment
+    scheduleAppointmentReminders(newAppointment).catch((err) => {
+      console.error("[AppointmentService] Failed to schedule BullMQ reminders for new appointment:", err.message);
+    });
+
+    schedulerService.fetchAppointmentContext(newAppointment).then((context) => {
+      const normalizedActorRole = String(actorRole || "").toUpperCase();
+      const targetRole = normalizedActorRole === "DOCTOR" ? "PATIENT" : "DOCTOR";
+      const body = targetRole === "DOCTOR"
+        ? `${context.patientName} rescheduled the appointment to ${context.appointmentTime}.`
+        : `Dr. ${context.doctorName} rescheduled your appointment to ${context.appointmentTime}.`;
+
+      schedulerService.notifyAppointmentParty(newAppointment, targetRole, "Appointment Rescheduled", body, {
+        previousAppointmentId: appointmentId,
+        status: newAppointment.status,
+        type: "APPOINTMENT_RESCHEDULED",
+        rescheduledBy: normalizedActorRole || "PATIENT",
+        doctorName: context.doctorName,
+        patientName: context.patientName,
+      });
+    }).catch((err) => {
+      console.error("[AppointmentService] Failed to send reschedule notification:", err.message);
+    });
+
+    return newAppointment;
   }
 
   /**
@@ -428,7 +556,7 @@ class AppointmentService {
       throw new Error("Cannot confirm a cancelled appointment");
     }
 
-    return prisma.appointment.update({
+    const updatedAppointment = await prisma.appointment.update({
       where: { id },
       data: {
         status: "CONFIRMED",
@@ -437,6 +565,42 @@ class AppointmentService {
         slot: true,
       },
     });
+
+    // Schedule reminders
+    schedulerService.scheduleAppointmentEvents(updatedAppointment).catch((err) => {
+      console.error("[AppointmentService] Failed to schedule events:", err.message);
+    });
+
+    schedulerService.fetchAppointmentContext(updatedAppointment).then((context) => {
+      schedulerService.notifyAppointmentParty(
+        updatedAppointment,
+        "PATIENT",
+        "Payment Received",
+        `Payment is complete for your appointment with Dr. ${context.doctorName} at ${context.appointmentTime}.`,
+        {
+          type: "PAYMENT_DONE",
+          status: "CONFIRMED",
+          doctorName: context.doctorName,
+          patientName: context.patientName,
+        }
+      );
+      schedulerService.notifyAppointmentParty(
+        updatedAppointment,
+        "DOCTOR",
+        "Appointment Confirmed",
+        `${context.patientName}'s appointment is confirmed for ${context.appointmentTime}.`,
+        {
+          type: "APPOINTMENT_CONFIRMED",
+          status: "CONFIRMED",
+          doctorName: context.doctorName,
+          patientName: context.patientName,
+        }
+      );
+    }).catch((err) => {
+      console.error("[AppointmentService] Failed to send confirmation notifications:", err.message);
+    });
+
+    return updatedAppointment;
   }
 
   /**
@@ -456,7 +620,7 @@ class AppointmentService {
       throw new Error("Cannot complete a cancelled appointment");
     }
 
-    return prisma.appointment.update({
+    const updated = await prisma.appointment.update({
       where: { id },
       data: {
         status: "COMPLETED",
@@ -465,6 +629,37 @@ class AppointmentService {
         slot: true,
       },
     });
+
+    schedulerService.fetchAppointmentContext(updated).then((context) => {
+      schedulerService.notifyAppointmentParty(
+        updated,
+        "DOCTOR",
+        "Appointment Completed",
+        `Your appointment with ${context.patientName} has been completed.`,
+        {
+          status: "COMPLETED",
+          type: "APPOINTMENT_COMPLETED",
+          doctorName: context.doctorName,
+          patientName: context.patientName,
+        }
+      );
+      schedulerService.notifyAppointmentParty(
+        updated,
+        "PATIENT",
+        "Appointment Completed",
+        `Your consultation with Dr. ${context.doctorName} has been completed.`,
+        {
+          status: "COMPLETED",
+          type: "APPOINTMENT_COMPLETED",
+          doctorName: context.doctorName,
+          patientName: context.patientName,
+        }
+      );
+    }).catch((err) => {
+      console.error("[AppointmentService] Failed to send completion notifications:", err.message);
+    });
+
+    return updated;
   }
 
   /**
@@ -489,10 +684,12 @@ class AppointmentService {
     });
 
     for (const apt of missed) {
-      await prisma.appointment.update({
+      const updated = await prisma.appointment.update({
         where: { id: apt.id },
         data: { status: "NO_SHOW" },
+        include: { slot: true },
       });
+      this._notifyNoShow(updated);
     }
 
     return { count: missed.length };
@@ -511,7 +708,7 @@ class AppointmentService {
       throw new Error("Cannot mark a completed appointment as no-show");
     }
 
-    return prisma.appointment.update({
+    const updated = await prisma.appointment.update({
       where: { id },
       data: {
         status: "NO_SHOW",
@@ -519,6 +716,35 @@ class AppointmentService {
       include: {
         slot: true,
       },
+    });
+    this._notifyNoShow(updated);
+    return updated;
+  }
+
+  _notifyNoShow(appointment) {
+    schedulerService.fetchAppointmentContext(appointment).then((context) => {
+      const payload = {
+        status: "NO_SHOW",
+        type: "APPOINTMENT_NO_SHOW",
+        doctorName: context.doctorName,
+        patientName: context.patientName,
+      };
+      schedulerService.notifyAppointmentParty(
+        appointment,
+        "DOCTOR",
+        "Appointment No-Show",
+        `${context.patientName} did not attend the appointment scheduled for ${context.appointmentTime}.`,
+        payload
+      );
+      schedulerService.notifyAppointmentParty(
+        appointment,
+        "PATIENT",
+        "Appointment No-Show",
+        `Your appointment with Dr. ${context.doctorName} was marked as no-show.`,
+        payload
+      );
+    }).catch((err) => {
+      console.error("[AppointmentService] Failed to send no-show notifications:", err.message);
     });
   }
   async getHospitalPatients(hospitalId, pagination = { page: 1, limit: 20 }) {
@@ -663,13 +889,28 @@ class AppointmentService {
 
       // Notify consultation-service to broadcast
       try {
-        const CONSULTATION_SERVICE_URL = process.env.CONSULTATION_SERVICE_URL || "http://localhost:3005";
+        const gatewayBase = process.env.BASE_URL;
+        const base = gatewayBase
+          ? (gatewayBase.endsWith("/") ? gatewayBase : `${gatewayBase}/`)
+          : null;
         console.log(`[BROADCAST DEBUG] Initiating extension broadcast for Appointment: ${id}`);
-        console.log(`[BROADCAST DEBUG] Target URL: ${CONSULTATION_SERVICE_URL}/api/consultations/appointment/${id}/broadcast-extension`);
-        
-        await axios.post(`${CONSULTATION_SERVICE_URL}/api/consultations/appointment/${id}/broadcast-extension`, {
+        if (!base) {
+          throw new Error("BASE_URL is not configured for gateway-routed consultation broadcast");
+        }
+
+        const targetUrl = `${base}consultations/appointment/${id}/broadcast-extension`;
+        console.log(`[BROADCAST DEBUG] Target URL: ${targetUrl}`);
+
+        await axios.post(targetUrl, {
           newEndTime,
           extendedByMinutes: durationMinutes,
+        }, {
+          headers: {
+            ...(process.env.INTERNAL_SERVICE_SECRET
+              ? { "x-internal-service-key": process.env.INTERNAL_SERVICE_SECRET }
+              : {}),
+            ...(process.env.INTERNAL_SECRET ? { "x-internal-secret": process.env.INTERNAL_SECRET } : {}),
+          },
         });
         
         console.log(`[BROADCAST DEBUG] Extension broadcast successful for Appointment: ${id}`);

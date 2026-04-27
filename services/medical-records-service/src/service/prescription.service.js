@@ -363,6 +363,16 @@ class PrescriptionService {
       });
     }
 
+    // Always send In-App Notification regardless of email settings
+    prescriptionNotificationService.sendPrescriptionInAppNotification({
+      userId: prescription.patientId,
+      patientName: documentModel.patient.patient,
+      doctorName: documentModel.doctor.name,
+      rxId: documentModel.prescription.rxId,
+    }).catch(err => {
+      console.error(`[PrescriptionService] In-App notification failed for Rx ${documentModel.prescription.rxId}:`, err);
+    });
+
     console.log(`[PrescriptionService] Updating prescription ${id} status to SENT...`);
     
     // Build update data, conditionally add s3Key

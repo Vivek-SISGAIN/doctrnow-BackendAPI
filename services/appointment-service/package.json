@@ -34,7 +34,9 @@
   "type": "commonjs",
   "dependencies": {
     "@prisma/client": "^6.19.2",
-    "axios": "^1.13.6",
+    "amqplib": "^1.0.3",
+    "axios": "^1.15.2",
+    "bullmq": "^5.76.2",
     "compression": "^1.8.1",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
@@ -46,6 +48,7 @@
     "express-rate-limit": "^8.2.1",
     "helmet": "^8.1.0",
     "hpp": "^0.2.3",
+    "ioredis": "^5.10.1",
     "joi": "^18.0.2",
     "morgan": "^1.10.1",
     "node-cron": "^3.0.3",

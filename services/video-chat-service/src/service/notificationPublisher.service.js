@@ -15,11 +15,30 @@
  *     never propagate to callers or break REST responses.
  *   - Client is lazily connected on first publish to avoid blocking startup.
  */
+"use strict";
+
+/**
+ * notificationPublisher.service.js
+ *
+ * Publishes unread increment notifications via Redis Pub/Sub.
+ *
+ * Channel: chat:unread
+ * Payload:  { userId, conversationId, unreadCount, timestamp }
+ *
+ * Design decisions:
+ *   - Uses a dedicated duplicate Redis client for publishing (best practice
+ *     — do not publish on the same client used by the Socket.IO adapter).
+ *   - Fire-and-forget: errors are logged as warnings only; they must
+ *     never propagate to callers or break REST responses.
+ *   - Client is lazily connected on first publish to avoid blocking startup.
+ */
 
 const { redisClient } = require("../config/redis");
 const logger = require("../utils/logger");
 
 const CHANNEL = "chat:unread";
+const API_GATEWAY_URL = process.env.API_GATEWAY_URL || process.env.API_GATEWAY || "http://localhost:8080/api/v1";
+const INTERNAL_SERVICE_KEY = process.env.INTERNAL_SERVICE_KEY || process.env.INTERNAL_SERVICE_SECRET || process.env.INTERNAL_SECRET;
 
 // Lazily-initialised dedicated publisher client
 let pubClient = null;
@@ -77,4 +96,77 @@ const publishUnreadIncrement = ({ userId, conversationId, unreadCount }) => {
     })();
 };
 
-module.exports = { publishUnreadIncrement };
+const triggerInAppNotification = ({ userId, title, body, payload }) => {
+    (async () => {
+        try {
+            const response = await fetch(`${API_GATEWAY_URL}/notifications/single`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    ...(INTERNAL_SERVICE_KEY ? { 
+                        "x-internal-service-key": INTERNAL_SERVICE_KEY,
+                        "x-internal-secret": INTERNAL_SERVICE_KEY
+                    } : {})
+                },
+                body: JSON.stringify({
+                    userId,
+                    channels: ["IN_APP"],
+                    title,
+                    body,
+                    payload
+                })
+            });
+
+            if (!response.ok) {
+                const bodyText = await response.text();
+                logger.warn("notificationPublisher: failed to trigger notification", {
+                    userId,
+                    status: response.status,
+                    body: bodyText
+                });
+            }
+        } catch (err) {
+            logger.warn("notificationPublisher: failed to call notification trigger", {
+                userId,
+                error: err.message
+            });
+        }
+    })();
+};
+
+const resolveDisplayName = async (role, userId, fallback) => {
+    const path = role === "DOCTOR" ? "/profiles/doctors/bulk" : "/profiles/patients/bulk";
+
+    try {
+        const response = await fetch(`${API_GATEWAY_URL}${path}`, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                ...(INTERNAL_SERVICE_KEY ? { 
+                    "x-internal-service-key": INTERNAL_SERVICE_KEY,
+                    "x-internal-secret": INTERNAL_SERVICE_KEY
+                } : {})
+            },
+            body: JSON.stringify({ ids: [userId] })
+        });
+
+        if (!response.ok) return fallback;
+        const json = await response.json();
+        const profile = json.data?.[userId];
+        return (
+            profile?.fullName ||
+            [profile?.firstName, profile?.lastName].filter(Boolean).join(" ").trim() ||
+            profile?.name ||
+            fallback
+        );
+    } catch (err) {
+        logger.warn("notificationPublisher: failed to resolve display name", {
+            role,
+            userId,
+            error: err.message
+        });
+        return fallback;
+    }
+};
+
+module.exports = { publishUnreadIncrement, triggerInAppNotification, resolveDisplayName };

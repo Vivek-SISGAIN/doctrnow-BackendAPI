@@ -1,10 +1,9 @@
-const PROFILE_SERVICE_URL = process.env.PROFILE_SERVICE_URL || 'http://localhost:5000';
 const BASE_GATEWAY_URL = (process.env.BASE_URL || 'http://localhost:8080/api/v1/').replace(/\/$/, '');
 
 class ProfileClient {
   async getPatientProfile(patientId, authHeader) {
     try {
-      const response = await fetch(`${BASE_GATEWAY_URL}/profile/patients/${patientId}`, {
+      const response = await fetch(`${BASE_GATEWAY_URL}/profiles/patients/${patientId}`, {
         method: 'GET',
         headers: { 
           'Content-Type': 'application/json',
@@ -27,7 +26,7 @@ class ProfileClient {
   async getPatientsByBulkIds(ids, authHeader) {
     if (!ids || ids.length === 0) return {};
     try {
-      const response = await fetch(`${BASE_GATEWAY_URL}/profile/patients/bulk`, {
+      const response = await fetch(`${BASE_GATEWAY_URL}/profiles/patients/bulk`, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
@@ -57,7 +56,7 @@ class ProfileClient {
     if (!ids || ids.length === 0) return {};
     try {
       // Corrected Path: Must include /doctors/ segment to match profile-service routes
-      const response = await fetch(`${BASE_GATEWAY_URL}/profile/doctors/bulk`, {
+      const response = await fetch(`${BASE_GATEWAY_URL}/profiles/doctors/bulk`, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',

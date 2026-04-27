@@ -1,6 +1,15 @@
 const logger = console; // Use console as logger since no winston/pino is present in consultation-service
 
-const VIDEO_CHAT_SERVICE_URL = process.env.VIDEO_CHAT_SERVICE_URL || 'http://localhost:3007';
+const API_GATEWAY_URL = process.env.BASE_URL || process.env.API_GATEWAY_URL || 'http://localhost:8080/api/v1/';
+const gatewayBaseUrl = () => API_GATEWAY_URL.endsWith('/') ? API_GATEWAY_URL : `${API_GATEWAY_URL}/`;
+
+const internalHeaders = () => ({
+  'Content-Type': 'application/json',
+  ...(process.env.INTERNAL_SERVICE_SECRET
+    ? { 'x-internal-service-key': process.env.INTERNAL_SERVICE_SECRET }
+    : {}),
+  ...(process.env.INTERNAL_SECRET ? { 'x-internal-secret': process.env.INTERNAL_SECRET } : {}),
+});
 
 /**
  * Internal client for communicating with video-chat-service.
@@ -25,12 +34,9 @@ class ChatClient {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 3000);
 
-      const response = await fetch(`${VIDEO_CHAT_SERVICE_URL}/api/chat/session/create`, {
+      const response = await fetch(`${gatewayBaseUrl()}chat/session/create`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-internal-secret': process.env.INTERNAL_SECRET
-        },
+        headers: internalHeaders(),
         body: JSON.stringify({
           consultationId,
           patientId,
@@ -64,9 +70,9 @@ class ChatClient {
    */
   async startSession(consultationId) {
     try {
-      const response = await fetch(`${VIDEO_CHAT_SERVICE_URL}/api/chat/session/start`, {
+      const response = await fetch(`${gatewayBaseUrl()}chat/session/start`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: internalHeaders(),
         body: JSON.stringify({ consultationId }),
       });
 
@@ -88,9 +94,9 @@ class ChatClient {
    */
   async endSession(consultationId, endStatus = 'COMPLETED', postMessageLimit = 5) {
     try {
-      const response = await fetch(`${VIDEO_CHAT_SERVICE_URL}/api/chat/session/end`, {
+      const response = await fetch(`${gatewayBaseUrl()}chat/session/end`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: internalHeaders(),
         body: JSON.stringify({ consultationId, endStatus, postMessageLimit }),
       });
 
@@ -112,12 +118,9 @@ class ChatClient {
    */
   async updateParticipantUserId(consultationId, oldUserId, newUserId) {
     try {
-      const response = await fetch(`${VIDEO_CHAT_SERVICE_URL}/api/chat/session/update-participant`, {
+      const response = await fetch(`${gatewayBaseUrl()}chat/session/update-participant`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-internal-secret': process.env.INTERNAL_SECRET
-        },
+        headers: internalHeaders(),
         body: JSON.stringify({ consultationId, oldUserId, newUserId }),
       });
 

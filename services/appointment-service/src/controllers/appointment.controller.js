@@ -372,6 +372,7 @@ const updateAppointment = asyncHandler(async (req, res) => {
 const cancelAppointment = asyncHandler(async (req, res) => {
   const { id } = req.params;
   const { reason } = req.body;
+  const actorRole = req.headers["x-user-role"] || req.body.cancelledBy || req.body.actorRole;
 
   const appointment = await appointmentService.findById(id);
 
@@ -379,7 +380,7 @@ const cancelAppointment = asyncHandler(async (req, res) => {
     throw ApiError.notFound("Appointment not found");
   }
 
-  const cancelledAppointment = await appointmentService.cancel(id, reason);
+  const cancelledAppointment = await appointmentService.cancel(id, reason, actorRole);
 
   res.status(200).json({
     success: true,
@@ -391,6 +392,7 @@ const cancelAppointment = asyncHandler(async (req, res) => {
 const rescheduleAppointment = asyncHandler(async (req, res) => {
   const { id } = req.params;
   const { newSlotId } = req.body;
+  const actorRole = req.headers["x-user-role"] || req.body.rescheduledBy || req.body.actorRole;
 
   const appointment = await appointmentService.findById(id);
 
@@ -401,6 +403,7 @@ const rescheduleAppointment = asyncHandler(async (req, res) => {
   const rescheduledAppointment = await appointmentService.reschedule(
     id,
     newSlotId,
+    actorRole,
   );
 
   res.status(200).json({

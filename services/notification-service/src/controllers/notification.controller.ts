@@ -79,6 +79,7 @@ export const createSingleNotification = async (req: Request, res: Response) => {
   }
 };
 
+
 export const createBulkNotification = async (req: Request, res: Response) => {
   try {
     const { userIds, channels, title, body, payload } = req.body;

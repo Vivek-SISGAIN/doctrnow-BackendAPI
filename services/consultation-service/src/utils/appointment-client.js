@@ -1,4 +1,5 @@
-const APPOINTMENT_SERVICE_URL = process.env.APPOINTMENT_SERVICE_URL || "http://localhost:3003";
+const API_GATEWAY_URL = process.env.BASE_URL || process.env.API_GATEWAY_URL || "http://localhost:8080/api/v1/";
+const gatewayBaseUrl = () => API_GATEWAY_URL.endsWith("/") ? API_GATEWAY_URL : `${API_GATEWAY_URL}/`;
 
 class AppointmentClient {
   async getAppointmentById(appointmentId) {
@@ -7,9 +8,15 @@ class AppointmentClient {
     }
 
     try {
-      const response = await fetch(`${APPOINTMENT_SERVICE_URL}/api/appointments/${appointmentId}`, {
+      const response = await fetch(`${gatewayBaseUrl()}appointments/${encodeURIComponent(appointmentId)}`, {
         method: "GET",
-        headers: { "Content-Type": "application/json" }
+        headers: {
+          "Content-Type": "application/json",
+          ...(process.env.INTERNAL_SERVICE_SECRET
+            ? { "x-internal-service-key": process.env.INTERNAL_SERVICE_SECRET }
+            : {}),
+          ...(process.env.INTERNAL_SECRET ? { "x-internal-secret": process.env.INTERNAL_SECRET } : {}),
+        }
       });
 
       if (!response.ok) {
