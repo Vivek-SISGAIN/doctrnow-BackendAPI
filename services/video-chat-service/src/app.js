@@ -3,6 +3,7 @@ const cors = require("cors");
 const helmet = require("helmet");
 const compression = require("compression");
 const chatRoutes = require("./routes/chat.routes");
+const adminChatRoutes = require("./routes/adminChat.routes");
 
 const app = express();
 
@@ -28,18 +29,25 @@ app.use((req, res, next) => {
             tenantId: req.headers['x-tenant-id'] || null
         };
         console.log(`[VideoChatService] Incoming request: ${req.method} ${req.url} | User: ${JSON.stringify(req.user)}`);
+    } else {
+        console.warn(`[VideoChatService] Request without valid user headers: ${req.method} ${req.url}`, req.headers);
     }
     next();
 });
 
 // ─── Routes ──────────────────────────────────────────────────────────────────
+// Existing patient-doctor chat — unchanged
 app.use("/api/chat", chatRoutes);
+
+// New admin support chat (Hospital Admin ↔ Super Admin)
+app.use("/api/admin-chat", adminChatRoutes);
 
 // ─── Global error handler ────────────────────────────────────────────────────
 // eslint-disable-next-line no-unused-vars
 app.use((err, req, res, next) => {
     const statusCode = err.statusCode || 500;
     const message = err.message || "Internal Server Error";
+    console.error(`[VideoChatService] Global Error on ${req.url}:`, err);
     res.status(statusCode).json({ success: false, error: message });
 });
 

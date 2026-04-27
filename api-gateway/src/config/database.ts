@@ -25,7 +25,6 @@ export const connectDB = async (): Promise<void> => {
       await mongoose.connect(uri, {
         family: 4,
       });
-      console.log('MongoDB connected');
     } catch (error) {
       console.error('MongoDB failed. Retry in 5s...', error);
       setTimeout(connectWithRetry, 5000);

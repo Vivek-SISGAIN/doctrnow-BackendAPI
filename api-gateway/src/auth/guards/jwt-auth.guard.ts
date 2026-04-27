@@ -114,6 +114,7 @@ const DEV_BYPASSABLE_PATH_SEGMENTS = [
   '/search',
   '/agora',
   '/notifications',
+  '/admin-chat'
 ] as const;
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -212,7 +213,7 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
     const isDevBypassEnabled = rawValue === true || rawValue === 'true';
 
     if (isDevBypassEnabled) {
-      return this.handleDevMode(request, rawPath);
+      return this.handleDevMode(request, rawPath, context);
     }
 
     // ── Tier 3: Strict Passport / JWKS validation ────────────────────────────
@@ -254,6 +255,7 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
   private handleDevMode(
     request: Record<string, any>,
     path: string,
+    context: ExecutionContext,
   ): boolean | Promise<boolean> | Observable<boolean> {
     const isBypassablePath = DEV_BYPASSABLE_PATH_SEGMENTS.some((segment) =>
       path.includes(segment),
@@ -262,7 +264,7 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
     if (!isBypassablePath) {
       // Not a bypassable path — enforce strict validation even in dev
       // (e.g. /auth/login, /auth/refresh themselves must stay strict).
-      return super.canActivate({ switchToHttp: () => ({ getRequest: () => request }) } as any);
+      return super.canActivate(context);
     }
 
     const token = extractBearerToken(request?.headers?.authorization);
