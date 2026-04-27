@@ -2,10 +2,11 @@ const { Server } = require("socket.io");
 const { createAdapter } = require("@socket.io/redis-adapter");
 const jwt = require("jsonwebtoken");
 const { redisClient } = require("../config/redis");
-const { registerMessageHandler } = require("./handlers/message.handler");
-const { registerPresenceHandler } = require("./handlers/presence.handler");
-const { registerTypingHandler } = require("./handlers/typing.handler");
-const { registerInboxHandler } = require("./handlers/inbox.handler");
+const { registerMessageHandler }   = require("./handlers/message.handler");
+const { registerPresenceHandler }  = require("./handlers/presence.handler");
+const { registerTypingHandler }    = require("./handlers/typing.handler");
+const { registerInboxHandler }     = require("./handlers/inbox.handler");
+const { registerAdminChatHandler } = require("./handlers/adminChat.handler");
 const logger = require("../utils/logger");
 
 let io;
@@ -113,6 +114,8 @@ const initSocket = async (httpServer) => {
         registerPresenceHandler(io, socket);
         registerTypingHandler(io, socket);
         registerInboxHandler(io, socket);
+        // Admin support chat (isolated from patient-doctor flow)
+        registerAdminChatHandler(io, socket);
     });
 
     return io;

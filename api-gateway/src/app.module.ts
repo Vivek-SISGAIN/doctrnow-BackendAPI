@@ -25,6 +25,7 @@ import { HospitalAdminController } from './controllers/hospital-admin.controller
 import { AgoraController } from './controllers/agora.controller';
 import { SuperAdminController } from './controllers/super-admin.controller';
 import { ChatController } from './controllers/chat.controller';
+import { AdminChatController } from './controllers/admin-chat.controller';
 import { NotificationController } from './controllers/notification.controller';
 import { SearchController } from './controllers/search.controller';
 import { AuditController } from './controllers/audit.controller';
@@ -141,6 +142,7 @@ import configuration from './config/configuration';
     SuperAdminController,
     AgoraController,
     ChatController,
+    AdminChatController,
     NotificationController,
     SearchController,
     AuditController,
