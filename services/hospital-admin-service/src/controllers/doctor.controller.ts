@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import doctorService from '../services/doctor.service';
-import { uploadToS3 } from '../utils/s3Handler';
+import { uploadToS3, uploadDoctorDocument } from '../utils/s3Handler';
 
 export class DoctorController {
     async createDoctor(req: any, res: Response) {
@@ -42,14 +42,15 @@ export class DoctorController {
         if (typeof req.body.certifications === 'string') certifications = JSON.parse(req.body.certifications);
         if (typeof req.body.professionalMemberships === 'string') professionalMemberships = JSON.parse(req.body.professionalMemberships);
         if (typeof req.body.schedule === 'string') schedule = JSON.parse(req.body.schedule);
-        console.log("REQ FILE" ,
-            req.file
-        )
+        // `createDoctorUpload` uses `multer.fields`, so uploaded files arrive on `req.files`.
+        // Still support any older middleware that might populate `req.file`.
+        const filesByField = (req.files ?? {}) as Record<string, any[]>;
+        const profileImageFile = (filesByField?.profileImage?.[0] ?? req.file) as any;
 
         let profileImageKey = "";
-        if (req.file) {
+        if (profileImageFile) {
             try {
-                const s3Result = await uploadToS3(req.file as any);
+                const s3Result = await uploadToS3(profileImageFile as any);
                 profileImageKey = s3Result.key;
             } catch (error) {
                 return res.status(500).json({
@@ -185,10 +186,39 @@ export class DoctorController {
                 tenantId
             }, authHeader);
 
+            // If documents were included during create, upload + persist them now.
+            const docFieldNames = [
+                'medicalLicense',
+                'emiratesId',
+                'passport',
+                'professionalPhoto',
+                'medicalDegree',
+                'specialistCert',
+                'cvResume',
+                'goodStanding',
+            ] as const;
+
+            const createdDoctor: any = doctor?.data ?? doctor;
+            const createdDoctorId: string | undefined = createdDoctor?.id;
+
+            const uploadedDocs: Record<string, { key: string; fileName: string; mime: string }> = {};
+            if (createdDoctorId) {
+                for (const docType of docFieldNames) {
+                    const file = filesByField?.[docType]?.[0];
+                    if (!file) continue;
+                    const s3Result = await uploadDoctorDocument(file, createdDoctorId, docType);
+                    uploadedDocs[docType] = s3Result;
+                }
+            }
+
+            const updatedDoctor = Object.keys(uploadedDocs).length > 0 && createdDoctorId
+                ? await doctorService.uploadDocuments(createdDoctorId, uploadedDocs, authHeader)
+                : createdDoctor;
+
             return res.status(201).json({
                 success: true,
                 message: 'Doctor created successfully',
-                data: doctor
+                data: updatedDoctor
             });
         } catch (error: any) {
             console.error('[DoctorController] createDoctor error:', error?.response?.data || error.message);
@@ -223,6 +253,47 @@ export class DoctorController {
     });
 }
 
+    async uploadDocuments(req: any, res: Response) {
+        const { id } = req.params;
+        const authHeader = req.headers.authorization ?? '';
+        
+        if (!req.files || Object.keys(req.files).length === 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'No files uploaded',
+            });
+        }
+
+        try {
+            const uploadedDocs: Record<string, { key: string; fileName: string; mime: string }> = {};
+            
+            // req.files is an object where keys are field names (e.g., 'medicalLicense') 
+            // and values are arrays of files
+            for (const [docType, files] of Object.entries(req.files as Record<string, any[]>)) {
+                if (files && files.length > 0) {
+                    const file = files[0];
+                    const s3Result = await uploadDoctorDocument(file, id, docType);
+                    uploadedDocs[docType] = s3Result;
+                }
+            }
+
+            const updatedDoctor = await doctorService.uploadDocuments(id, uploadedDocs, authHeader);
+
+            return res.status(200).json({
+                success: true,
+                message: 'Documents uploaded successfully',
+                data: updatedDoctor,
+            });
+        } catch (error: any) {
+            console.error('[DoctorController] uploadDocuments error:', error?.response?.data || error.message);
+            const status = error?.response?.status || 500;
+            const message = error?.response?.data?.message || error.message || 'Failed to upload documents';
+            return res.status(status).json({
+                success: false,
+                message: message
+            });
+        }
+    }
 }
 
 export default new DoctorController();

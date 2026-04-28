@@ -364,6 +364,75 @@ class DoctorService {
     };
   }
 
+  /**
+   * Persists document S3 keys for one doctor.
+   * Each file in `files` is keyed by the document type (e.g. "medicalLicense").
+   * The method PATCHes the profile-service with the new S3 keys.
+   */
+  async uploadDocuments(
+    doctorProfileId: string,
+    uploadedDocs: Record<string, { key: string; fileName: string; mime: string }>,
+    authHeader: string,
+  ) {
+    // Map document-type names → profile-service DB column names
+    const fieldMap: Record<string, { keyField: string; fileNameField: string; mimeField: string; statusField: string }> = {
+      medicalLicense:    { keyField: 'docMedicalLicenseKey',       fileNameField: 'docMedicalLicenseFileName',    mimeField: 'docMedicalLicenseMime',    statusField: 'docMedicalLicenseStatus' },
+      emiratesId:        { keyField: 'docEmiratesIdKey',            fileNameField: 'docEmiratesIdFileName',        mimeField: 'docEmiratesIdMime',        statusField: 'docEmiratesIdStatus' },
+      passport:          { keyField: 'docPassportKey',              fileNameField: 'docPassportFileName',          mimeField: 'docPassportMime',          statusField: 'docPassportStatus' },
+      professionalPhoto: { keyField: 'docProfessionalPhotoKey',     fileNameField: 'docProfessionalPhotoFileName', mimeField: 'docProfessionalPhotoMime', statusField: 'docProfessionalPhotoStatus' },
+      medicalDegree:     { keyField: 'docMedicalDegreeKey',         fileNameField: 'docMedicalDegreeFileName',     mimeField: 'docMedicalDegreeMime',     statusField: 'docMedicalDegreeStatus' },
+      specialistCert:    { keyField: 'docSpecialistCertKey',        fileNameField: 'docSpecialistCertFileName',    mimeField: 'docSpecialistCertMime',    statusField: 'docSpecialistCertStatus' },
+      cvResume:          { keyField: 'docCvResumeKey',              fileNameField: 'docCvResumeFileName',          mimeField: 'docCvResumeMime',          statusField: 'docCvResumeStatus' },
+      goodStanding:      { keyField: 'docGoodStandingKey',          fileNameField: 'docGoodStandingFileName',      mimeField: 'docGoodStandingMime',      statusField: 'docGoodStandingStatus' },
+    };
+
+    // Build the patch payload
+    const patch: Record<string, string> = {};
+    for (const [docType, { key, fileName, mime }] of Object.entries(uploadedDocs)) {
+      const fields = fieldMap[docType];
+      if (!fields) continue;
+      patch[fields.keyField]      = key;
+      patch[fields.fileNameField] = fileName;
+      patch[fields.mimeField]     = mime;
+      patch[fields.statusField]   = 'UPLOADED';
+    }
+
+    if (Object.keys(patch).length === 0) {
+      throw new Error('No valid document types provided');
+    }
+
+    const res = await axios.patch(
+      `${process.env.API_BASE_URL}api/v1/profiles/doctors/${doctorProfileId}`,
+      patch,
+      {
+        headers: {
+          Authorization: authHeader,
+          'X-Service-Name': 'hospital-admin-service',
+          'Content-Type': 'application/json',
+        },
+      },
+    );
+
+    return res.data?.data;
+  }
+
+  /**
+   * Fetches a doctor's document metadata (with presigned URLs) from profile-service.
+   */
+  async getDocuments(doctorProfileId: string, authHeader: string) {
+    const res = await axios.get(
+      `${process.env.API_BASE_URL}api/v1/profiles/doctors/${doctorProfileId}`,
+      {
+        headers: {
+          Authorization: authHeader,
+          'X-Service-Name': 'hospital-admin-service',
+        },
+      },
+    );
+    // profile-service already populates presigned URLs in the `documents` map
+    return res.data?.data?.documents ?? {};
+  }
+
 
 }
 export default new DoctorService();
