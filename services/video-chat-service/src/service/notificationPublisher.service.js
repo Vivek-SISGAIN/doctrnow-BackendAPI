@@ -110,7 +110,7 @@ const triggerInAppNotification = ({ userId, title, body, payload }) => {
                 },
                 body: JSON.stringify({
                     userId,
-                    channels: ["IN_APP"],
+                    channels: ["IN_APP", "PUSH"],
                     title,
                     body,
                     payload
