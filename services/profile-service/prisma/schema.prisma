@@ -126,7 +126,55 @@ model Doctor {
   updatedAt               DateTime           @updatedAt
   assignedHospitalIds     String[]           @default([])
 
+  // ── Documents — S3 keys (null until uploaded) ─────────────────────────────
+  docMedicalLicenseKey          String?
+  docMedicalLicenseStatus       DocumentStatus @default(PENDING)
+  docMedicalLicenseFileName     String?
+  docMedicalLicenseMime         String?
+
+  docEmiratesIdKey              String?
+  docEmiratesIdStatus           DocumentStatus @default(PENDING)
+  docEmiratesIdFileName         String?
+  docEmiratesIdMime             String?
+
+  docPassportKey                String?
+  docPassportStatus             DocumentStatus @default(PENDING)
+  docPassportFileName           String?
+  docPassportMime               String?
+
+  docProfessionalPhotoKey       String?
+  docProfessionalPhotoStatus    DocumentStatus @default(PENDING)
+  docProfessionalPhotoFileName  String?
+  docProfessionalPhotoMime      String?
+
+  docMedicalDegreeKey           String?
+  docMedicalDegreeStatus        DocumentStatus @default(PENDING)
+  docMedicalDegreeFileName      String?
+  docMedicalDegreeMime          String?
+
+  docSpecialistCertKey          String?
+  docSpecialistCertStatus       DocumentStatus @default(PENDING)
+  docSpecialistCertFileName     String?
+  docSpecialistCertMime         String?
+
+  docCvResumeKey                String?
+  docCvResumeStatus             DocumentStatus @default(PENDING)
+  docCvResumeFileName           String?
+  docCvResumeMime               String?
+
+  docGoodStandingKey            String?
+  docGoodStandingStatus         DocumentStatus @default(PENDING)
+  docGoodStandingFileName       String?
+  docGoodStandingMime           String?
+
   @@map("doctor")
+}
+
+enum DocumentStatus {
+  PENDING
+  UPLOADED
+  VERIFIED
+  REJECTED
 }
 
 model HospitalAdmin {

@@ -488,6 +488,64 @@ class DoctorService {
     if (!data) return data;
     const isArray = Array.isArray(data);
     const elements = isArray ? data : [data];
+    const documentKeyMap = [
+      {
+        key: 'medicalLicense',
+        s3KeyField: 'docMedicalLicenseKey',
+        statusField: 'docMedicalLicenseStatus',
+        fileNameField: 'docMedicalLicenseFileName',
+        mimeField: 'docMedicalLicenseMime'
+      },
+      {
+        key: 'emiratesId',
+        s3KeyField: 'docEmiratesIdKey',
+        statusField: 'docEmiratesIdStatus',
+        fileNameField: 'docEmiratesIdFileName',
+        mimeField: 'docEmiratesIdMime'
+      },
+      {
+        key: 'passport',
+        s3KeyField: 'docPassportKey',
+        statusField: 'docPassportStatus',
+        fileNameField: 'docPassportFileName',
+        mimeField: 'docPassportMime'
+      },
+      {
+        key: 'medicalDegree',
+        s3KeyField: 'docMedicalDegreeKey',
+        statusField: 'docMedicalDegreeStatus',
+        fileNameField: 'docMedicalDegreeFileName',
+        mimeField: 'docMedicalDegreeMime'
+      },
+      {
+        key: 'specialistCert',
+        s3KeyField: 'docSpecialistCertKey',
+        statusField: 'docSpecialistCertStatus',
+        fileNameField: 'docSpecialistCertFileName',
+        mimeField: 'docSpecialistCertMime'
+      },
+      {
+        key: 'cvResume',
+        s3KeyField: 'docCvResumeKey',
+        statusField: 'docCvResumeStatus',
+        fileNameField: 'docCvResumeFileName',
+        mimeField: 'docCvResumeMime'
+      },
+      {
+        key: 'goodStanding',
+        s3KeyField: 'docGoodStandingKey',
+        statusField: 'docGoodStandingStatus',
+        fileNameField: 'docGoodStandingFileName',
+        mimeField: 'docGoodStandingMime'
+      },
+      {
+        key: 'professionalPhoto',
+        s3KeyField: 'docProfessionalPhotoKey',
+        statusField: 'docProfessionalPhotoStatus',
+        fileNameField: 'docProfessionalPhotoFileName',
+        mimeField: 'docProfessionalPhotoMime'
+      }
+    ];
 
     const populated = await Promise.all(
       elements.map(async (doc) => {
@@ -495,6 +553,20 @@ class DoctorService {
         if (plainDoc.profileImage) {
           plainDoc.profileImage = await getPresignedS3Url(plainDoc.profileImage);
         }
+        plainDoc.documents = plainDoc.documents || {};
+        await Promise.all(
+          documentKeyMap.map(async (d) => {
+            const s3Key = plainDoc[d.s3KeyField];
+            const url = s3Key ? await getPresignedS3Url(s3Key) : null;
+            plainDoc.documents[d.key] = {
+              key: s3Key || null,
+              url,
+              status: plainDoc[d.statusField] || 'PENDING',
+              fileName: plainDoc[d.fileNameField] || null,
+              mime: plainDoc[d.mimeField] || null
+            };
+          })
+        );
         return plainDoc;
       })
     );
