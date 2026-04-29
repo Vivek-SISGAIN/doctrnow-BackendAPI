@@ -9,6 +9,7 @@ const router = Router();
 router.post("/hospital", hospitalController.createHospital);
 router.post("/hospital/bulk", hospitalController.getHospitalsBulk);
 router.get("/hospital", hospitalController.getHospitals);
+router.get("/hospital/search/ids", hospitalController.getHospitalIds);
 router.get("/hospital/:id", hospitalController.getHospitalById);
 router.patch("/hospital/:id", hospitalController.updateHospital);
 router.delete("/hospital/:id", hospitalController.deleteHospital);

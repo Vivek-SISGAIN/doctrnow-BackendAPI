@@ -306,16 +306,33 @@ const getAppointmentById = asyncHandler(async (req, res) => {
 
   const authHeader = req.headers.authorization;
   if (authHeader) {
-    // Augment with prescription
-    const prescriptionMap = await fetchProfilesBulk(
-      [appointment.id],
-      `${baseUrl}prescriptions/appointments/bulk`,
-      authHeader,
-      "prescription",
-    );
+    // ── Bulk fetch profiles (Patient, Doctor, Prescription) ───────────────────
+    const [patientMap, doctorMap, prescriptionMap] = await Promise.all([
+      fetchProfilesBulk(
+        [appointment.patientId],
+        `${baseUrl}profiles/patients/bulk`,
+        authHeader,
+        "patient",
+      ),
+      fetchProfilesBulk(
+        [appointment.doctorId],
+        `${baseUrl}profiles/doctors/bulk`,
+        authHeader,
+        "doctor",
+      ),
+      fetchProfilesBulk(
+        [appointment.id],
+        `${baseUrl}prescriptions/appointments/bulk`,
+        authHeader,
+        "prescription",
+      ),
+    ]);
+
+    appointment.patient = patientMap[appointment.patientId] || null;
+    appointment.doctor = doctorMap[appointment.doctorId] || null;
     appointment.prescription = prescriptionMap[appointment.id] || null;
 
-    // Augment with full documents array (detail endpoint)
+    // ── Augment with full documents array (detail endpoint) ───────────────────
     try {
       const docRes = await axios.post(
         `${baseUrl}documents/appointments/bulk`,

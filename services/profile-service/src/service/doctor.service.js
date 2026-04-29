@@ -51,6 +51,17 @@ class DoctorService {
     const { page = 1, limit = 20 } = pagination;
     const skip = (page - 1) * limit;
 
+    // ── Inter-service filtering (Hospital attributes) ───────────────────────
+    const filteredHospitalIds = await this._fetchHospitalIdsByFilters(filters);
+
+    // If hospital filters were applied and they DON'T include this hospital, return empty
+    if (filteredHospitalIds !== null && !filteredHospitalIds.includes(hospitalId)) {
+      return {
+        doctors: [],
+        pagination: { page: parseInt(page, 10), limit: parseInt(limit, 10), total: 0, totalPages: 0 }
+      };
+    }
+
     const where = {
       OR: [{ hospitalId }, { assignedHospitalIds: { has: hospitalId } }],
       ...this.buildWhereClause(filters)
@@ -193,11 +204,25 @@ class DoctorService {
             break;
 
           case 'gender':
-            where.gender = { equals: value };
+            where.gender = { equals: value.toUpperCase() };
+            break;
+
+          case 'languages':
+            {
+              const langs = Array.isArray(value) ? value : value.split(',').map((l) => l.trim());
+              where.languagesSpoken = { hasSome: langs };
+            }
+            break;
+
+          case 'countries':
+            {
+              const counts = Array.isArray(value) ? value : value.split(',').map((c) => c.trim());
+              where.nationality = { in: counts };
+            }
             break;
 
           case 'minExperience':
-            where.experience = { gte: parseInt(value, 10) };
+            where.yearsOfExperience = { gte: parseInt(value, 10) };
             break;
 
           case 'maxFee':
@@ -205,15 +230,15 @@ class DoctorService {
             break;
 
           case 'workingDay':
-            where.workingDays = { has: value };
+            where.workingDays = { has: value.toUpperCase() };
             break;
 
           case 'status':
-            where.status = { equals: value };
+            where.status = { equals: value.toUpperCase() };
             break;
 
           case 'availabilityStatus':
-            where.availabilityStatus = { equals: value };
+            where.availabilityStatus = { equals: value.toUpperCase() };
             break;
 
           default:
@@ -328,7 +353,22 @@ class DoctorService {
     const { page = 1, limit = 20 } = pagination;
     const skip = (page - 1) * limit;
 
+    // ── Inter-service filtering (Hospital attributes) ───────────────────────
+    const filteredHospitalIds = await this._fetchHospitalIdsByFilters(filters);
+
     const where = this.buildWhereClause(filters);
+
+    // If hospital filters were applied, restrict the doctor query
+    if (filteredHospitalIds !== null) {
+      if (filteredHospitalIds.length === 0) {
+        return {
+          doctors: [],
+          pagination: { page: parseInt(page, 10), limit: parseInt(limit, 10), total: 0, totalPages: 0 }
+        };
+      }
+      where.hospitalId = { in: filteredHospitalIds };
+    }
+
     const orderBy = this.buildOrderBy(sortBy);
 
     const [doctors, total] = await Promise.all([
@@ -676,6 +716,27 @@ class DoctorService {
     }
 
     return isArray ? doctorList : doctorList[0];
+  }
+
+  async _fetchHospitalIdsByFilters(filters) {
+    const { emirate, facility, distanceRange, lat, lng } = filters;
+    if (!emirate && !facility && !distanceRange) return null;
+
+    const baseUrl = process.env.API_BASE_URL || 'http://localhost:8080/api/v1';
+    const internalSecret = process.env.INTERNAL_SERVICE_SECRET || 'super_secret_internal_key_123';
+
+    try {
+      const response = await axios.get(`${baseUrl}/super-admins/hospital/search/ids`, {
+        params: { emirate, facility, distanceRange, lat, lng },
+        headers: {
+          'x-internal-service-key': internalSecret
+        }
+      });
+      return response.data?.data || [];
+    } catch (err) {
+      console.error('[ProfileService] Failed to fetch hospital IDs by filters:', err.message);
+      return [];
+    }
   }
 }
 
