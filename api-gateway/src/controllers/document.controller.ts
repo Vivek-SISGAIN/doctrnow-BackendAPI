@@ -39,11 +39,12 @@ export class DocumentController {
     const user = (req as any).user;
 
     try {
+      const isMultipart = req.headers['content-type']?.startsWith('multipart/');
       const response = await this.httpProxyService.proxyRequest('MEDICAL_RECORDS', {
         method: req.method,
         url: path,
         headers: this.extractHeaders(req),
-        body: req.body,
+        body: isMultipart ? req : req.body,
         query: req.query as Record<string, any>,
         correlationId,
         userId: user?.userId,

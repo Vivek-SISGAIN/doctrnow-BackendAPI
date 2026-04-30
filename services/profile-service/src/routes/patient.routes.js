@@ -8,7 +8,8 @@ const {
   updatePatient,
   deletePatient,
   getPatientsByBulkIds,
-  updatePatientStatus
+  updatePatientStatus,
+  getAvatarUploadUrl
   // getPatientsByBulkIds
 } = require('../controllers/patient.controller');
 const { createPatientSchema } = require('../validations/patient.validation');
@@ -116,6 +117,25 @@ router.get('/', getAllPatients);
  *         description: Patient profile not found
  */
 router.get('/me', getCurrentPatient);
+
+/**
+ * @swagger
+ * /api/patients/me/avatar-upload-url:
+ *   get:
+ *     summary: Get a presigned S3 URL to upload patient avatar directly
+ *     tags: [Patients]
+ *     parameters:
+ *       - in: query
+ *         name: mimeType
+ *         schema:
+ *           type: string
+ *         required: true
+ *         description: MIME type of the image
+ *     responses:
+ *       200:
+ *         description: Presigned URL generated
+ */
+router.get('/me/avatar-upload-url', getAvatarUploadUrl);
 
 /**
  * @swagger

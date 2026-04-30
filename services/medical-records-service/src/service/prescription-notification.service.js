@@ -84,7 +84,7 @@ class PrescriptionNotificationService {
       },
       body: JSON.stringify({
         userId: recipientUserId,
-        channels: ['IN_APP'],
+        channels: ['IN_APP', 'PUSH'],
         title: 'New Prescription Issued',
         body: `Dr. ${doctorName} has issued a new prescription (${rxId}) for ${patientName}.`,
         payload: {
@@ -116,7 +116,7 @@ class PrescriptionNotificationService {
       },
       body: JSON.stringify({
         userId: recipientUserId,
-        channels: ['IN_APP'],
+        channels: ['IN_APP', 'PUSH'],
         title: 'Lab Report Available',
         body: `Your lab report (${reportId}) ordered by Dr. ${doctorName} is now available.`,
         payload: {
@@ -160,7 +160,7 @@ class PrescriptionNotificationService {
       body: JSON.stringify({
         roles: ['HOSPITAL_ADMIN'],
         hospitalId,
-        channels: ['IN_APP'],
+        channels: ['IN_APP', 'PUSH'],
         title: 'Lab Report Available',
         body: `Lab report ${reportId} for ${patientName || 'patient'} is available for Dr. ${doctorName}.`,
         payload: {

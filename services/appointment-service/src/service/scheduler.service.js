@@ -224,7 +224,7 @@ class SchedulerService {
 
     const data = {
       userId: resolvedUserId,
-      channels: ["IN_APP"],
+      channels: ["IN_APP", "PUSH"],
       title,
       body,
       payload,

@@ -62,7 +62,8 @@ const updatePatientSchema = Joi.object({
     }),
   nationality: Joi.string().min(2).max(50).optional(),
   bloodGroup: Joi.string().valid('A_POS', 'A_NEG', 'B_POS', 'B_NEG', 'AB_POS', 'AB_NEG', 'O_POS', 'O_NEG').optional(),
-  maritalStatus: Joi.string().valid('SINGLE', 'MARRIED', 'DIVORCED', 'WIDOWED').optional()
+  maritalStatus: Joi.string().valid('SINGLE', 'MARRIED', 'DIVORCED', 'WIDOWED').optional(),
+  profileImage: Joi.string().uri().optional()
 }).min(1).messages({
   'object.min': 'At least one field must be provided for update'
 });

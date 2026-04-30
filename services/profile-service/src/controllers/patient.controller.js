@@ -58,9 +58,13 @@ const getAllPatients = asyncHandler(async (req, res) => {
   );
 
 
-  // Merge status into each patient
-  const patients = result.patients.map((p) => ({
-    ...p
+  // Merge status into each patient and resolve S3 URLs
+  const patients = await Promise.all(result.patients.map(async (p) => {
+    const patientObj = { ...p };
+    if (patientObj.profileImage) {
+      patientObj.profileImage = await getPresignedS3Url(patientObj.profileImage) || patientObj.profileImage;
+    }
+    return patientObj;
   }));
 
   res.status(200).json({
@@ -84,6 +88,10 @@ const getPatientById = asyncHandler(async (req, res) => {
     throw ApiError.notFound('Patient not found');
   }
 
+  if (patient.profileImage) {
+    patient.profileImage = await getPresignedS3Url(patient.profileImage) || patient.profileImage;
+  }
+
   res.status(200).json({
     success: true,
     data: patient
@@ -102,6 +110,10 @@ const getCurrentPatient = asyncHandler(async (req, res) => {
   const patient = await patientService.findByUserId(userId);
   if (!patient) {
     throw ApiError.notFound('Patient profile not found');
+  }
+
+  if (patient.profileImage) {
+    patient.profileImage = await getPresignedS3Url(patient.profileImage) || patient.profileImage;
   }
 
   res.status(200).json({
@@ -229,12 +241,16 @@ const getPatientsByBulkIds = asyncHandler(async (req, res) => {
   const patients = await patientService.findByIdsOrUserIds(uniqueIds);
 
   const patientMap = {};
-  patients.forEach((patient) => {
-    patientMap[patient.id] = patient;
-    if (patient.userId) {
-      patientMap[patient.userId] = patient;
+  for (const patient of patients) {
+    const patientObj = { ...patient };
+    if (patientObj.profileImage) {
+      patientObj.profileImage = await getPresignedS3Url(patientObj.profileImage) || patientObj.profileImage;
     }
-  });
+    patientMap[patientObj.id] = patientObj;
+    if (patientObj.userId) {
+      patientMap[patientObj.userId] = patientObj;
+    }
+  }
 
   res.status(200).json({
     success: true,
@@ -269,6 +285,36 @@ const updatePatientStatus = asyncHandler(async (req, res) => {
   });
 });
 
+const { getPresignedUploadUrl, getPresignedS3Url } = require('../utils/s3Handler');
+
+const getAvatarUploadUrl = asyncHandler(async (req, res) => {
+  const userId = req.headers['x-user-id'];
+  if (!userId) {
+    throw ApiError.unauthorized('User ID required');
+  }
+
+  const { mimeType } = req.query;
+  if (!mimeType) {
+    throw ApiError.badRequest('mimeType is required');
+  }
+
+  // Get patient to ensure they exist and use their ID
+  const patient = await patientService.findByUserId(userId);
+  if (!patient) {
+    throw ApiError.notFound('Patient profile not found');
+  }
+
+  const fileExt = mimeType.split('/')[1] || 'jpg';
+  const fileKey = `patient-profile/${patient.id}-${Date.now()}.${fileExt}`;
+
+  const { uploadUrl, fileUrl } = await getPresignedUploadUrl(fileKey, mimeType);
+
+  res.status(200).json({
+    success: true,
+    data: { uploadUrl, fileUrl }
+  });
+});
+
 module.exports = {
   getAllPatients,
   getPatientById,
@@ -277,5 +323,6 @@ module.exports = {
   updatePatient,
   deletePatient,
   updatePatientStatus,
-  getPatientsByBulkIds
+  getPatientsByBulkIds,
+  getAvatarUploadUrl
 };

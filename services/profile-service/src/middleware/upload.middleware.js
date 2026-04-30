@@ -1,4 +1,4 @@
-import multer from 'multer';
+const multer = require('multer');
 
 // Store files in memory so we can stream them directly to S3
 const storage = multer.memoryStorage();
@@ -31,7 +31,7 @@ const upload = multer({
  * Accepts exactly the five document fields expected by the hospital-documents API.
  * Each field allows up to 5 files (insurance/accreditation may be multi-doc).
  */
-export const hospitalDocumentsUpload = upload.fields([
+const hospitalDocumentsUpload = upload.fields([
   { name: 'tradeLicenseDocument', maxCount: 1 },
   { name: 'dhaLicenseDocument', maxCount: 1 },
   { name: 'insuranceDocuments', maxCount: 5 },
@@ -39,5 +39,13 @@ export const hospitalDocumentsUpload = upload.fields([
   { name: 'accreditationCertificates', maxCount: 5 }
 ]);
 
+/**
+ * Accepts a single profile image for doctors or patients.
+ */
+const profileImageUpload = upload.single('profileImage');
 
-export default upload;
+module.exports = {
+  upload,
+  hospitalDocumentsUpload,
+  profileImageUpload
+};
