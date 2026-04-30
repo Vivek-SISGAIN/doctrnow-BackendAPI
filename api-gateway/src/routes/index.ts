@@ -166,6 +166,19 @@ router.use(
   )
 );
 
+router.use(
+  '/slots',
+  authenticateJWT,
+  userRateLimiter,
+  createServiceProxy(
+    {
+      target: config.services.appointment,
+      pathRewrite: { '^/api/v1/slots': '/api/slots' },
+    },
+    'appointment-service'
+  )
+);
+
 // Consultation Service Routes (requires authentication)
 router.use(
   '/consultations',

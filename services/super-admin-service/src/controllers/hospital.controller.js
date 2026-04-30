@@ -128,6 +128,22 @@ class HospitalController {
 
   });
 
+  getHospitalIds = asyncHandler(async (req, res) => {
+    const { emirate, facility, distanceRange, lat, lng } = req.query;
+    const ids = await hospitalService.getHospitalIdsByFilters({
+      emirate,
+      facility,
+      distanceRange,
+      lat,
+      lng,
+    });
+
+    res.status(200).json({
+      success: true,
+      data: ids,
+    });
+  });
+
 }
 
 export default new HospitalController();

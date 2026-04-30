@@ -29,6 +29,7 @@ import { AdminChatController } from './controllers/admin-chat.controller';
 import { NotificationController } from './controllers/notification.controller';
 import { SearchController } from './controllers/search.controller';
 import { AuditController } from './controllers/audit.controller';
+import { SlotController } from './controllers/slot.controller';
 
 import { CorrelationIdInterceptor } from './common/interceptors/correlation-id.interceptor';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
@@ -146,6 +147,7 @@ import configuration from './config/configuration';
     NotificationController,
     SearchController,
     AuditController,
+    SlotController,
   ],
   providers: [
     // Global Guards (execution order: Throttler → JWT → Roles)

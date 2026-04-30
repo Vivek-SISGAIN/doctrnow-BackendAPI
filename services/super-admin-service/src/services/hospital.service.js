@@ -274,6 +274,59 @@ class HospitalService {
       },
     });
   }
+
+  async getHospitalIdsByFilters(filters) {
+    const { emirate, facility, distanceRange, lat, lng } = filters;
+    const where = {};
+
+    if (emirate) {
+      where.emirate = { contains: emirate, mode: "insensitive" };
+    }
+
+    if (facility) {
+      const facilityConditions = [
+        { officialName: { contains: facility, mode: "insensitive" } },
+        { shortName: { contains: facility, mode: "insensitive" } },
+      ];
+      if (where.OR) {
+        where.AND = [{ OR: where.OR }, { OR: facilityConditions }];
+        delete where.OR;
+      } else {
+        where.OR = facilityConditions;
+      }
+    }
+
+    const hospitals = await prisma.hospital.findMany({
+      where,
+      select: { id: true, latitude: true, longitude: true },
+    });
+
+    if (distanceRange && lat && lng) {
+      const R = 6371; // Radius of the earth in km
+      const centerLat = parseFloat(lat);
+      const centerLng = parseFloat(lng);
+      const range = parseFloat(distanceRange);
+
+      return hospitals
+        .filter((h) => {
+          if (h.latitude === null || h.longitude === null) return false;
+          const dLat = ((h.latitude - centerLat) * Math.PI) / 180;
+          const dLon = ((h.longitude - centerLng) * Math.PI) / 180;
+          const a =
+            Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+            Math.cos((centerLat * Math.PI) / 180) *
+              Math.cos((h.latitude * Math.PI) / 180) *
+              Math.sin(dLon / 2) *
+              Math.sin(dLon / 2);
+          const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+          const d = R * c; // Distance in km
+          return d <= range;
+        })
+        .map((h) => h.id);
+    }
+
+    return hospitals.map((h) => h.id);
+  }
 }
 
 async function fetchConsultationCount(hospitalId) {
