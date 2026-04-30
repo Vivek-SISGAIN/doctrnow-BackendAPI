@@ -44,11 +44,12 @@ export class ProfileController {
     const userId = user?.userId ?? user?.sub;
 
     try {
+      const isMultipart = req.headers['content-type']?.startsWith('multipart/');
       const response = await this.httpProxyService.proxyRequest('PROFILE', {
         method: req.method,
         url: path,
         headers: this.extractHeaders(req),
-        body: req.body,
+        body: isMultipart ? req : req.body,
         query: req.query as Record<string, any>,
         correlationId,
         userId,

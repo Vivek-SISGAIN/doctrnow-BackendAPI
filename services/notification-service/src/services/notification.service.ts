@@ -54,13 +54,13 @@ export class NotificationService {
       return notification;
     }
 
-    // When the user is currently online, also push the notification into the portal
-    // UI in real time. This is especially useful for PUSH channel: browser/system
-    // notifications can be missed in foreground, but the portal should still update.
-    if (data.channel === 'PUSH') {
-      emitToUser(notification.userId, 'notification', eventPayload);
-      emitToUser(notification.userId, 'notification:new', eventPayload);
-    }
+    // When the user is currently online, we rely on the IN_APP channel 
+    // for real-time portal UI updates. Emitting here for PUSH would cause
+    // duplicate notifications in the portal.
+    // if (data.channel === 'PUSH') {
+    //   emitToUser(notification.userId, 'notification', eventPayload);
+    //   emitToUser(notification.userId, 'notification:new', eventPayload);
+    // }
 
     await QueueService.publishMessage(this.channelToRoutingKey(data.channel), notification);
 
@@ -145,14 +145,50 @@ export class NotificationService {
 
   static async listNotificationsForUser(
     userId: string,
-    options?: { limit?: number; offset?: number },
-  ): Promise<Notification[]> {
-    return prisma.notification.findMany({
-      where: { userId },
-      orderBy: { createdAt: 'desc' },
-      take: options?.limit ?? 50,
-      skip: options?.offset ?? 0,
-    });
+    options?: { page?: number; limit?: number; offset?: number },
+  ): Promise<{ notifications: Notification[]; total: number; unreadCount: number }> {
+    const limit = options?.limit ?? 50;
+    const page = options?.page ?? 1;
+    const skip = options?.offset ?? (page - 1) * limit;
+
+    const [notifications, total, allUnread] = await Promise.all([
+      prisma.notification.findMany({
+        where: {
+          userId,
+          channel: Channel.IN_APP // Only show in-app notifications in the history list
+        },
+        orderBy: { createdAt: 'desc' },
+        take: limit,
+        skip: skip,
+      }),
+      prisma.notification.count({
+        where: {
+          userId,
+          channel: Channel.IN_APP
+        }
+      }),
+      // Count ALL unread notifications (where payload.__meta.read is not true)
+      prisma.notification.findMany({
+        where: {
+          userId,
+          channel: Channel.IN_APP,
+        },
+        select: { id: true, payload: true },
+      }),
+    ]);
+
+    // Derive unread count from payload.__meta.read flag across all notifications
+    const unreadCount = allUnread.filter((n) => {
+      const payload = n.payload && typeof n.payload === 'object' && !Array.isArray(n.payload)
+        ? (n.payload as Record<string, unknown>)
+        : {};
+      const meta = payload.__meta && typeof payload.__meta === 'object' && !Array.isArray(payload.__meta)
+        ? (payload.__meta as Record<string, unknown>)
+        : {};
+      return !meta.read;
+    }).length;
+
+    return { notifications, total, unreadCount };
   }
 
   static async markAsRead(

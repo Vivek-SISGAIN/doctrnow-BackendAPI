@@ -17,9 +17,9 @@ const s3 = new S3Client({
 
 const BUCKET = process.env.AWS_S3_BUCKET || '';
 
-const uploadToS3 = async (file) => {
+const uploadToS3 = async (file, folder = 'doctor-profiles') => {
   try {
-    const fileKey = `documents/hospitals/${uuid()}-${file.originalname}`;
+    const fileKey = `${folder}/${uuid()}-${file.originalname}`;
 
     const command = new PutObjectCommand({
       Bucket: BUCKET,

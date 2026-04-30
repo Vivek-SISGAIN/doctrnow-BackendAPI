@@ -3,6 +3,7 @@ const doctorService = require('../service/doctor.service');
 const specialtyService = require('../service/specialty.service');
 const ApiError = require('../utils/ApiError');
 const asyncHandler = require('../utils/asyncHandler');
+const { uploadToS3 } = require('../utils/s3Handler');
 
 const getAllDoctors = asyncHandler(async (req, res) => {
   const {
@@ -400,6 +401,33 @@ const assignDoctorToHospital = asyncHandler(async (req, res) => {
   });
 });
 
+const updateDoctorProfileImage = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+
+  if (!req.file) {
+    throw ApiError.badRequest('No profile image provided');
+  }
+
+  const doctor = await doctorService.findByIdOrUserId(id);
+  if (!doctor) {
+    throw ApiError.notFound('Doctor not found');
+  }
+
+  try {
+    const { key } = await uploadToS3(req.file, 'doctor-profiles');
+    const updatedDoctor = await doctorService.update(doctor.id, { profileImage: key });
+
+    res.status(200).json({
+      success: true,
+      message: 'Profile image updated successfully',
+      data: updatedDoctor
+    });
+  } catch (error) {
+    console.error('[DoctorController] updateDoctorProfileImage error:', error.message);
+    throw ApiError.internal('Failed to upload profile image');
+  }
+});
+
 module.exports = {
   getDoctorById,
   updateDoctor,
@@ -412,5 +440,6 @@ module.exports = {
   setAvailability,
   getDoctorsByBulkIds,
   getDocByHospitalId,
-  assignDoctorToHospital
+  assignDoctorToHospital,
+  updateDoctorProfileImage
 };

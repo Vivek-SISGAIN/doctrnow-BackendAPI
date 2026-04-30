@@ -12,8 +12,10 @@ const {
   setAvailability,
   getDoctorsByBulkIds,
   getDocByHospitalId,
-  assignDoctorToHospital
+  assignDoctorToHospital,
+  updateDoctorProfileImage
 } = require('../controllers/doctor.controller');
+const { profileImageUpload } = require('../middleware/upload.middleware');
 const { createDoctorSchema } = require('../validations/doctor.validation');
 const validate = require('../middleware/validation');
 
@@ -195,6 +197,34 @@ router.get('/:id', getDoctorById);
  *         description: Doctor not found
  */
 router.patch('/:id', updateDoctor);
+
+/**
+ * @swagger
+ * /api/doctors/{id}/profile-image:
+ *   patch:
+ *     summary: Update doctor profile image
+ *     tags: [Doctors]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     requestBody:
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               profileImage:
+ *                 type: string
+ *                 format: binary
+ *     responses:
+ *       200:
+ *         description: Profile image updated
+ */
+router.patch('/:id/profile-image', profileImageUpload, updateDoctorProfileImage);
 
 /**
  * @swagger

@@ -159,17 +159,26 @@ export const listNotifications = async (req: Request, res: Response) => {
       return res.status(401).json({ error: 'x-user-id header is required' });
     }
 
+    const page = Number(req.query.page ?? 1);
     const limit = Number(req.query.limit ?? 50);
-    const offset = Number(req.query.offset ?? 0);
 
-    const notifications = await NotificationService.listNotificationsForUser(userId, {
+    const { notifications, total, unreadCount } = await NotificationService.listNotificationsForUser(userId, {
+      page: Number.isFinite(page) ? page : 1,
       limit: Number.isFinite(limit) ? limit : 50,
-      offset: Number.isFinite(offset) ? offset : 0,
     });
+
+    const totalPages = Math.ceil(total / (Number.isFinite(limit) ? limit : 50));
 
     return res.status(200).json({
       success: true,
       data: notifications,
+      unreadCount,
+      pagination: {
+        total,
+        page: Number.isFinite(page) ? page : 1,
+        limit: Number.isFinite(limit) ? limit : 50,
+        totalPages,
+      },
     });
   } catch (error) {
     console.error('[NotificationController] listNotifications error:', error);
