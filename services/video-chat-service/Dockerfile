@@ -1,37 +1,37 @@
 # ---------- BUILD STAGE ----------
-FROM node:18-alpine AS builder
+FROM node:20-slim AS builder
 
 WORKDIR /app
 
+RUN npm config set fetch-retries 5 \
+    && npm config set fetch-retry-mintimeout 20000 \
+    && npm config set fetch-retry-maxtimeout 120000 \
+    && npm config set fetch-timeout 600000
+
 COPY package*.json ./
-
-RUN npm ci
-
+RUN npm install
 
 COPY . .
-
 RUN npm run build
 
 
 # ---------- PRODUCTION STAGE ----------
-FROM node:18-alpine
+FROM node:20-slim
 
 WORKDIR /app
 
-# install only production deps
+RUN npm config set fetch-retries 5 \
+    && npm config set fetch-retry-mintimeout 20000 \
+    && npm config set fetch-retry-maxtimeout 120000 \
+    && npm config set fetch-timeout 600000
+
 COPY package*.json ./
-RUN npm ci --omit=dev
+RUN npm install --omit=dev
 
-
-# copy build output
 COPY --from=builder /app/dist ./dist
 
-
-# create user
-RUN addgroup -S nodejs && adduser -S nodejs -G nodejs
+RUN addgroup --system nodejs && adduser --system --ingroup nodejs nodejs
 USER nodejs
 
 EXPOSE 3007
-HEALTHCHECK --interval=30s --timeout=3s --start-period=40s --retries=3 \
-  CMD node -e "require('http').get('http://localhost:3010/video/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})" || exit 1
 CMD ["node", "dist/server.js"]

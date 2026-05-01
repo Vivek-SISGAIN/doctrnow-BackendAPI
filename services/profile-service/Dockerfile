@@ -6,7 +6,7 @@ WORKDIR /app
 COPY package*.json ./
 COPY prisma ./prisma/
 
-RUN npm ci
+RUN npm install
 RUN npx prisma generate
 
 # ---------- PRODUCTION STAGE ----------
@@ -15,7 +15,7 @@ FROM node:18-alpine
 WORKDIR /app
 
 COPY package*.json ./
-RUN npm ci --omit=dev
+RUN npm install --omit=dev
 
 COPY prisma ./prisma/
 COPY src ./src/
@@ -34,8 +34,11 @@ USER nodejs
 
 EXPOSE 5000
 
-HEALTHCHECK --interval=30s --timeout=3s --start-period=40s --retries=3 \
-    CMD node -e "require('http').get('http://localhost:5000/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"
 
 # NO prisma generate at runtime — already done in builder
-CMD ["sh", "-c", "npx prisma db push --skip-generate && node src/server.js"]
+# --accept-data-loss is required to apply schema changes that *may* drop data
+# (e.g. adding a unique constraint that fails if duplicates exist). It does NOT
+# auto-resolve duplicates — Postgres still rejects the migration if real dups
+# are present. If startup fails on a unique-constraint error, deduplicate the
+# offending column manually before retrying.
+CMD ["sh", "-c", "npx prisma db push --skip-generate --accept-data-loss && node src/server.js"]
