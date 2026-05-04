@@ -128,3 +128,79 @@ enum PORTAL {
   DOCTOR
   GENERAL
 }
+
+// ─── Support Ticket System ────────────────────────────────────────────────────
+
+enum TICKET_STATUS {
+  open
+  in_progress
+  resolved
+  closed
+}
+
+enum TICKET_PRIORITY {
+  High
+  Medium
+  Low
+}
+
+enum TICKET_CATEGORY {
+  Booking_Issue
+  Payment_Problem
+  Technical_Issue
+  Doctor_Query
+  Other
+}
+
+enum TICKET_ACTOR {
+  USER
+  ADMIN
+  SYSTEM
+}
+
+model SupportTicket {
+  id          String          @id @default(uuid())
+  ticketCode  String          @unique @map("ticket_code") // e.g. TK-001
+
+  // Creator info (stored at creation time for quick display)
+  userId      String          @map("user_id")
+  userRole    String          @map("user_role") // PATIENT | DOCTOR | HOSPITAL_ADMIN
+
+  // Ticket fields
+  category    TICKET_CATEGORY
+  subject     String
+  description String          @db.Text
+
+  // Status / Priority managed by admin
+  status      TICKET_STATUS   @default(open)
+  priority    TICKET_PRIORITY @default(Medium)
+
+  // Optional: which admin is assigned to resolve this
+  assignedToId String?        @map("assigned_to_id")
+
+  createdAt   DateTime        @default(now()) @map("created_at")
+  updatedAt   DateTime        @updatedAt @map("updated_at")
+
+  // Relations
+  timeline    TicketTimeline[]
+
+  @@map("support_tickets")
+}
+
+model TicketTimeline {
+  id        String       @id @default(uuid())
+  ticketId  String       @map("ticket_id")
+
+  text      String       @db.Text
+  actor     TICKET_ACTOR @default(USER) // who wrote this entry
+  userId    String       @map("user_id")  // actual user id of the author
+
+  // System-generated entries (e.g. "Status changed to In Progress")
+  isSystem  Boolean      @default(false) @map("is_system")
+
+  createdAt DateTime     @default(now()) @map("created_at")
+
+  ticket    SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  @@map("ticket_timelines")
+}

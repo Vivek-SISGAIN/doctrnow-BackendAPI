@@ -128,6 +128,7 @@ class SchedulerService {
 
     await this.notifyAppointmentParty(appointment, targetRole, title, body, {
       type: reminderType,
+      isReminder: true,
       context,
     });
   }

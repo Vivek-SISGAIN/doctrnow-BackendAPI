@@ -1,12 +1,12 @@
 # ---------- BUILD STAGE ----------
-FROM node:20-alpine AS builder
+FROM node:20-slim AS builder
 
 WORKDIR /app
 
 COPY package*.json ./
 COPY prisma ./prisma/
 
-RUN npm ci
+RUN npm install
 
 RUN npx prisma generate
 
@@ -16,13 +16,13 @@ RUN npm run build
 
 
 # ---------- PRODUCTION STAGE ----------
-FROM node:20-alpine
+FROM node:20-slim
 
 WORKDIR /app
 
 # install only production deps
 COPY package*.json ./
-RUN npm ci --omit=dev
+RUN npm install --omit=dev
 
 # copy prisma only (no need to regenerate again)
 COPY prisma ./prisma/
@@ -35,10 +35,8 @@ COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
 
 # create user
-RUN addgroup -S nodejs && adduser -S nodejs -G nodejs
+RUN addgroup --system nodejs && adduser --system --ingroup nodejs nodejs
 USER nodejs
 
 EXPOSE 3004
-HEALTHCHECK --interval=30s --timeout=3s --start-period=40s --retries=3 \
-  CMD node -e "require('http').get('http://localhost:3004/hospital/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})" || exit 1
 CMD ["node", "dist/server.js"]

@@ -6,7 +6,7 @@
   COPY package*.json ./
   COPY prisma ./prisma/
   
-  RUN npm ci
+  RUN npm install
   
   RUN npx prisma generate
   
@@ -22,7 +22,7 @@
   
   # install only production deps
   COPY package*.json ./
-  RUN npm ci --omit=dev
+  RUN npm install --omit=dev
   
   # copy prisma only (no need to regenerate again)
   COPY prisma ./prisma/
@@ -39,6 +39,4 @@
   USER nodejs
   
 EXPOSE 3009
-HEALTHCHECK --interval=30s --timeout=3s --start-period=40s --retries=3 \
-  CMD node -e "require('http').get('http://localhost:3009/payments/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})" || exit 1
 CMD ["node", "dist/main.js"]
