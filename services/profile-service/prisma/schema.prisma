@@ -177,6 +177,11 @@ enum DocumentStatus {
   REJECTED
 }
 
+enum HospitalAdminSubRole {
+  ADMIN
+  MASTER_ADMIN
+}
+
 model HospitalAdmin {
   id           String   @id @default(uuid())
   userId       String   @unique
@@ -193,6 +198,7 @@ model HospitalAdmin {
   department   String?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+  subRole      HospitalAdminSubRole? @default(MASTER_ADMIN)
 
   @@map("hospital_admin")
 }

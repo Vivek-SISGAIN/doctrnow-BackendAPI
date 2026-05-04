@@ -114,7 +114,8 @@ class HospitalAdminService {
         position: data.position,
         department: data.department || null,
 
-        profileImage: data.profileImage || ''
+        profileImage: data.profileImage || '',
+        subRole: data.subRole || 'ADMIN'
       }
     });
   }

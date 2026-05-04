@@ -19,7 +19,7 @@ import { SkipThrottle } from '@nestjs/throttler';
  */
 @ApiTags('profiles')
 @ApiBearerAuth('JWT-auth')
-@Controller('profiles')
+@Controller(['profile', 'profiles'])
 @SkipThrottle()
 @UseGuards(JwtAuthGuard)
 export class ProfileController {
@@ -38,7 +38,7 @@ export class ProfileController {
     const rawUrl = (req as any).originalUrl || req.url || '';
     const incomingPath = rawUrl.split('?')[0];
     // Strip gateway prefix: /api/v1/profiles/... -> /api/... (e.g. /api/patients/me)
-    const pathSuffix = incomingPath.replace(/^\/api\/v1\/profiles/, '').trim() || '';
+    const pathSuffix = incomingPath.replace(/^\/api\/v1\/profiles?/, '').trim() || '';
     const path = `/api${pathSuffix.startsWith('/') ? pathSuffix : `/${pathSuffix}`}`.replace('//', '/') || '/api';
     const user = (req as any).user;
     const userId = user?.userId ?? user?.sub;
