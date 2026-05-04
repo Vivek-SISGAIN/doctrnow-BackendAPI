@@ -18,6 +18,7 @@
  */
 
 const AdminChatSession = require("../models/adminChatSession.model");
+const AdminChatMessage = require("../models/adminChatMessage.model");
 const { getIO }        = require("../realtime/socket");
 const logger           = require("../utils/logger");
 
@@ -399,6 +400,124 @@ const getAuditLogs = async (req, res, next) => {
     }
 };
 
+// ─── GET /api/admin-chat/session/:id/messages ──────────────────────────────────
+const getSessionMessages = async (req, res, next) => {
+    try {
+        const identity = requireIdentity(req, res);
+        if (!identity) return;
+        const { userId, role } = identity;
+        const { id } = req.params;
+        const limit = Math.min(parseInt(req.query.limit, 10) || 100, 200);
+        const before = req.query.before;
+
+        const session = await AdminChatSession.findById(id).lean();
+        if (!session) {
+            return res.status(404).json({ success: false, error: "Session not found" });
+        }
+
+        const isParticipant =
+            session.hospitalAdminId === userId ||
+            session.superAdminId === userId;
+
+        if (!isParticipant && role !== "SUPER_ADMIN") {
+            return res.status(403).json({ success: false, error: "Access denied" });
+        }
+
+        const query = { sessionId: id };
+        if (before) {
+            query.createdAt = { $lt: new Date(before) };
+        }
+
+        const messages = await AdminChatMessage.find(query)
+            .sort({ createdAt: 1 })
+            .limit(limit)
+            .lean();
+
+        return res.status(200).json({ success: true, data: messages });
+    } catch (err) {
+        next(err);
+    }
+};
+
+// ─── POST /api/admin-chat/session/:id/resolve ────────────────────────────────
+const markSessionResolved = async (req, res, next) => {
+    try {
+        const identity = requireIdentity(req, res);
+        if (!identity) return;
+        const { role } = identity;
+
+        if (role !== "SUPER_ADMIN") {
+            return res.status(403).json({ success: false, error: "Only Super Admins can mark sessions resolved" });
+        }
+
+        const { id } = req.params;
+        const session = await AdminChatSession.findByIdAndUpdate(
+            id,
+            { resolved: true },
+            { new: true }
+        );
+
+        if (!session) {
+            return res.status(404).json({ success: false, error: "Session not found" });
+        }
+
+        return res.status(200).json({ success: true, data: session });
+    } catch (err) {
+        next(err);
+    }
+};
+
+// ─── GET /api/admin-chat/search ──────────────────────────────────────────────
+const searchSessions = async (req, res, next) => {
+    try {
+        const identity = requireIdentity(req, res);
+        if (!identity) return;
+        const { role } = identity;
+
+        if (role !== "SUPER_ADMIN") {
+            return res.status(403).json({ success: false, error: "Only Super Admins can search sessions" });
+        }
+
+        const { startDate, endDate, resolved, status, hospitalAdminId, page = 1, limit = 20 } = req.query;
+
+        const filter = {};
+        if (startDate || endDate) {
+            filter.createdAt = {};
+            if (startDate) filter.createdAt.$gte = new Date(startDate);
+            if (endDate) filter.createdAt.$lte = new Date(endDate);
+        }
+        if (resolved === "true") filter.resolved = true;
+        if (resolved === "false") filter.resolved = false;
+        if (status && status !== "all") filter.status = status;
+        if (hospitalAdminId) filter.hospitalAdminId = hospitalAdminId;
+
+        const pageNum = Math.max(1, parseInt(page, 10));
+        const limitNum = Math.min(100, parseInt(limit, 10));
+        const skip = (pageNum - 1) * limitNum;
+
+        const [sessions, total] = await Promise.all([
+            AdminChatSession.find(filter)
+                .sort({ createdAt: -1 })
+                .skip(skip)
+                .limit(limitNum)
+                .lean(),
+            AdminChatSession.countDocuments(filter)
+        ]);
+
+        return res.status(200).json({
+            success: true,
+            data: sessions,
+            meta: {
+                total,
+                page: pageNum,
+                totalPages: Math.ceil(total / limitNum)
+            }
+        });
+    } catch (err) {
+        next(err);
+    }
+};
+
 // ─── Exports ──────────────────────────────────────────────────────────────────
 
 module.exports = {
@@ -408,5 +527,8 @@ module.exports = {
     endSession,
     getSession,
     getMySession,
-    getAuditLogs
+    getAuditLogs,
+    getSessionMessages,
+    markSessionResolved,
+    searchSessions
 };

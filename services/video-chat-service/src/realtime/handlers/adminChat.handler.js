@@ -28,6 +28,8 @@
  */
 
 const logger = require("../../utils/logger");
+const AdminChatMessage = require("../../models/adminChatMessage.model");
+const AdminChatSession = require("../../models/adminChatSession.model");
 
 /**
  * @param {import("socket.io").Server} io
@@ -63,10 +65,6 @@ const registerAdminChatHandler = (io, socket) => {
     });
 
     // ── Send a message within an active session ───────────────────────────────
-    // NOTE: messages are NOT persisted (audit-only design).
-    // If you later decide to persist them, hook into AdminChatSession or a
-    // separate AdminChatMessage model here — without touching the existing
-    // patient-doctor Message model.
     socket.on("admin_chat:message", ({ sessionId, text, clientMsgId }) => {
         if (!sessionId || !text?.trim()) return;
 
@@ -84,6 +82,52 @@ const registerAdminChatHandler = (io, socket) => {
         io.to(room).emit("admin_chat:message", payload);
 
         logger.debug("[adminChat:socket] Message relayed", { sessionId, userId, room });
+
+        // Asynchronously save to MongoDB
+        (async () => {
+            try {
+                const newMsg = await AdminChatMessage.create({
+                    sessionId,
+                    senderId: userId,
+                    senderRole: role,
+                    text: text.trim(),
+                    clientMsgId: clientMsgId || null,
+                    readBy: []
+                });
+
+                await AdminChatSession.findByIdAndUpdate(sessionId, {
+                    lastMessagePreview: text.trim().slice(0, 120),
+                    lastMessageAt: new Date()
+                });
+            } catch (err) {
+                logger.error("[adminChat:socket] Failed to persist message", { error: err.message, sessionId });
+            }
+        })();
+    });
+
+    // ── Read Receipts ─────────────────────────────────────────────────────────
+    socket.on("admin_chat:read_receipt", async ({ sessionId, messageIds }) => {
+        if (!sessionId || !messageIds || !messageIds.length) return;
+
+        try {
+            const room = `admin_session:${sessionId}`;
+            const readAtDate = new Date();
+
+            await AdminChatMessage.updateMany(
+                { _id: { $in: messageIds }, "readBy.userId": { $ne: userId } },
+                { $push: { readBy: { userId, readAt: readAtDate } } }
+            );
+
+            io.to(room).emit("admin_chat:messages_read", {
+                sessionId,
+                readBy: userId,
+                messageIds,
+                readAt: readAtDate.toISOString()
+            });
+            logger.debug("[adminChat:socket] Read receipt processed", { sessionId, userId, count: messageIds.length });
+        } catch (err) {
+            logger.error("[adminChat:socket] Failed to process read receipt", { error: err.message, sessionId });
+        }
     });
 
     // ── Typing indicator ──────────────────────────────────────────────────────

@@ -21,7 +21,10 @@ const {
     endSession,
     getSession,
     getMySession,
-    getAuditLogs
+    getAuditLogs,
+    getSessionMessages,
+    markSessionResolved,
+    searchSessions
 } = require("../controllers/adminChat.controller");
 
 // ─── Hospital Admin ───────────────────────────────────────────────────────────
@@ -45,8 +48,17 @@ router.get("/audit-logs", getAuditLogs);
 
 // ─── Shared ───────────────────────────────────────────────────────────────────
 
+// Search sessions by date range, resolved status, etc.
+router.get("/search", searchSessions);
+
 /** Fetch a single session by ID */
 router.get("/session/:id", getSession);
+
+// Get messages for a session (for page refresh recovery)
+router.get("/session/:id/messages", getSessionMessages);
+
+// Mark a session as resolved (Super Admin only)
+router.post("/session/:id/resolve", markSessionResolved);
 
 /** End an ACTIVE session (either party) */
 router.post("/requests/:id/end", endSession);

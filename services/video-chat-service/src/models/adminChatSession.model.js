@@ -65,7 +65,18 @@ const adminChatSessionSchema = new mongoose.Schema(
          * Optional subject / initial message so the super admin sees
          * context before accepting.
          */
-        subject: { type: String, default: null }
+        subject: { type: String, default: null },
+
+        // Whether the session has been marked resolved by a super admin
+        resolved: {
+            type: Boolean,
+            default: false,
+            index: true,
+        },
+
+        // Last message preview — for showing in session list without querying messages
+        lastMessagePreview: { type: String, default: null },
+        lastMessageAt: { type: Date, default: null }
     },
     { timestamps: true }   // adds createdAt (= when request was raised) + updatedAt
 );
@@ -75,5 +86,7 @@ adminChatSessionSchema.index({ status: 1, createdAt: -1 });
 
 // Compound index: list sessions for a given hospital admin
 adminChatSessionSchema.index({ hospitalAdminId: 1, status: 1, createdAt: -1 });
+
+adminChatSessionSchema.index({ status: 1, resolved: 1, lastMessageAt: -1 });
 
 module.exports = mongoose.model("AdminChatSession", adminChatSessionSchema);
