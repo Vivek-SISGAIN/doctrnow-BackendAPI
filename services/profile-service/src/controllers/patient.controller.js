@@ -116,9 +116,49 @@ const getCurrentPatient = asyncHandler(async (req, res) => {
     patient.profileImage = await getPresignedS3Url(patient.profileImage) || patient.profileImage;
   }
 
+  const authHeader = req.headers.authorization;
+  let appointments = 0;
+  let doctorsConsulted = 0;
+  let documents = 0;
+
+  if (authHeader) {
+    try {
+      const [appointmentsRes, doctorsRes, documentsRes] = await Promise.allSettled([
+        axios.get(`${process.env.API_BASE_URL}/appointments?patientId=${patient.id}&limit=1`, {
+          headers: { Authorization: authHeader }
+        }),
+        axios.get(`${process.env.API_BASE_URL}/appointments/${patient.id}/previously-consulted-doctors`, {
+          headers: { Authorization: authHeader }
+        }),
+        axios.get(`${process.env.API_BASE_URL}/documents/patient/${patient.id}?limit=1`, {
+          headers: { Authorization: authHeader }
+        })
+      ]);
+
+      if (appointmentsRes.status === 'fulfilled') {
+        appointments = appointmentsRes.value.data?.pagination?.total || 0;
+      }
+      if (doctorsRes.status === 'fulfilled') {
+        doctorsConsulted = doctorsRes.value.data?.data?.length || 0;
+      }
+      if (documentsRes.status === 'fulfilled') {
+        documents = documentsRes.value.data?.pagination?.total || 0;
+      }
+    } catch (error) {
+      console.error('Error fetching profile counts:', error.message);
+    }
+  }
+
   res.status(200).json({
     success: true,
-    data: patient
+    data: {
+      ...patient,
+      profileCount: {
+        appointments,
+        doctorsConsulted,
+        documents
+      }
+    }
   });
 });
 

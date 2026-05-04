@@ -297,10 +297,11 @@ export class NotificationService {
     }
 
     // If we go through the gateway, authenticate as an internal service so JwtAuthGuard can bypass.
-    const internalSecret = process.env.INTERNAL_SERVICE_SECRET;
+    const internalSecret = process.env.INTERNAL_SERVICE_SECRET || '';
     const commonHeaders: Record<string, string> = {
       'X-Correlation-ID': randomUUID(),
-      ...(internalSecret ? { 'x-internal-service-key': internalSecret } : {}),
+      'x-internal-secret': internalSecret,
+      'x-internal-service-key': internalSecret,
     };
 
     const isGateway = !!apiGateway;
@@ -318,10 +319,10 @@ export class NotificationService {
       if (resolvedRole === 'HOSPITAL_ADMIN') {
         const path = hospitalId
           ? (isGateway
-            ? `/profiles/hospital-admins/hospital/id/${hospitalId}`
+            ? `/profile/hospital-admins/hospital/id/${hospitalId}`
             : `/api/hospital-admins/hospital/id/${hospitalId}`)
-          : (isGateway ? '/profiles/hospital-admins' : '/api/hospital-admins');
-        const response = await axios.get(`${baseUrl}${prefix}${path}`, { headers: commonHeaders });
+          : (isGateway ? '/profile/hospital-admins' : '/api/hospital-admins');
+        const response = await axios.get(`${baseUrl}${path}`, { headers: commonHeaders });
         const records = response?.data?.data ?? response?.data ?? [];
         for (const admin of records) {
           if (admin?.userId) userIds.add(admin.userId);
@@ -329,8 +330,8 @@ export class NotificationService {
       }
 
       if (resolvedRole === 'DOCTOR') {
-        const path = isGateway ? '/profiles/doctors' : '/api/doctors';
-        const response = await axios.get(`${baseUrl}${prefix}${path}`, { headers: commonHeaders });
+        const path = isGateway ? '/profile/doctors' : '/api/doctors';
+        const response = await axios.get(`${baseUrl}${path}`, { headers: commonHeaders });
         const records = response?.data?.data ?? response?.data ?? [];
         for (const doctor of records) {
           if (doctor?.userId) userIds.add(doctor.userId);
@@ -338,15 +339,24 @@ export class NotificationService {
       }
 
       if (resolvedRole === 'PATIENT') {
-        const path = isGateway ? '/profiles/patients' : '/api/patients';
-        const response = await axios.get(`${baseUrl}${prefix}${path}`, { headers: commonHeaders });
+        const path = isGateway ? '/profile/patients' : '/api/patients';
+        const response = await axios.get(`${baseUrl}${path}`, { headers: commonHeaders });
         const records = response?.data?.data ?? response?.data ?? [];
         for (const patient of records) {
           if (patient?.userId) userIds.add(patient.userId);
         }
       }
 
-      if (!['HOSPITAL_ADMIN', 'DOCTOR', 'PATIENT', 'HOSPITAL'].includes(role)) {
+      if (resolvedRole === 'SUPER_ADMIN') {
+        const path = isGateway ? '/profile/super-admins' : '/api/super-admins';
+        const response = await axios.get(`${baseUrl}${path}`, { headers: commonHeaders });
+        const records = response?.data?.data ?? response?.data ?? [];
+        for (const admin of records) {
+          if (admin?.userId) userIds.add(admin.userId);
+        }
+      }
+
+      if (!['HOSPITAL_ADMIN', 'DOCTOR', 'PATIENT', 'HOSPITAL', 'SUPER_ADMIN'].includes(role)) {
         console.warn(`[NotificationService] Unsupported role "${role}" ignored.`);
       }
     }

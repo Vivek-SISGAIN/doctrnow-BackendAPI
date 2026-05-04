@@ -51,7 +51,7 @@ export class SuperAdminController {
   }
 
   @Patch()
-  @Roles(UserRole.SUPER_ADMIN)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.PATIENT)
   async proxyBasePatch(@Req() req: Request, @Res() res: Response): Promise<void> {
     return this.proxyRequest(req, res);
   }
@@ -82,7 +82,7 @@ export class SuperAdminController {
   }
 
   @Patch('*')
-  @Roles(UserRole.SUPER_ADMIN)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.PATIENT)
   async proxyRequestPatch(@Req() req: Request, @Res() res: Response): Promise<void> {
     return this.proxyRequest(req, res);
   }
