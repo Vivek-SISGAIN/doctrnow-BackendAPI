@@ -46,11 +46,11 @@ export async function fetchUserProfile(userId, role) {
     let path;
 
     if (upperRole === "PATIENT") {
-      path = `/profiles/patients/user/${userId}`;
+      path = `/profiles/patients/${userId}`;
     } else if (upperRole === "DOCTOR") {
-      path = `/profiles/doctors/user/${userId}`;
+      path = `/profiles/doctors/${userId}`;
     } else if (upperRole === "HOSPITAL_ADMIN") {
-      path = `/profiles/hospital-admins/user/${userId}`;
+      path = `/profiles/hospital-admins/${userId}`;
     } else {
       // SUPER_ADMIN or unknown — we can only return minimal data
       return { userId, firstName: "Admin", lastName: "", email: "", phone: "", avatarUrl: null, role };
@@ -66,7 +66,11 @@ export async function fetchUserProfile(userId, role) {
     return normaliseProfile(profile, userId, role);
   } catch (err) {
     // Never let profile fetch failures break the ticket response
-    console.warn(`[ProfileIntegration] Failed to fetch profile for userId=${userId}:`, err?.message);
+    console.warn(`[ProfileIntegration] Failed to fetch profile for userId=${userId} via ${GATEWAY()}${path}:`, {
+      message: err?.message,
+      status: err?.response?.status,
+      data: err?.response?.data,
+    });
     return null;
   }
 }
