@@ -1,3 +1,4 @@
+const { Prisma } = require('@prisma/client');
 const prisma = require('../prisma/prisma');
 const axios = require('axios');
 const { getPresignedS3Url } = require('../utils/s3Handler');
@@ -233,7 +234,10 @@ class DoctorService {
             break;
 
           case 'workingDay':
-            where.workingDays = { has: value.toUpperCase() };
+            where.schedule = {
+              path: [value.toUpperCase()],
+              not: Prisma.AnyNull
+            };
             break;
 
           case 'status':
@@ -251,6 +255,12 @@ class DoctorService {
                 { assignedHospitalIds: { has: value } }
               ];
             }
+          case 'facility':
+          case 'emirate':
+          case 'distanceRange':
+          case 'lat':
+          case 'lng':
+            // These are handled by _fetchHospitalIdsByFilters
             break;
 
           default:
