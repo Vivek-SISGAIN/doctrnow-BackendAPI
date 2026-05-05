@@ -1,8 +1,8 @@
-import axios from 'axios';
-import { PrismaClient, Channel, Notification, Prisma } from '@prisma/client';
-import { QueueService } from './queue.service';
-import { emitToUser } from '../sockets';
-import { randomUUID } from 'crypto';
+import axios from "axios";
+import { PrismaClient, Channel, Notification, Prisma } from "@prisma/client";
+import { QueueService } from "./queue.service";
+import { emitToUser } from "../sockets";
+import { randomUUID } from "crypto";
 
 const prisma = new PrismaClient();
 
@@ -14,21 +14,21 @@ export class NotificationService {
 
   private static channelToRoutingKey(channel: Channel): string {
     const key = channel.toLowerCase();
-    return key === 'in_app' ? 'inapp' : key;
+    return key === "in_app" ? "inapp" : key;
   }
 
   private static async createAndQueueNotification(data: {
-    userId: string,
-    title: string,
-    body: string,
-    channel: Channel,
-    payload?: Prisma.InputJsonValue,
+    userId: string;
+    title: string;
+    body: string;
+    channel: Channel;
+    payload?: Prisma.InputJsonValue;
   }): Promise<Notification> {
     const notification = await prisma.notification.create({
       data: {
         userId: data.userId,
         channel: data.channel,
-        ...(data.channel === 'IN_APP' ? { status: 'SENT' } : {}),
+        ...(data.channel === "IN_APP" ? { status: "SENT" } : {}),
         title: data.title,
         body: data.body,
         payload: data.payload ?? {},
@@ -48,13 +48,13 @@ export class NotificationService {
 
     // In-app notifications should be real-time even if RabbitMQ/worker is delayed.
     // Emit immediately and skip queueing to avoid duplicates.
-    if (data.channel === 'IN_APP') {
-      emitToUser(notification.userId, 'notification', eventPayload);
-      emitToUser(notification.userId, 'notification:new', eventPayload);
+    if (data.channel === "IN_APP") {
+      emitToUser(notification.userId, "notification", eventPayload);
+      emitToUser(notification.userId, "notification:new", eventPayload);
       return notification;
     }
 
-    // When the user is currently online, we rely on the IN_APP channel 
+    // When the user is currently online, we rely on the IN_APP channel
     // for real-time portal UI updates. Emitting here for PUSH would cause
     // duplicate notifications in the portal.
     // if (data.channel === 'PUSH') {
@@ -62,7 +62,10 @@ export class NotificationService {
     //   emitToUser(notification.userId, 'notification:new', eventPayload);
     // }
 
-    await QueueService.publishMessage(this.channelToRoutingKey(data.channel), notification);
+    await QueueService.publishMessage(
+      this.channelToRoutingKey(data.channel),
+      notification,
+    );
 
     return notification;
   }
@@ -140,13 +143,23 @@ export class NotificationService {
     const recipients = await this.resolveUserIdsByRoles(roles, hospitalId);
     if (!recipients.length) return [];
 
-    return this.createBulkNotifications(recipients, channels, title, body, payload);
+    return this.createBulkNotifications(
+      recipients,
+      channels,
+      title,
+      body,
+      payload,
+    );
   }
 
   static async listNotificationsForUser(
     userId: string,
     options?: { page?: number; limit?: number; offset?: number },
-  ): Promise<{ notifications: Notification[]; total: number; unreadCount: number }> {
+  ): Promise<{
+    notifications: Notification[];
+    total: number;
+    unreadCount: number;
+  }> {
     const limit = options?.limit ?? 50;
     const page = options?.page ?? 1;
     const skip = options?.offset ?? (page - 1) * limit;
@@ -155,17 +168,17 @@ export class NotificationService {
       prisma.notification.findMany({
         where: {
           userId,
-          channel: Channel.IN_APP // Only show in-app notifications in the history list
+          channel: Channel.IN_APP, // Only show in-app notifications in the history list
         },
-        orderBy: { createdAt: 'desc' },
+        orderBy: { createdAt: "desc" },
         take: limit,
         skip: skip,
       }),
       prisma.notification.count({
         where: {
           userId,
-          channel: Channel.IN_APP
-        }
+          channel: Channel.IN_APP,
+        },
       }),
       // Count ALL unread notifications (where payload.__meta.read is not true)
       prisma.notification.findMany({
@@ -179,12 +192,16 @@ export class NotificationService {
 
     // Derive unread count from payload.__meta.read flag across all notifications
     const unreadCount = allUnread.filter((n) => {
-      const payload = n.payload && typeof n.payload === 'object' && !Array.isArray(n.payload)
-        ? (n.payload as Record<string, unknown>)
-        : {};
-      const meta = payload.__meta && typeof payload.__meta === 'object' && !Array.isArray(payload.__meta)
-        ? (payload.__meta as Record<string, unknown>)
-        : {};
+      const payload =
+        n.payload && typeof n.payload === "object" && !Array.isArray(n.payload)
+          ? (n.payload as Record<string, unknown>)
+          : {};
+      const meta =
+        payload.__meta &&
+        typeof payload.__meta === "object" &&
+        !Array.isArray(payload.__meta)
+          ? (payload.__meta as Record<string, unknown>)
+          : {};
       return !meta.read;
     }).length;
 
@@ -202,12 +219,16 @@ export class NotificationService {
     if (!notification) return null;
 
     const payloadRecord =
-      notification.payload && typeof notification.payload === 'object' && !Array.isArray(notification.payload)
+      notification.payload &&
+      typeof notification.payload === "object" &&
+      !Array.isArray(notification.payload)
         ? (notification.payload as Record<string, unknown>)
         : {};
 
     const meta =
-      payloadRecord.__meta && typeof payloadRecord.__meta === 'object' && !Array.isArray(payloadRecord.__meta)
+      payloadRecord.__meta &&
+      typeof payloadRecord.__meta === "object" &&
+      !Array.isArray(payloadRecord.__meta)
         ? (payloadRecord.__meta as Record<string, unknown>)
         : {};
 
@@ -236,14 +257,14 @@ export class NotificationService {
       notifications.map((notification) => {
         const payloadRecord =
           notification.payload &&
-          typeof notification.payload === 'object' &&
+          typeof notification.payload === "object" &&
           !Array.isArray(notification.payload)
             ? (notification.payload as Record<string, unknown>)
             : {};
 
         const meta =
           payloadRecord.__meta &&
-          typeof payloadRecord.__meta === 'object' &&
+          typeof payloadRecord.__meta === "object" &&
           !Array.isArray(payloadRecord.__meta)
             ? (payloadRecord.__meta as Record<string, unknown>)
             : {};
@@ -293,71 +314,96 @@ export class NotificationService {
     // Falls back to direct service URL for backward compatibility.
     const baseUrl = apiGateway ?? profileServiceUrl;
     if (!baseUrl) {
-      throw new Error('API_GATEWAY (preferred) or PROFILE_SERVICE_URL must be configured');
+      throw new Error(
+        "API_GATEWAY (preferred) or PROFILE_SERVICE_URL must be configured",
+      );
     }
 
     // If we go through the gateway, authenticate as an internal service so JwtAuthGuard can bypass.
-    const internalSecret = process.env.INTERNAL_SERVICE_SECRET || '';
+    const internalSecret = process.env.INTERNAL_SERVICE_SECRET || "";
     const commonHeaders: Record<string, string> = {
-      'X-Correlation-ID': randomUUID(),
-      'x-internal-secret': internalSecret,
-      'x-internal-service-key': internalSecret,
+      "X-Correlation-ID": randomUUID(),
+      "x-internal-secret": internalSecret,
+      "x-internal-service-key": internalSecret,
     };
 
     const isGateway = !!apiGateway;
-    const prefix = isGateway ? '' : ''; // keep for clarity
+    const prefix = isGateway ? "" : ""; // keep for clarity
 
     const normalizedRoles = roles.map((role) => role.toUpperCase());
     const userIds = new Set<string>();
 
     for (const role of normalizedRoles) {
-      const resolvedRole = role === 'HOSPITAL' ? 'HOSPITAL_ADMIN' : role;
-      if (role === 'HOSPITAL') {
-        console.warn('[NotificationService] Role "HOSPITAL" is deprecated; use "HOSPITAL_ADMIN". Treating as HOSPITAL_ADMIN.');
+      const resolvedRole = role === "HOSPITAL" ? "HOSPITAL_ADMIN" : role;
+      if (role === "HOSPITAL") {
+        console.warn(
+          '[NotificationService] Role "HOSPITAL" is deprecated; use "HOSPITAL_ADMIN". Treating as HOSPITAL_ADMIN.',
+        );
       }
 
-      if (resolvedRole === 'HOSPITAL_ADMIN') {
+      if (resolvedRole === "HOSPITAL_ADMIN") {
         const path = hospitalId
-          ? (isGateway
-            ? `/profile/hospital-admins/hospital/id/${hospitalId}`
-            : `/api/hospital-admins/hospital/id/${hospitalId}`)
-          : (isGateway ? '/profile/hospital-admins' : '/api/hospital-admins');
-        const response = await axios.get(`${baseUrl}${path}`, { headers: commonHeaders });
+          ? isGateway
+            ? `/profiles/hospital-admins/hospital/id/${hospitalId}`
+            : `/api/hospital-admins/hospital/id/${hospitalId}`
+          : isGateway
+            ? "/profile/hospital-admins"
+            : "/api/hospital-admins";
+        const response = await axios.get(`${baseUrl}${path}`, {
+          headers: commonHeaders,
+        });
         const records = response?.data?.data ?? response?.data ?? [];
         for (const admin of records) {
           if (admin?.userId) userIds.add(admin.userId);
         }
       }
 
-      if (resolvedRole === 'DOCTOR') {
-        const path = isGateway ? '/profile/doctors' : '/api/doctors';
-        const response = await axios.get(`${baseUrl}${path}`, { headers: commonHeaders });
+      if (resolvedRole === "DOCTOR") {
+        const path = isGateway ? "/profiles/doctors" : "/api/doctors";
+        const response = await axios.get(`${baseUrl}${path}`, {
+          headers: commonHeaders,
+        });
         const records = response?.data?.data ?? response?.data ?? [];
         for (const doctor of records) {
           if (doctor?.userId) userIds.add(doctor.userId);
         }
       }
 
-      if (resolvedRole === 'PATIENT') {
-        const path = isGateway ? '/profile/patients' : '/api/patients';
-        const response = await axios.get(`${baseUrl}${path}`, { headers: commonHeaders });
+      if (resolvedRole === "PATIENT") {
+        const path = isGateway ? "/profiles/patients" : "/api/patients";
+
+        const response = await axios.get(`${baseUrl}${path}`, {
+          headers: commonHeaders,
+        });
         const records = response?.data?.data ?? response?.data ?? [];
         for (const patient of records) {
           if (patient?.userId) userIds.add(patient.userId);
         }
       }
 
-      if (resolvedRole === 'SUPER_ADMIN') {
-        const path = isGateway ? '/profile/super-admins' : '/api/super-admins';
-        const response = await axios.get(`${baseUrl}${path}`, { headers: commonHeaders });
+      if (resolvedRole === "SUPER_ADMIN") {
+        const path = isGateway ? "/profiles/super-admins" : "/api/super-admins";
+        const response = await axios.get(`${baseUrl}${path}`, {
+          headers: commonHeaders,
+        });
         const records = response?.data?.data ?? response?.data ?? [];
         for (const admin of records) {
           if (admin?.userId) userIds.add(admin.userId);
         }
       }
 
-      if (!['HOSPITAL_ADMIN', 'DOCTOR', 'PATIENT', 'HOSPITAL', 'SUPER_ADMIN'].includes(role)) {
-        console.warn(`[NotificationService] Unsupported role "${role}" ignored.`);
+      if (
+        ![
+          "HOSPITAL_ADMIN",
+          "DOCTOR",
+          "PATIENT",
+          "HOSPITAL",
+          "SUPER_ADMIN",
+        ].includes(role)
+      ) {
+        console.warn(
+          `[NotificationService] Unsupported role "${role}" ignored.`,
+        );
       }
     }
 

@@ -49,6 +49,9 @@ class DoctorService {
     pagination = { page: 1, limit: 20 },
     sortBy = 'name'
   ) {
+    if (!hospitalId) {
+      throw new Error("Hospital ID is required");
+    }
     const { page = 1, limit = 20 } = pagination;
     const skip = (page - 1) * limit;
 
@@ -245,6 +248,13 @@ class DoctorService {
             where.availabilityStatus = { equals: value.toUpperCase() };
             break;
 
+          case 'hospitalId':
+            if (value) {
+              where.OR = [
+                { hospitalId: value },
+                { assignedHospitalIds: { has: value } }
+              ];
+            }
           case 'facility':
           case 'emirate':
           case 'distanceRange':

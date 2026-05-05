@@ -74,6 +74,14 @@ model Hospital {
   accreditationCertificates      String[] @map("accreditation_certificates")
   accreditationCertificateKeys   String[] @map("accreditation_certificate_keys")
 
+  // Branding & Customisation
+  logoKey               String?  @map("logo_key")
+  logoUrl               String?  @map("logo_url")
+  bannerKey             String?  @map("banner_key")
+  bannerUrl             String?  @map("banner_url")
+  primaryColor          String?  @map("primary_color")
+  secondaryColor        String?  @map("secondary_color")
+
   // Relations
   finance                        Finance?
 

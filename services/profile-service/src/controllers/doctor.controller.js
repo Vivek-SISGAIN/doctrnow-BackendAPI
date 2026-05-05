@@ -21,6 +21,7 @@ const getAllDoctors = asyncHandler(async (req, res) => {
     workingDay,
     status,
     availabilityStatus,
+    hospitalId,
     page = 1,
     limit = 20,
     sortBy = 'experience',
@@ -60,7 +61,8 @@ const getAllDoctors = asyncHandler(async (req, res) => {
       emirate,
       workingDay,
       status,
-      availabilityStatus
+      availabilityStatus,
+      hospitalId
     };
   }
 
@@ -79,7 +81,6 @@ const getAllDoctors = asyncHandler(async (req, res) => {
 });
 
 const getDocByHospitalId = asyncHandler(async (req, res) => {
-  const { hospitalId } = req.params;
   const {
     search,
     gender,
@@ -97,21 +98,19 @@ const getDocByHospitalId = asyncHandler(async (req, res) => {
     page = 1,
     limit = 20,
     sortBy = 'name',
-    filters: dynamicFilters // New: Accept filters from query or body
-  } = { ...req.query, ...req.body }; // Merge query params and body
+    filters: dynamicFilters
+  } = { ...req.query, ...req.body };
 
+  // ── 1. Resolve hospitalId (params takes precedence over filters) ──────────
   let filters = {};
 
-  // If dynamic filters are provided (new format)
   if (dynamicFilters) {
     try {
       filters = typeof dynamicFilters === 'string' ? JSON.parse(dynamicFilters) : dynamicFilters;
-    } catch (error) {
+    } catch {
       throw new Error('Invalid filters format');
     }
-  }
-  // Otherwise use legacy format (old format)
-  else {
+  } else {
     filters = {
       search,
       gender,
@@ -129,12 +128,32 @@ const getDocByHospitalId = asyncHandler(async (req, res) => {
     };
   }
 
+  // Scenario 1: hospitalId comes from route params  → /hospitals/:hospitalId/doctors
+  // Scenario 2: hospitalId comes from filters object → { filters: { hospitalId: '...' } }
+  const resolvedHospitalId = req.params.hospitalId ?? filters.hospitalId;
+
+  if (!resolvedHospitalId) {
+    return res.status(400).json({
+      success: false,
+      message: 'hospitalId is required (pass it as a route param or inside filters)'
+    });
+  }
+
+  // Remove hospitalId from filters to avoid duplication in the service layer
+  delete filters.hospitalId;
+
+  // ── 2. Query ──────────────────────────────────────────────────────────────
   const pagination = {
     page: parseInt(page, 10),
     limit: parseInt(limit, 10)
   };
 
-  const result = await doctorService.findDocByHospital({ hospitalId }, filters, pagination, sortBy);
+  const result = await doctorService.findDocByHospital(
+    { hospitalId: resolvedHospitalId },
+    filters,
+    pagination,
+    sortBy
+  );
 
   res.status(200).json({
     success: true,
@@ -404,7 +423,7 @@ const assignDoctorToHospital = asyncHandler(async (req, res) => {
   if (!doctor) {
     throw ApiError.notFound('Doctor not found');
   }
-  
+
   const updatedDoctor = await prisma.doctor.update({
     where: { id },
     data: {

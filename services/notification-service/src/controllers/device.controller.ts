@@ -83,3 +83,25 @@ export const listDevicesForUser = async (req: Request, res: Response) => {
     return res.status(500).json({ error: "Internal server error" });
   }
 };
+
+export const unregisterDevice = async (req: Request, res: Response) => {
+  try {
+    const headerUserId = String(req.headers["x-user-id"] || "").trim();
+    const bodyUserId   = String(req.body?.userId || "").trim();
+    const userId       = headerUserId || bodyUserId;
+    const fcmToken     = String(req.body?.fcmToken || "").trim();
+
+    if (!userId || !fcmToken) {
+      return res.status(400).json({ error: "Missing required fields: userId and fcmToken" });
+    }
+
+    await prisma.userDevice.deleteMany({
+      where: { userId, fcmToken },
+    });
+
+    return res.status(200).json({ success: true, message: "Device unregistered successfully" });
+  } catch (error) {
+    console.error("[DeviceController] unregisterDevice error:", error);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+};
