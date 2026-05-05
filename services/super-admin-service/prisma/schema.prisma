@@ -32,8 +32,13 @@ model Hospital {
   hospitalType      String   @map("hospital_type")
   specializationFocus String? @map("specialization_focus")
 
-  // Branch
+  // Branch / chain relationship
+  // If this hospital is a branch, parentHospitalId stores the parent hospital's ID.
+  parentHospitalId  String?  @map("parent_hospital_id")
+  // Optional branch code (human-readable)
   branchId          String?  @map("branch_id")
+  // Parent hospital keeps an array of its branch hospital IDs
+  branchIds         String[] @default([]) @map("branch_ids")
 
   // Location
   emirate           String

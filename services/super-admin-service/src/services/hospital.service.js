@@ -4,34 +4,50 @@ import s3Handler from "../utils/s3Handler.js";
 
 class HospitalService {
   async createHospital(data) {
-    const hospital = await prisma.hospital.create({
-      data: {
-        officialName: data.officialName,
-        shortName: data.shortName,
-        registrationNumber: data.registrationNumber,
-        dhaLicenseNumber: data.dhaLicenseNumber,
-        hospitalType: data.hospitalType,
-        specializationFocus: data.specializationFocus,
-        branchId: data.branchId,
-        emirate: data.emirate,
-        area: data.area,
-        fullAddress: data.fullAddress,
-        poBox: data.poBox,
-        latitude: data.latitude,
-        longitude: data.longitude,
-        landline: data.landline,
-        mobile: data.mobile,
-        officialEmail: data.officialEmail,
-        website: data.website,
-        facebook: data.facebook,
-        instagram: data.instagram,
-        operations: data.operations,
-        servicesOffered: data.servicesOffered || [],
-        specializationsAvailable: data.specializationsAvailable || [],
-      },
-      include: {
-        finance: true,
-      },
+    const parentHospitalId = data.parentHospitalId || null;
+
+    const hospital = await prisma.$transaction(async (tx) => {
+      const created = await tx.hospital.create({
+        data: {
+          officialName: data.officialName,
+          shortName: data.shortName,
+          registrationNumber: data.registrationNumber,
+          dhaLicenseNumber: data.dhaLicenseNumber,
+          hospitalType: data.hospitalType,
+          specializationFocus: data.specializationFocus,
+          parentHospitalId,
+          branchId: data.branchId,
+          emirate: data.emirate,
+          area: data.area,
+          fullAddress: data.fullAddress,
+          poBox: data.poBox,
+          latitude: data.latitude,
+          longitude: data.longitude,
+          landline: data.landline,
+          mobile: data.mobile,
+          officialEmail: data.officialEmail,
+          website: data.website,
+          facebook: data.facebook,
+          instagram: data.instagram,
+          operations: data.operations,
+          servicesOffered: data.servicesOffered || [],
+          specializationsAvailable: data.specializationsAvailable || [],
+        },
+        include: {
+          finance: true,
+        },
+      });
+
+      if (parentHospitalId) {
+        await tx.hospital.update({
+          where: { id: parentHospitalId },
+          data: {
+            branchIds: { push: created.id },
+          },
+        });
+      }
+
+      return created;
     });
 
     return hospital;
