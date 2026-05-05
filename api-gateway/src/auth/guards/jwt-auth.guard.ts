@@ -108,6 +108,7 @@ const DEV_BYPASSABLE_PATH_SEGMENTS = [
   '/lab-reports',
   '/hospital',
   '/profiles',
+  '/profile',
   '/super-admins',
   '/audit',
   '/chat',

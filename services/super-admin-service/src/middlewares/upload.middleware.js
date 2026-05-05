@@ -44,4 +44,12 @@ export const hospitalDocumentsUpload = upload.fields([
   { name: "accreditationCertificates", maxCount: 5 },
 ]);
 
+/**
+ * Accepts logo and promotional banner image files for hospital branding.
+ */
+export const hospitalBrandingUpload = upload.fields([
+  { name: "logo",   maxCount: 1 },
+  { name: "banner", maxCount: 1 },
+]);
+
 export default upload;

@@ -144,6 +144,32 @@ class HospitalController {
     });
   });
 
+  /**
+   * POST /hospital/:id/branding
+   * Accepts multipart/form-data with fields:
+   *   logo   (single image file – PNG preferred)
+   *   banner (single image file)
+   * Plus optional body text fields:
+   *   primaryColor   (hex e.g. "#1A73E8")
+   *   secondaryColor (hex e.g. "#FBBC04")
+   */
+  uploadBranding = asyncHandler(async (req, res) => {
+    const { primaryColor, secondaryColor } = req.body || {};
+
+    const hospital = await hospitalService.uploadBranding(
+      req.params.id,
+      req.files || {},
+      primaryColor,
+      secondaryColor,
+    );
+
+    res.status(200).json({
+      success: true,
+      message: "Branding updated successfully",
+      data: hospital,
+    });
+  });
+
 }
 
 export default new HospitalController();

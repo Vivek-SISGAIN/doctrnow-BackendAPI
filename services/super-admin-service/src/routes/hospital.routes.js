@@ -2,7 +2,7 @@ import { Router } from "express";
 import hospitalController from "../controllers/hospital.controller.js";
 import financeController from "../controllers/finance.controller.js";
 import bannerController from "../controllers/banner.controller.js";
-import { hospitalDocumentsUpload } from "../middlewares/upload.middleware.js";
+import { hospitalDocumentsUpload, hospitalBrandingUpload } from "../middlewares/upload.middleware.js";
 
 const router = Router();
 
@@ -27,6 +27,20 @@ router.post(
   "/hospital/:id/documents",
   hospitalDocumentsUpload,
   hospitalController.uploadDocuments
+);
+
+// ── Branding Upload ──────────────────────────────────────────────────────────
+// POST /hospital/:id/branding
+// Content-Type: multipart/form-data
+// Fields (all optional):
+//   logo           – PNG/JPG image (1 file)
+//   banner         – PNG/JPG image (1 file)
+//   primaryColor   – text "#RRGGBB"
+//   secondaryColor – text "#RRGGBB"
+router.post(
+  "/hospital/:id/branding",
+  hospitalBrandingUpload,
+  hospitalController.uploadBranding
 );
 
 router.post("/finance", financeController.createFinance);

@@ -1,8 +1,7 @@
-import { Request, Response } from 'express';
-import { NotificationService } from '../services/notification.service';
-import { emailService } from '../services/email.service';
-import { emitBannerEvent } from '../sockets';
-
+import { Request, Response } from "express";
+import { NotificationService } from "../services/notification.service";
+import { emailService } from "../services/email.service";
+import { emitBannerEvent } from "../sockets";
 
 const normalizeUserIds = (value: unknown): string[] => {
   if (!Array.isArray(value)) return [];
@@ -21,11 +20,13 @@ export const createNotification = async (req: Request, res: Response) => {
     const normalizedChannels = normalizeChannels(channels);
 
     if (!normalizedUserIds.length) {
-      return res.status(400).json({ error: 'userIds must be a non-empty array' });
+      return res
+        .status(400)
+        .json({ error: "userIds must be a non-empty array" });
     }
 
     if (!normalizedChannels.length) {
-      return res.status(400).json({ error: 'channels must be an array' });
+      return res.status(400).json({ error: "channels must be an array" });
     }
 
     const notifications = await NotificationService.createBulkNotifications(
@@ -33,16 +34,16 @@ export const createNotification = async (req: Request, res: Response) => {
       normalizedChannels,
       title,
       body,
-      payload
+      payload,
     );
 
     res.status(201).json({
-      message: 'Notifications created and scheduled',
+      message: "Notifications created and scheduled",
       data: notifications,
     });
   } catch (error) {
-    console.error('[NotificationController] create error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    console.error("[NotificationController] create error:", error);
+    res.status(500).json({ error: "Internal server error" });
   }
 };
 
@@ -52,13 +53,15 @@ export const createSingleNotification = async (req: Request, res: Response) => {
     const normalizedChannels = normalizeChannels(channels);
 
     if (!userId) {
-      return res.status(400).json({ error: 'userId is required' });
+      return res.status(400).json({ error: "userId is required" });
     }
     if (!normalizedChannels.length) {
-      return res.status(400).json({ error: 'channels must be a non-empty array' });
+      return res
+        .status(400)
+        .json({ error: "channels must be a non-empty array" });
     }
     if (!title || !body) {
-      return res.status(400).json({ error: 'title and body are required' });
+      return res.status(400).json({ error: "title and body are required" });
     }
 
     const notifications = await NotificationService.createSingleNotification(
@@ -70,15 +73,17 @@ export const createSingleNotification = async (req: Request, res: Response) => {
     );
 
     return res.status(201).json({
-      message: 'Single-user notification created and scheduled',
+      message: "Single-user notification created and scheduled",
       data: notifications,
     });
   } catch (error) {
-    console.error('[NotificationController] createSingleNotification error:', error);
-    return res.status(500).json({ error: 'Internal server error' });
+    console.error(
+      "[NotificationController] createSingleNotification error:",
+      error,
+    );
+    return res.status(500).json({ error: "Internal server error" });
   }
 };
-
 
 export const createBulkNotification = async (req: Request, res: Response) => {
   try {
@@ -87,13 +92,17 @@ export const createBulkNotification = async (req: Request, res: Response) => {
     const normalizedChannels = normalizeChannels(channels);
 
     if (!normalizedUserIds.length) {
-      return res.status(400).json({ error: 'userIds must be a non-empty array' });
+      return res
+        .status(400)
+        .json({ error: "userIds must be a non-empty array" });
     }
     if (!normalizedChannels.length) {
-      return res.status(400).json({ error: 'channels must be a non-empty array' });
+      return res
+        .status(400)
+        .json({ error: "channels must be a non-empty array" });
     }
     if (!title || !body) {
-      return res.status(400).json({ error: 'title and body are required' });
+      return res.status(400).json({ error: "title and body are required" });
     }
 
     const notifications = await NotificationService.createBulkNotifications(
@@ -105,67 +114,84 @@ export const createBulkNotification = async (req: Request, res: Response) => {
     );
 
     return res.status(201).json({
-      message: 'Bulk notifications created and scheduled',
+      message: "Bulk notifications created and scheduled",
       data: notifications,
     });
   } catch (error) {
-    console.error('[NotificationController] createBulkNotification error:', error);
-    return res.status(500).json({ error: 'Internal server error' });
+    console.error(
+      "[NotificationController] createBulkNotification error:",
+      error,
+    );
+    return res.status(500).json({ error: "Internal server error" });
   }
 };
 
-export const createBroadcastNotification = async (req: Request, res: Response) => {
+export const createBroadcastNotification = async (
+  req: Request,
+  res: Response,
+) => {
   try {
     const { roles, channels, title, body, payload, hospitalId } = req.body;
     const normalizedRoles = Array.isArray(roles)
-      ? [...new Set(roles.map((role) => String(role).toUpperCase()).filter(Boolean))]
+      ? [
+          ...new Set(
+            roles.map((role) => String(role).toUpperCase()).filter(Boolean),
+          ),
+        ]
       : [];
     const normalizedChannels = normalizeChannels(channels);
 
     if (!normalizedRoles.length) {
-      return res.status(400).json({ error: 'roles must be a non-empty array' });
+      return res.status(400).json({ error: "roles must be a non-empty array" });
     }
     if (!normalizedChannels.length) {
-      return res.status(400).json({ error: 'channels must be a non-empty array' });
+      return res
+        .status(400)
+        .json({ error: "channels must be a non-empty array" });
     }
     if (!title || !body) {
-      return res.status(400).json({ error: 'title and body are required' });
+      return res.status(400).json({ error: "title and body are required" });
     }
-
-    const notifications = await NotificationService.createBroadcastNotifications(
-      normalizedRoles,
-      normalizedChannels,
-      String(title),
-      String(body),
-      payload,
-      hospitalId ? String(hospitalId) : undefined,
-    );
+    console.log("request recived for broadcast notification", req.headers);
+    const notifications =
+      await NotificationService.createBroadcastNotifications(
+        normalizedRoles,
+        normalizedChannels,
+        String(title),
+        String(body),
+        payload,
+        hospitalId ? String(hospitalId) : undefined,
+      );
 
     return res.status(201).json({
-      message: 'Broadcast notifications created and scheduled',
+      message: "Broadcast notifications created and scheduled",
       count: notifications.length,
       data: notifications,
     });
-  } catch (error) {
-    console.error('[NotificationController] createBroadcastNotification error:', error);
-    return res.status(500).json({ error: 'Internal server error' });
+  } catch (error: any) {
+    console.error(
+      "[NotificationController] createBroadcastNotification error:",
+      error,
+    );
+    return res.status(500).json({ error: "Internal server error" });
   }
 };
 
 export const listNotifications = async (req: Request, res: Response) => {
   try {
-    const userId = String(req.headers['x-user-id'] || '');
+    const userId = String(req.headers["x-user-id"] || "");
     if (!userId) {
-      return res.status(401).json({ error: 'x-user-id header is required' });
+      return res.status(401).json({ error: "x-user-id header is required" });
     }
-
+    console.log("user id ", userId);
     const page = Number(req.query.page ?? 1);
     const limit = Number(req.query.limit ?? 50);
 
-    const { notifications, total, unreadCount } = await NotificationService.listNotificationsForUser(userId, {
-      page: Number.isFinite(page) ? page : 1,
-      limit: Number.isFinite(limit) ? limit : 50,
-    });
+    const { notifications, total, unreadCount } =
+      await NotificationService.listNotificationsForUser(userId, {
+        page: Number.isFinite(page) ? page : 1,
+        limit: Number.isFinite(limit) ? limit : 50,
+      });
 
     const totalPages = Math.ceil(total / (Number.isFinite(limit) ? limit : 50));
 
@@ -181,26 +207,26 @@ export const listNotifications = async (req: Request, res: Response) => {
       },
     });
   } catch (error) {
-    console.error('[NotificationController] listNotifications error:', error);
-    return res.status(500).json({ error: 'Internal server error' });
+    console.error("[NotificationController] listNotifications error:", error);
+    return res.status(500).json({ error: "Internal server error" });
   }
 };
 
 export const markNotificationAsRead = async (req: Request, res: Response) => {
   try {
-    const userId = String(req.headers['x-user-id'] || '');
+    const userId = String(req.headers["x-user-id"] || "");
     const { id } = req.params;
 
     if (!userId) {
-      return res.status(401).json({ error: 'x-user-id header is required' });
+      return res.status(401).json({ error: "x-user-id header is required" });
     }
     if (!id) {
-      return res.status(400).json({ error: 'notification id is required' });
+      return res.status(400).json({ error: "notification id is required" });
     }
 
     const notification = await NotificationService.markAsRead(id, userId);
     if (!notification) {
-      return res.status(404).json({ error: 'Notification not found' });
+      return res.status(404).json({ error: "Notification not found" });
     }
 
     return res.status(200).json({
@@ -208,66 +234,82 @@ export const markNotificationAsRead = async (req: Request, res: Response) => {
       data: notification,
     });
   } catch (error) {
-    console.error('[NotificationController] markNotificationAsRead error:', error);
-    return res.status(500).json({ error: 'Internal server error' });
+    console.error(
+      "[NotificationController] markNotificationAsRead error:",
+      error,
+    );
+    return res.status(500).json({ error: "Internal server error" });
   }
 };
 
-export const markAllNotificationsAsRead = async (req: Request, res: Response) => {
+export const markAllNotificationsAsRead = async (
+  req: Request,
+  res: Response,
+) => {
   try {
-    const userId = String(req.headers['x-user-id'] || '');
+    const userId = String(req.headers["x-user-id"] || "");
     if (!userId) {
-      return res.status(401).json({ error: 'x-user-id header is required' });
+      return res.status(401).json({ error: "x-user-id header is required" });
     }
 
     const updatedCount = await NotificationService.markAllAsRead(userId);
     return res.status(200).json({
       success: true,
-      message: 'All notifications marked as read',
+      message: "All notifications marked as read",
       count: updatedCount,
     });
   } catch (error) {
-    console.error('[NotificationController] markAllNotificationsAsRead error:', error);
-    return res.status(500).json({ error: 'Internal server error' });
+    console.error(
+      "[NotificationController] markAllNotificationsAsRead error:",
+      error,
+    );
+    return res.status(500).json({ error: "Internal server error" });
   }
 };
 
 export const deleteNotification = async (req: Request, res: Response) => {
   try {
-    const userId = String(req.headers['x-user-id'] || '');
+    const userId = String(req.headers["x-user-id"] || "");
     const { id } = req.params;
 
     if (!userId) {
-      return res.status(401).json({ error: 'x-user-id header is required' });
+      return res.status(401).json({ error: "x-user-id header is required" });
     }
 
     if (!id) {
-      return res.status(400).json({ error: 'notification id is required' });
+      return res.status(400).json({ error: "notification id is required" });
     }
 
     const deleted = await NotificationService.deleteNotification(id, userId);
     if (!deleted) {
-      return res.status(404).json({ error: 'Notification not found' });
+      return res.status(404).json({ error: "Notification not found" });
     }
 
     return res.status(200).json({
       success: true,
-      message: 'Notification deleted successfully',
+      message: "Notification deleted successfully",
     });
   } catch (error) {
-    console.error('[NotificationController] deleteNotification error:', error);
-    return res.status(500).json({ error: 'Internal server error' });
+    console.error("[NotificationController] deleteNotification error:", error);
+    return res.status(500).json({ error: "Internal server error" });
   }
 };
 
 export const sendPrescriptionEmail = async (req: Request, res: Response) => {
   try {
-    const { to, patientName, doctorName, facilityName, rxId, attachments } = req.body;
-    console.log(`[NotificationController] Received prescription email request: to=${to}, rxId=${rxId}, patientName=${patientName}`);
+    const { to, patientName, doctorName, facilityName, rxId, attachments } =
+      req.body;
+    console.log(
+      `[NotificationController] Received prescription email request: to=${to}, rxId=${rxId}, patientName=${patientName}`,
+    );
 
     if (!to || !rxId) {
-      console.warn(`[NotificationController] Missing required fields for prescription email: to=${to}, rxId=${rxId}`);
-      return res.status(400).json({ error: 'Missing required fields: to, rxId' });
+      console.warn(
+        `[NotificationController] Missing required fields for prescription email: to=${to}, rxId=${rxId}`,
+      );
+      return res
+        .status(400)
+        .json({ error: "Missing required fields: to, rxId" });
     }
 
     await emailService.sendPrescriptionEmail({
@@ -281,11 +323,14 @@ export const sendPrescriptionEmail = async (req: Request, res: Response) => {
 
     res.status(200).json({
       success: true,
-      message: 'Prescription email sent successfully',
+      message: "Prescription email sent successfully",
     });
   } catch (error) {
-    console.error('[NotificationController] sendPrescriptionEmail error:', error);
-    res.status(500).json({ error: 'Failed to send prescription email' });
+    console.error(
+      "[NotificationController] sendPrescriptionEmail error:",
+      error,
+    );
+    res.status(500).json({ error: "Failed to send prescription email" });
   }
 };
 
@@ -309,17 +354,20 @@ export const broadcastBannerNotification = (req: Request, res: Response) => {
     if (!banner || !banner.id || !banner.title) {
       return res
         .status(400)
-        .json({ error: 'banner object with id and title is required' });
+        .json({ error: "banner object with id and title is required" });
     }
 
     emitBannerEvent(banner);
 
     return res.status(200).json({
       success: true,
-      message: 'Banner event broadcast initiated',
+      message: "Banner event broadcast initiated",
     });
   } catch (error) {
-    console.error('[NotificationController] broadcastBannerNotification error:', error);
-    return res.status(500).json({ error: 'Internal server error' });
+    console.error(
+      "[NotificationController] broadcastBannerNotification error:",
+      error,
+    );
+    return res.status(500).json({ error: "Internal server error" });
   }
 };

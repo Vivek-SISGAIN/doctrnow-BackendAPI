@@ -275,6 +275,49 @@ class HospitalService {
     });
   }
 
+  /**
+   * Upload hospital branding assets (logo, banner) and save hex color codes.
+   *
+   * @param {string} hospitalId
+   * @param {object} files         – req.files from multer .fields()
+   * @param {string} primaryColor  – hex code e.g. "#1A73E8"
+   * @param {string} secondaryColor – hex code e.g. "#FBBC04"
+   */
+  async uploadBranding(hospitalId, files = {}, primaryColor, secondaryColor) {
+    const hospital = await prisma.hospital.findUnique({ where: { id: hospitalId } });
+    if (!hospital) throw new Error("Hospital not found");
+
+    const patch = {};
+
+    // Logo (single file)
+    if (files.logo && files.logo.length > 0) {
+      const { key, url } = await s3Handler.uploadToS3(files.logo[0], "branding/logos");
+      patch.logoKey = key;
+      patch.logoUrl = url;
+    }
+
+    // Promotional banner (single file)
+    if (files.banner && files.banner.length > 0) {
+      const { key, url } = await s3Handler.uploadToS3(files.banner[0], "branding/banners");
+      patch.bannerKey = key;
+      patch.bannerUrl = url;
+    }
+
+    // Hex color codes (no upload needed)
+    if (primaryColor) patch.primaryColor = primaryColor;
+    if (secondaryColor) patch.secondaryColor = secondaryColor;
+
+    if (Object.keys(patch).length === 0) {
+      throw new Error("No branding data provided.");
+    }
+
+    return prisma.hospital.update({
+      where: { id: hospitalId },
+      data: patch,
+      include: { finance: true },
+    });
+  }
+
   async getHospitalIdsByFilters(filters) {
     const { emirate, facility, distanceRange, lat, lng } = filters;
     const where = {};
