@@ -3,6 +3,7 @@ const router = express.Router();
 const {
   upsertVitals,
   getVitalsByConsultation,
+  getVitalsByPatient,
   deleteVitals
 } = require('../controllers/consultation-vitals.controller');
 const {
@@ -70,6 +71,37 @@ router.post('/', validate(createVitalsSchema), upsertVitals);
  *         description: Vitals not found
  */
 router.get('/consultation/:consultationId', getVitalsByConsultation);
+
+/**
+ * @swagger
+ * /api/consultation-vitals/patient/{patientId}:
+ *   get:
+ *     summary: List vitals for a patient (trend view)
+ *     tags: [Consultation Vitals]
+ *     parameters:
+ *       - in: path
+ *         name: patientId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *       - in: query
+ *         name: take
+ *         required: false
+ *         schema:
+ *           type: integer
+ *           default: 50
+ *       - in: query
+ *         name: skip
+ *         required: false
+ *         schema:
+ *           type: integer
+ *           default: 0
+ *     responses:
+ *       200:
+ *         description: List of vitals entries for the patient
+ */
+router.get('/patient/:patientId', getVitalsByPatient);
 
 /**
  * @swagger

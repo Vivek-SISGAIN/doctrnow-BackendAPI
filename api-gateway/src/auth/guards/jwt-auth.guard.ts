@@ -105,6 +105,7 @@ const DEV_BYPASSABLE_PATH_SEGMENTS = [
   '/documents',
   '/consultations',
   '/consultation-notes',
+  '/consultation-vitals',
   '/lab-reports',
   '/hospital',
   '/profiles',

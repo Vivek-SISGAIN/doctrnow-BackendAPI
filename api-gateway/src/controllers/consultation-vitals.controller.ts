@@ -10,20 +10,18 @@ import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { Request, Response } from 'express';
 import { HttpProxyService } from '../http-proxy/http-proxy.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { SkipThrottle } from '@nestjs/throttler';
 
 /**
- * Admin Chat Controller
- * Routes: /api/v1/admin-chat/*
- * Target: video-chat-service
+ * Consultation Vitals Controller
+ * Routes: /api/v1/consultation-vitals/*
+ * Target: consultation-service /api/consultation-vitals/*
  */
-@ApiTags('admin-chat')
+@ApiTags('consultation-vitals')
 @ApiBearerAuth('JWT-auth')
-@Controller('admin-chat')
-@SkipThrottle()
+@Controller('consultation-vitals')
 @UseGuards(JwtAuthGuard)
-export class AdminChatController {
-  constructor(private readonly httpProxyService: HttpProxyService) { }
+export class ConsultationVitalsController {
+  constructor(private readonly httpProxyService: HttpProxyService) {}
 
   @All()
   async proxyBase(@Req() req: Request, @Res() res: Response): Promise<void> {
@@ -34,17 +32,19 @@ export class AdminChatController {
   async proxyRequest(@Req() req: Request, @Res() res: Response): Promise<void> {
     const correlationId = req.headers['x-correlation-id'] as string;
     const rawUrl = (req as any).originalUrl || req.url || '';
-    const strippedPath = rawUrl.split('?')[0].replace(/^\/api\/v\d+\/admin-chat/, '');
-    const path = `/api/admin-chat${strippedPath}`.replace('//', '/');
+    const pathSuffix =
+      rawUrl.split('?')[0].replace(/^\/api\/v1\/consultation-vitals/, '') || '';
+    const path =
+      `/api/consultation-vitals${pathSuffix}`.replace('//', '/') ||
+      '/api/consultation-vitals';
     const user = (req as any).user;
 
     try {
-      const isMultipart = req.headers['content-type']?.startsWith('multipart/');
-      const response = await this.httpProxyService.proxyRequest('VIDEO_CHAT', {
+      const response = await this.httpProxyService.proxyRequest('CONSULTATION', {
         method: req.method,
         url: path,
         headers: this.extractHeaders(req),
-        body: isMultipart ? req : req.body,
+        body: req.body,
         query: req.query as Record<string, any>,
         correlationId,
         userId: user?.userId,
@@ -55,19 +55,13 @@ export class AdminChatController {
       res.status(response.status).json(response.data);
     } catch (error: any) {
       const status = error.status || HttpStatus.INTERNAL_SERVER_ERROR;
-      const downstream = error?.data;
-      const message =
-        downstream?.message ??
-        downstream?.error?.message ??
-        error.message ??
-        'Internal server error';
-
+      const upstreamMessage =
+        error?.data?.message ?? error?.data?.error?.message ?? error.message;
       res.status(status).json({
         error: {
-          code: downstream?.error?.code ?? 'PROXY_ERROR',
-          message,
+          code: 'PROXY_ERROR',
+          message: upstreamMessage || 'Internal server error',
           correlationId,
-          ...(downstream && { details: downstream }),
         },
       });
     }
@@ -75,7 +69,7 @@ export class AdminChatController {
 
   private extractHeaders(req: Request): Record<string, string> {
     const headers: Record<string, string> = {};
-    const allowedHeaders = ['content-type', 'content-length', 'accept', 'x-tenant-id', 'authorization'];
+    const allowedHeaders = ['content-type', 'accept', 'x-tenant-id', 'authorization'];
 
     for (const [key, value] of Object.entries(req.headers)) {
       if (allowedHeaders.includes(key.toLowerCase())) {
@@ -87,3 +81,4 @@ export class AdminChatController {
     return headers;
   }
 }
+

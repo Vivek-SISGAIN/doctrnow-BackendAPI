@@ -29,6 +29,18 @@ const getVitalsByConsultation = asyncHandler(async (req, res) => {
   });
 });
 
+const getVitalsByPatient = asyncHandler(async (req, res) => {
+  const { patientId } = req.params;
+  const { take, skip } = req.query;
+
+  const vitals = await vitalsService.findByPatientId(patientId, { take, skip });
+
+  res.status(200).json({
+    success: true,
+    data: vitals
+  });
+});
+
 const deleteVitals = asyncHandler(async (req, res) => {
   const { consultationId } = req.params;
 
@@ -46,5 +58,6 @@ const deleteVitals = asyncHandler(async (req, res) => {
 module.exports = {
   upsertVitals,
   getVitalsByConsultation,
+  getVitalsByPatient,
   deleteVitals
 };

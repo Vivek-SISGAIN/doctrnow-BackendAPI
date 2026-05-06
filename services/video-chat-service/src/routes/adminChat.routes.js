@@ -13,6 +13,11 @@
 
 const express = require("express");
 const router  = express.Router();
+const multer = require("multer");
+const upload = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 10 * 1024 * 1024 }, // 10 MB
+});
 
 const {
     createRequest,
@@ -24,7 +29,8 @@ const {
     getAuditLogs,
     getSessionMessages,
     markSessionResolved,
-    searchSessions
+    searchSessions,
+    uploadAttachment
 } = require("../controllers/adminChat.controller");
 
 // ─── Hospital Admin ───────────────────────────────────────────────────────────
@@ -50,6 +56,9 @@ router.get("/audit-logs", getAuditLogs);
 
 // Search sessions by date range, resolved status, etc.
 router.get("/search", searchSessions);
+
+/** Upload a file attachment for a session */
+router.post("/session/:id/upload", upload.single("file"), uploadAttachment);
 
 /** Fetch a single session by ID */
 router.get("/session/:id", getSession);
