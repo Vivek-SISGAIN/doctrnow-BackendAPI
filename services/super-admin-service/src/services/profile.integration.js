@@ -41,9 +41,9 @@ const GATEWAY = () => {
  * @returns {Promise<object|null>}
  */
 export async function fetchUserProfile(userId, role) {
+  let path = "unknown";
   try {
     const upperRole = (role || "").toUpperCase();
-    let path;
 
     if (upperRole === "PATIENT") {
       path = `/profiles/patients/${userId}`;

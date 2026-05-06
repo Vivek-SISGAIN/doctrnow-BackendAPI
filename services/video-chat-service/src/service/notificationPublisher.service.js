@@ -134,6 +134,44 @@ const triggerInAppNotification = ({ userId, title, body, payload }) => {
     })();
 };
 
+const triggerBroadcastNotification = ({ roles, title, body, payload }) => {
+    (async () => {
+        try {
+            const response = await fetch(`${API_GATEWAY_URL}/notifications/broadcast`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    ...(INTERNAL_SERVICE_KEY ? { 
+                        "x-internal-service-key": INTERNAL_SERVICE_KEY,
+                        "x-internal-secret": INTERNAL_SERVICE_KEY
+                    } : {})
+                },
+                body: JSON.stringify({
+                    roles,
+                    channels: ["IN_APP", "PUSH"],
+                    title,
+                    body,
+                    payload
+                })
+            });
+
+            if (!response.ok) {
+                const bodyText = await response.text();
+                logger.warn("notificationPublisher: failed to trigger broadcast", {
+                    roles,
+                    status: response.status,
+                    body: bodyText
+                });
+            }
+        } catch (err) {
+            logger.warn("notificationPublisher: failed to call broadcast trigger", {
+                roles,
+                error: err.message
+            });
+        }
+    })();
+};
+
 const resolveDisplayName = async (role, userId, fallback) => {
     const path = role === "DOCTOR" ? "/profiles/doctors/bulk" : "/profiles/patients/bulk";
 
@@ -169,4 +207,9 @@ const resolveDisplayName = async (role, userId, fallback) => {
     }
 };
 
-module.exports = { publishUnreadIncrement, triggerInAppNotification, resolveDisplayName };
+module.exports = { 
+    publishUnreadIncrement, 
+    triggerInAppNotification, 
+    triggerBroadcastNotification,
+    resolveDisplayName 
+};
