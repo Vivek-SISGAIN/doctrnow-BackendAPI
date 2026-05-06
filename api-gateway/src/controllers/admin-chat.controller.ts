@@ -1,11 +1,4 @@
-import {
-  Controller,
-  All,
-  Req,
-  Res,
-  HttpStatus,
-  UseGuards,
-} from '@nestjs/common';
+import { Controller, All, Req, Res, HttpStatus, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { Request, Response } from 'express';
 import { HttpProxyService } from '../http-proxy/http-proxy.service';
@@ -23,7 +16,7 @@ import { SkipThrottle } from '@nestjs/throttler';
 @SkipThrottle()
 @UseGuards(JwtAuthGuard)
 export class AdminChatController {
-  constructor(private readonly httpProxyService: HttpProxyService) { }
+  constructor(private readonly httpProxyService: HttpProxyService) {}
 
   @All()
   async proxyBase(@Req() req: Request, @Res() res: Response): Promise<void> {
@@ -75,7 +68,13 @@ export class AdminChatController {
 
   private extractHeaders(req: Request): Record<string, string> {
     const headers: Record<string, string> = {};
-    const allowedHeaders = ['content-type', 'content-length', 'accept', 'x-tenant-id', 'authorization'];
+    const allowedHeaders = [
+      'content-type',
+      'content-length',
+      'accept',
+      'x-tenant-id',
+      'authorization',
+    ];
 
     for (const [key, value] of Object.entries(req.headers)) {
       if (allowedHeaders.includes(key.toLowerCase())) {

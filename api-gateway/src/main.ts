@@ -123,7 +123,7 @@ async function bootstrap(): Promise<void> {
   // ─── Helmet (security headers) ───────────────────────────────────────────────
   app.use(
     helmet({
-      contentSecurityPolicy: false,     // frontend sets its own CSP
+      contentSecurityPolicy: false, // frontend sets its own CSP
       crossOriginEmbedderPolicy: false, // needed for Agora / video embeds
       hsts: {
         maxAge: 31536000,
@@ -232,9 +232,7 @@ async function bootstrap(): Promise<void> {
       swaggerOptions: { persistAuthorization: true },
     });
 
-    logger.log(
-      `📖 Swagger docs → http://localhost:${getInt('PORT', 8080)}/api-docs`,
-    );
+    logger.log(`📖 Swagger docs → http://localhost:${getInt('PORT', 8080)}/api-docs`);
   }
 
   // ─── Start server ─────────────────────────────────────────────────────────────

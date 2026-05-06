@@ -29,7 +29,7 @@ import { SkipThrottle } from '@nestjs/throttler';
 @UseGuards(JwtAuthGuard)
 @SkipThrottle() // We handle rate limiting at the service level, so skip global throttling here
 export class SuperAdminController {
-  constructor(private readonly httpProxyService: HttpProxyService) { }
+  constructor(private readonly httpProxyService: HttpProxyService) {}
 
   /** Base path: /api/v1/super-admins */
   @Get()
@@ -39,25 +39,25 @@ export class SuperAdminController {
   }
 
   @Post()
-  @Roles(UserRole.SUPER_ADMIN)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.PATIENT, UserRole.DOCTOR, UserRole.HOSPITAL_ADMIN)
   async proxyBasePost(@Req() req: Request, @Res() res: Response): Promise<void> {
     return this.proxyRequest(req, res);
   }
 
   @Put()
-  @Roles(UserRole.SUPER_ADMIN)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.PATIENT, UserRole.DOCTOR, UserRole.HOSPITAL_ADMIN)
   async proxyBasePut(@Req() req: Request, @Res() res: Response): Promise<void> {
     return this.proxyRequest(req, res);
   }
 
   @Patch()
-  @Roles(UserRole.SUPER_ADMIN, UserRole.PATIENT)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.PATIENT, UserRole.DOCTOR, UserRole.HOSPITAL_ADMIN)
   async proxyBasePatch(@Req() req: Request, @Res() res: Response): Promise<void> {
     return this.proxyRequest(req, res);
   }
 
   @Delete()
-  @Roles(UserRole.SUPER_ADMIN)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.PATIENT, UserRole.DOCTOR, UserRole.HOSPITAL_ADMIN)
   async proxyBaseDelete(@Req() req: Request, @Res() res: Response): Promise<void> {
     return this.proxyRequest(req, res);
   }
@@ -82,13 +82,13 @@ export class SuperAdminController {
   }
 
   @Patch('*')
-  @Roles(UserRole.SUPER_ADMIN, UserRole.PATIENT)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.PATIENT, UserRole.DOCTOR, UserRole.HOSPITAL_ADMIN)
   async proxyRequestPatch(@Req() req: Request, @Res() res: Response): Promise<void> {
     return this.proxyRequest(req, res);
   }
 
   @Delete('*')
-  @Roles(UserRole.SUPER_ADMIN)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.PATIENT, UserRole.DOCTOR, UserRole.HOSPITAL_ADMIN)
   async proxyRequestDelete(@Req() req: Request, @Res() res: Response): Promise<void> {
     return this.proxyRequest(req, res);
   }

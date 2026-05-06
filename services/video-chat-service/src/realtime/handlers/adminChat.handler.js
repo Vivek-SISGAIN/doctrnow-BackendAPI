@@ -30,6 +30,7 @@
 const logger = require("../../utils/logger");
 const AdminChatMessage = require("../../models/adminChatMessage.model");
 const AdminChatSession = require("../../models/adminChatSession.model");
+const { triggerInAppNotification } = require("../../service/notificationPublisher.service");
 
 /**
  * @param {import("socket.io").Server} io
@@ -99,10 +100,35 @@ const registerAdminChatHandler = (io, socket) => {
                     attachments: hasAttachments ? attachments : [],
                 });
 
-                await AdminChatSession.findByIdAndUpdate(sessionId, {
+                const session = await AdminChatSession.findByIdAndUpdate(sessionId, {
                     lastMessagePreview: hasText ? text.trim().slice(0, 120) : "📎 Attachment",
                     lastMessageAt: new Date()
                 });
+
+                if (session) {
+                    // Identify the recipient
+                    let recipientId = null;
+                    if (role === "SUPER_ADMIN") {
+                        recipientId = session.hospitalAdminId || session.doctorId || session.patientId;
+                    } else {
+                        recipientId = session.superAdminId;
+                    }
+
+                    if (recipientId) {
+                        triggerInAppNotification({
+                            userId: recipientId,
+                            title: `Support Message from ${role.replace("_", " ")}`,
+                            body: hasText ? text.trim() : "Sent an attachment",
+                            payload: {
+                                type: "ADMIN_CHAT_MESSAGE",
+                                sessionId,
+                                senderId: userId,
+                                senderRole: role,
+                                senderName: role === "SUPER_ADMIN" ? (session.superAdminName || "Super Admin") : (session.requesterName || "User")
+                            }
+                        });
+                    }
+                }
             } catch (err) {
                 logger.error("[adminChat:socket] Failed to persist message", { error: err.message, sessionId });
             }
