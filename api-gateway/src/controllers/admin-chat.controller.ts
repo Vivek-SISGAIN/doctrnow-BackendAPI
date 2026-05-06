@@ -16,7 +16,7 @@ import { SkipThrottle } from '@nestjs/throttler';
 @SkipThrottle()
 @UseGuards(JwtAuthGuard)
 export class AdminChatController {
-  constructor(private readonly httpProxyService: HttpProxyService) {}
+  constructor(private readonly httpProxyService: HttpProxyService) { }
 
   @All()
   async proxyBase(@Req() req: Request, @Res() res: Response): Promise<void> {
@@ -77,7 +77,7 @@ export class AdminChatController {
     ];
 
     for (const [key, value] of Object.entries(req.headers)) {
-      if (allowedHeaders.includes(key.toLowerCase())) {
+      if (key.toLowerCase() !== 'host') {
         const val = Array.isArray(value) ? value[0] : value;
         if (typeof val === 'string') headers[key] = val;
       }
