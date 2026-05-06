@@ -10,7 +10,7 @@ const adminChatMessageSchema = new mongoose.Schema(
     },
     senderId: { type: String, required: true },
     senderRole: { type: String, required: true },
-    text: { type: String, required: true },
+    text: { type: String, default: "" },
     clientMsgId: { type: String, default: null },
     readBy: [
       {
@@ -18,6 +18,16 @@ const adminChatMessageSchema = new mongoose.Schema(
         readAt: Date,
         _id: false,
       },
+    ],
+    attachments: [
+      {
+        url: { type: String, required: true },
+        key: { type: String, required: true },
+        originalName: { type: String, required: true },
+        mimeType: { type: String, required: true },
+        size: { type: Number, required: true },
+        _id: false,
+      }
     ],
   },
   { timestamps: true }

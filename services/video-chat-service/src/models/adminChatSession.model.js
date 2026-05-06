@@ -8,6 +8,10 @@
  * so that the existing patient-doctor flow remains untouched.
  *
  * Only the session lifecycle is persisted (no per-message storage).
+ *
+ * v2: Extended to support Doctors and Patients as requesters alongside
+ *     existing Hospital Admin sessions. All old sessions remain backward-
+ *     compatible — requesterRole: null is treated as "HOSPITAL_ADMIN".
  */
 
 const mongoose = require("mongoose");
@@ -16,12 +20,14 @@ const adminChatSessionSchema = new mongoose.Schema(
     {
         /**
          * The Hospital Admin who raised the support request.
-         * Populated from req.user (x-user-id header from gateway).
+         * Now optional — null when the requester is a Doctor or Patient.
+         * Kept for full backward compatibility with existing records.
          */
         hospitalAdminId: {
             type: String,
-            required: true,
-            index: true
+            required: false,   // CHANGED from required: true
+            default: null,
+            index: true,
         },
 
         /**
@@ -41,10 +47,54 @@ const adminChatSessionSchema = new mongoose.Schema(
         hospitalAdminName: { type: String, default: null },
         superAdminName:    { type: String, default: null },
         hospitalName:      { type: String, default: null },
+        hospitalId: {
+            type: String,
+            default: null,
+            index: true
+        },
+
+        // ─── NEW: Doctor / Patient requester fields ────────────────────────
+
+        /** Doctor who raised the support request (null if requester is not a doctor) */
+        doctorId: {
+            type: String,
+            default: null,
+            index: true,
+        },
+
+        /** Patient who raised the support request (null if requester is not a patient) */
+        patientId: {
+            type: String,
+            default: null,
+            index: true,
+        },
+
+        /**
+         * Single display name for the person who raised the request.
+         * Populated for all roles — complements hospitalAdminName (kept for backward compat).
+         */
+        requesterName: {
+            type: String,
+            default: null,
+        },
+
+        /**
+         * The role of the person who raised the request.
+         * "HOSPITAL_ADMIN" | "DOCTOR" | "PATIENT"
+         * null on old records — treat as "HOSPITAL_ADMIN" in display logic.
+         */
+        requesterRole: {
+            type: String,
+            enum: ["HOSPITAL_ADMIN", "DOCTOR", "PATIENT", null],
+            default: null,
+            index: true,
+        },
+
+        // ─── END NEW ──────────────────────────────────────────────────────
 
         /**
          * Lifecycle status.
-         *   REQUESTED  — hospital admin has opened a request, waiting for a super admin
+         *   REQUESTED  — requester has opened a request, waiting for a super admin
          *   ACTIVE     — a super admin has accepted, chat is live
          *   ENDED      — session was explicitly closed by either party
          */
@@ -81,6 +131,8 @@ const adminChatSessionSchema = new mongoose.Schema(
     { timestamps: true }   // adds createdAt (= when request was raised) + updatedAt
 );
 
+// ─── Indexes ──────────────────────────────────────────────────────────────────
+
 // Compound index: list open requests for super admins quickly
 adminChatSessionSchema.index({ status: 1, createdAt: -1 });
 
@@ -88,5 +140,15 @@ adminChatSessionSchema.index({ status: 1, createdAt: -1 });
 adminChatSessionSchema.index({ hospitalAdminId: 1, status: 1, createdAt: -1 });
 
 adminChatSessionSchema.index({ status: 1, resolved: 1, lastMessageAt: -1 });
+adminChatSessionSchema.index({ hospitalId: 1, status: 1, createdAt: -1 });
+
+// Fast lookup: all sessions from a specific doctor
+adminChatSessionSchema.index({ doctorId: 1, status: 1, createdAt: -1 });
+
+// Fast lookup: all sessions from a specific patient
+adminChatSessionSchema.index({ patientId: 1, status: 1, createdAt: -1 });
+
+// Fast lookup: filter sessions by requesterRole in super admin panel
+adminChatSessionSchema.index({ requesterRole: 1, status: 1, createdAt: -1 });
 
 module.exports = mongoose.model("AdminChatSession", adminChatSessionSchema);

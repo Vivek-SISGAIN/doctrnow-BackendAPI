@@ -65,17 +65,20 @@ const registerAdminChatHandler = (io, socket) => {
     });
 
     // ── Send a message within an active session ───────────────────────────────
-    socket.on("admin_chat:message", ({ sessionId, text, clientMsgId }) => {
-        if (!sessionId || !text?.trim()) return;
+    socket.on("admin_chat:message", ({ sessionId, text, clientMsgId, attachments }) => {
+        const hasText = text && text.trim();
+        const hasAttachments = Array.isArray(attachments) && attachments.length > 0;
+        if (!sessionId || (!hasText && !hasAttachments)) return;
 
         const room    = `admin_session:${sessionId}`;
         const payload = {
             sessionId,
             senderId:    userId,
             senderRole:  role,
-            text:        text.trim(),
+            text:        hasText ? text.trim() : "",
             clientMsgId: clientMsgId || null,
-            timestamp:   new Date().toISOString()
+            timestamp:   new Date().toISOString(),
+            attachments: hasAttachments ? attachments : [],
         };
 
         // Broadcast to everyone in the session room (including sender for echo)
@@ -90,13 +93,14 @@ const registerAdminChatHandler = (io, socket) => {
                     sessionId,
                     senderId: userId,
                     senderRole: role,
-                    text: text.trim(),
+                    text: hasText ? text.trim() : "",
                     clientMsgId: clientMsgId || null,
-                    readBy: []
+                    readBy: [],
+                    attachments: hasAttachments ? attachments : [],
                 });
 
                 await AdminChatSession.findByIdAndUpdate(sessionId, {
-                    lastMessagePreview: text.trim().slice(0, 120),
+                    lastMessagePreview: hasText ? text.trim().slice(0, 120) : "📎 Attachment",
                     lastMessageAt: new Date()
                 });
             } catch (err) {

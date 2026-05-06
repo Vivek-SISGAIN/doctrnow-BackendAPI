@@ -52,6 +52,43 @@ class ConsultationVitalsService {
   }
 
   /**
+   * List vitals for a patient (trend view)
+   * Returns vitals with minimal consultation context.
+   */
+  async findByPatientId(patientId, options = {}) {
+    const take = options.take ? Number(options.take) : undefined;
+    const skip = options.skip ? Number(options.skip) : undefined;
+
+    const items = await prisma.consultationVitals.findMany({
+      where: {
+        consultation: {
+          patientId
+        }
+      },
+      include: {
+        consultation: {
+          select: {
+            id: true,
+            appointmentId: true,
+            status: true,
+            type: true,
+            startedAt: true,
+            endedAt: true,
+            createdAt: true
+          }
+        }
+      },
+      orderBy: {
+        recordedAt: 'desc'
+      },
+      take,
+      skip
+    });
+
+    return items;
+  }
+
+  /**
    * Delete vitals
    */
   async delete(consultationId) {

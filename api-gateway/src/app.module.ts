@@ -18,6 +18,7 @@ import { ProfileController } from './controllers/profile.controller';
 import { AppointmentController } from './controllers/appointment.controller';
 import { ConsultationController } from './controllers/consultation.controller';
 import { ConsultationNotesController } from './controllers/consultation-notes.controller';
+import { ConsultationVitalsController } from './controllers/consultation-vitals.controller';
 import { PrescriptionController } from './controllers/prescription.controller';
 import { DocumentController } from './controllers/document.controller';
 import { LabReportController } from './controllers/lab-report.controller';
@@ -136,6 +137,7 @@ import configuration from './config/configuration';
     AppointmentController,
     ConsultationController,
     ConsultationNotesController,
+    ConsultationVitalsController,
     PrescriptionController,
     DocumentController,
     LabReportController,
