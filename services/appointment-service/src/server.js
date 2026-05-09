@@ -7,6 +7,7 @@ const slotService = require('./service/slot.service');
 const { startNotificationWorker } = require('./queue/notification.queue');
 
 // Initialize BullMQ notification worker
+console.log('--- Initializing Notification Infrastructure ---');
 startNotificationWorker();
 
 const PORT = process.env.PORT || 3003;

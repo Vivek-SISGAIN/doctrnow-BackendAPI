@@ -68,7 +68,7 @@ function getFirstSlotDate(now) {
     firstDate.setHours(9, 0, 0, 0);
     if (firstDate < now) {
       const mins = now.getMinutes();
-      const next = mins <= 30 ? 30 : 60;
+      const next = Math.ceil(mins / 5) * 5;
       firstDate.setMinutes(next, 0, 0);
       if (next === 60) firstDate.setHours(firstDate.getHours() + 1, 0, 0, 0);
       if (firstDate.getHours() >= 22) {
@@ -82,7 +82,7 @@ function getFirstSlotDate(now) {
 
 async function createSlotsForDoctor(doctorId, now, firstDate) {
   const slots = [];
-  const SLOTS_PER_DAY = 22;
+  const SLOTS_PER_DAY = 160;
   for (let day = 0; day < 14; day++) {
     const date = new Date(firstDate);
     date.setDate(date.getDate() + day);
@@ -90,9 +90,9 @@ async function createSlotsForDoctor(doctorId, now, firstDate) {
 
     for (let i = 0; i < SLOTS_PER_DAY; i++) {
       const startTime = new Date(date);
-      startTime.setMinutes(date.getMinutes() + i * 30, 0, 0);
+      startTime.setMinutes(date.getMinutes() + i * 5, 0, 0);
       const endTime = new Date(startTime);
-      endTime.setMinutes(endTime.getMinutes() + 30);
+      endTime.setMinutes(endTime.getMinutes() + 5);
       if (startTime.getHours() >= 22) break;
 
       slots.push({
@@ -109,7 +109,7 @@ async function createSlotsForDoctor(doctorId, now, firstDate) {
     startTime.setDate(startTime.getDate() + 1);
     startTime.setHours(9, 0, 0, 0);
     const endTime = new Date(startTime);
-    endTime.setMinutes(endTime.getMinutes() + 30);
+    endTime.setMinutes(endTime.getMinutes() + 5);
     slots.push({
       doctorId,
       startTime,
@@ -146,7 +146,7 @@ async function createSlots() {
 
     const count = await createSlotsForDoctor(doctorId, now, firstDate);
     totalCreated += count;
-    console.log('  Created', count, 'slots (next 14 days, 9 AM–5 PM, 30 min)');
+    console.log('  Created', count, 'slots (next 14 days, 9 AM–10 PM, 5 min)');
   }
 
   console.log('Total slots created:', totalCreated);
@@ -249,7 +249,7 @@ async function main() {
     await createSlots();
 
     // Create appointments
-    await createAppointments();
+    // await createAppointments();
 
     console.log('Seed completed successfully!');
   } catch (error) {

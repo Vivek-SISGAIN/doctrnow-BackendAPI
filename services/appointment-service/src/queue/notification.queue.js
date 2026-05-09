@@ -63,7 +63,9 @@ async function scheduleAppointmentReminders(appointment) {
   const reminders = [
     // Patient reminders
     { jobId: `reminder_15m_patient_${id}`, type: "APPOINTMENT_REMINDER_15", role: "PATIENT", minutesBefore: 15 },
+    { jobId: `reminder_5m_patient_${id}`,  type: "APPOINTMENT_LOCK_5M",      role: "PATIENT", minutesBefore: 5 },
     { jobId: `reminder_3m_patient_${id}`,  type: "APPOINTMENT_REMINDER_3",  role: "PATIENT", minutesBefore: 3 },
+    { jobId: `reminder_1m_patient_${id}`,  type: "APPOINTMENT_JOIN_1M",     role: "PATIENT", minutesBefore: 1 },
 
     // Doctor reminders
     { jobId: `reminder_5m_doctor_${id}`,   type: "APPOINTMENT_APPROACHING", role: "DOCTOR",  minutesBefore: 5 },
@@ -107,7 +109,9 @@ async function scheduleAppointmentReminders(appointment) {
 async function cancelAppointmentReminders(appointmentId) {
   const jobIds = [
     `reminder_15m_patient_${appointmentId}`,
+    `reminder_5m_patient_${appointmentId}`,
     `reminder_3m_patient_${appointmentId}`,
+    `reminder_1m_patient_${appointmentId}`,
     `reminder_5m_doctor_${appointmentId}`,
     `reminder_1m_doctor_${appointmentId}`,
     `reminder_15s_doctor_${appointmentId}`,
