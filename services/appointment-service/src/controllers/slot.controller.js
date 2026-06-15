@@ -139,6 +139,21 @@ const unlockSlot = asyncHandler(async (req, res) => {
   });
 });
 
+const getNextAvailableSlotsBulk = asyncHandler(async (req, res) => {
+  const { doctorIds } = req.body;
+
+  if (!doctorIds || !Array.isArray(doctorIds)) {
+    throw ApiError.badRequest('doctorIds must be an array');
+  }
+
+  const slotMap = await slotService.findNextAvailableSlotsBulk(doctorIds);
+
+  res.status(200).json({
+    success: true,
+    data: slotMap
+  });
+});
+
 module.exports = {
   getAvailableSlots,
   getSlotsByDoctor,
@@ -148,5 +163,6 @@ module.exports = {
   updateSlot,
   deleteSlot,
   lockSlot,
-  unlockSlot
+  unlockSlot,
+  getNextAvailableSlotsBulk
 };

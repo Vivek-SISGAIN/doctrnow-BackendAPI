@@ -73,12 +73,14 @@ const registerAdminChatHandler = (io, socket) => {
 
         const room    = `admin_session:${sessionId}`;
         const payload = {
+            id:          clientMsgId || `tmp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
             sessionId,
             senderId:    userId,
             senderRole:  role,
             text:        hasText ? text.trim() : "",
             clientMsgId: clientMsgId || null,
             timestamp:   new Date().toISOString(),
+            createdAt:   new Date().toISOString(),
             attachments: hasAttachments ? attachments : [],
         };
 

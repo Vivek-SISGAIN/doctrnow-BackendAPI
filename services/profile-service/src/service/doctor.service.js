@@ -556,7 +556,8 @@ class DoctorService {
     if (!doctors) return doctors;
     const populated = await this._populatePresignedUrls(doctors);
     const rated = await this._attachRatings(populated);
-    return this._attachHospitalDetails(rated);
+    const hospitalEnriched = await this._attachHospitalDetails(rated);
+    return this._attachNextAvailableSlots(hospitalEnriched);
   }
 
   async _populatePresignedUrls(data) {
@@ -748,6 +749,43 @@ class DoctorService {
       });
     } catch (err) {
       console.error('[ProfileService] Failed to fetch bulk hospitals:', err.message);
+    }
+
+    return isArray ? doctorList : doctorList[0];
+  }
+
+  async _attachNextAvailableSlots(doctors) {
+    if (!doctors || (Array.isArray(doctors) && doctors.length === 0)) return doctors;
+    const isArray = Array.isArray(doctors);
+    const doctorList = isArray ? doctors : [doctors];
+    const doctorIds = doctorList.map((d) => d.id);
+
+    const baseUrl = process.env.API_BASE_URL || 'http://localhost:8080/api/v1';
+    const internalSecret = process.env.INTERNAL_SERVICE_SECRET || 'super_secret_internal_key_123';
+
+    try {
+      const response = await axios.post(
+        `${baseUrl}/appointments/slots/next-available/bulk`,
+        { doctorIds },
+        {
+          headers: {
+            'x-internal-service-key': internalSecret,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      const slotMap = response.data?.data || {};
+
+      doctorList.forEach((doc) => {
+        doc.nextAvailableSlot = slotMap[doc.id] || null;
+      });
+    } catch (err) {
+      console.error('[ProfileService] Failed to fetch bulk next available slots:', err.message);
+      // Fallback: set to null if appointment service is down
+      doctorList.forEach((doc) => {
+        doc.nextAvailableSlot = null;
+      });
     }
 
     return isArray ? doctorList : doctorList[0];

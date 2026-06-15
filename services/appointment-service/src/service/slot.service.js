@@ -116,6 +116,50 @@ class SlotService {
   }
 
   /**
+   * Find the first available future slot for multiple doctors.
+   * Returns a map: { [doctorId]: slot }
+   */
+  async findNextAvailableSlotsBulk(doctorIds) {
+    if (!doctorIds || !Array.isArray(doctorIds) || doctorIds.length === 0) {
+      return {};
+    }
+
+    const now = new Date();
+
+    // Fetch the first available slot for each doctor in one or multiple queries.
+    // Since Prisma findMany doesn't easily support "limit 1 per group", 
+    // we use Promise.all to fetch the first slot for each doctor.
+    const results = await Promise.all(
+      doctorIds.map(async (doctorId) => {
+        const slot = await prisma.slot.findFirst({
+          where: {
+            doctorId,
+            status: "AVAILABLE",
+            startTime: { gte: now },
+            slotLock: null,
+            appointments: {
+              none: {
+                status: { not: "CANCELLED" }
+              }
+            }
+          },
+          orderBy: { startTime: "asc" }
+        });
+        return { doctorId, slot };
+      })
+    );
+
+    const slotMap = {};
+    results.forEach(({ doctorId, slot }) => {
+      if (slot) {
+        slotMap[doctorId] = slot;
+      }
+    });
+
+    return slotMap;
+  }
+
+  /**
    * Find slots by doctor ID with optional filters.
    * Never returns past AVAILABLE slots — those are stale.
    */

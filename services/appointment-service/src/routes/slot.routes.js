@@ -10,6 +10,7 @@ const {
   deleteSlot,
   lockSlot,
   unlockSlot,
+  getNextAvailableSlotsBulk,
 } = require("../controllers/slot.controller");
 const {
   createSlotSchema,
@@ -361,5 +362,29 @@ router.post("/internal/slot-maintenance/run", async (req, res, next) => {
     next(err);
   }
 });
+/**
+ * @swagger
+ * /api/slots/next-available/bulk:
+ *   post:
+ *     summary: Get the first available future slot for multiple doctors
+ *     tags: [Slots]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [doctorIds]
+ *             properties:
+ *               doctorIds:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *                   format: uuid
+ *     responses:
+ *       200:
+ *         description: Map of doctorId to next available slot
+ */
+router.post("/next-available/bulk", getNextAvailableSlotsBulk);
 
 module.exports = router;

@@ -66,21 +66,21 @@ function formatTicket(ticket, profileMap = {}) {
     // Aggregated user info — no extra API call required by frontend
     user: profile
       ? {
-          userId: profile.userId,
-          name: `${profile.firstName} ${profile.lastName}`.trim(),
-          email: profile.email,
-          phone: profile.phone,
-          avatarUrl: profile.avatarUrl,
-          role: ticket.userRole,
-        }
+        userId: profile.userId,
+        name: `${profile.firstName} ${profile.lastName}`.trim(),
+        email: profile.email,
+        phone: profile.phone,
+        avatarUrl: profile.avatarUrl,
+        role: ticket.userRole,
+      }
       : {
-          userId: ticket.userId,
-          name: "Unknown User",
-          email: "",
-          phone: "",
-          avatarUrl: null,
-          role: ticket.userRole,
-        },
+        userId: ticket.userId,
+        name: "Unknown User",
+        email: "",
+        phone: "",
+        avatarUrl: null,
+        role: ticket.userRole,
+      },
     // Timeline entries — actor field tells frontend if it was user or admin
     timeline: (ticket.timeline ?? []).map((entry) => ({
       id: entry.id,
@@ -129,7 +129,7 @@ class TicketService {
     });
 
     // Fire notification async — do not await so we don't block the response
-    notifyTicketCreated({ ticket }).catch(() => {});
+    notifyTicketCreated({ ticket }).catch(() => { });
 
     const profile = await fetchUserProfile(ticket.userId, ticket.userRole);
     const profileMap = profile ? { [ticket.userId]: profile } : {};
@@ -173,7 +173,7 @@ class TicketService {
         include: {
           timeline: {
             orderBy: { createdAt: "desc" },
-            take: 1, // Only the latest entry for list view (saves data)
+            // take: 1, // Only the latest entry for list view (saves data)
           },
         },
         orderBy: { createdAt: "desc" },
@@ -270,7 +270,7 @@ class TicketService {
 
     if (status && status !== existing.status) {
       updateData.status = status;
-      
+
       let entryText = `Status changed to "${status.replace(/_/g, " ")}"`;
       if (status === "closed") {
         entryText = isAdmin ? "Ticket closed by admin" : "Ticket closed by user";
@@ -307,7 +307,7 @@ class TicketService {
 
     // Notify the ticket owner or admins depending on who closed it
     if (status) {
-      notifyStatusUpdated({ ticket, newStatus: status, actorRole: role }).catch(() => {});
+      notifyStatusUpdated({ ticket, newStatus: status, actorRole: role }).catch(() => { });
     }
 
     const profile = await fetchUserProfile(ticket.userId, ticket.userRole);
@@ -358,9 +358,9 @@ class TicketService {
 
     // Fire notifications
     if (isAdmin) {
-      notifyAdminReplied({ ticket }).catch(() => {});
+      notifyAdminReplied({ ticket }).catch(() => { });
     } else {
-      notifyUserReplied({ ticket }).catch(() => {});
+      notifyUserReplied({ ticket }).catch(() => { });
     }
 
     const profile = await fetchUserProfile(ticket.userId, ticket.userRole);

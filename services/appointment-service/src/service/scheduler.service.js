@@ -6,6 +6,33 @@ dayjs.extend(utc);
 const axios = require("axios");
 const prisma = require("../prisma/prisma");
 
+// ── Redis publisher for appointment state events ─────────────────────────────
+// Used to notify consultation-service to push LOCK/JOIN triggers to the RN app
+// via /consultation-events socket. Kept separate from BullMQ's own Redis
+// connection so failures here never affect the job queue.
+// ── Redis publisher for appointment state events ─────────────────────────────
+// Uses ioredis (already a dependency via BullMQ) — do NOT use the redis package.
+const IORedis = require("ioredis");
+
+const _redisPublisherOptions = {
+  host: process.env.REDIS_HOST || "127.0.0.1",
+  port: parseInt(process.env.REDIS_PORT || "6379", 10),
+  lazyConnect: true,
+};
+if (process.env.REDIS_PASSWORD) {
+  _redisPublisherOptions.password = process.env.REDIS_PASSWORD;
+}
+
+const redisPublisher = new IORedis(_redisPublisherOptions);
+redisPublisher.on("error", (err) =>
+  console.error("[SchedulerService] Redis publisher error:", err.message)
+);
+redisPublisher.connect().then(() => {
+  console.log("✅ [SchedulerService] Redis publisher connected");
+}).catch((err) =>
+  console.error("❌ [SchedulerService] Redis publisher connect failed:", err.message)
+);
+
 const profileUserIdCache = {
   DOCTOR: new Map(),
   PATIENT: new Map(),
@@ -109,6 +136,40 @@ class SchedulerService {
         title = "Join Virtual Lobby";
         body = `Your doctor will join in 3 minutes. Please join the virtual lobby.`;
         break;
+      case "APPOINTMENT_LOCK_5M":
+        title = "Action Locked";
+        body = ""; // Silent/System trigger
+        // Also push to consultation-events room for React Native app
+        console.log(`[SchedulerService] Attempting to publish APPOINTMENT_LOCK_5M for ${appointment.id}`);
+        redisPublisher
+          .publish(
+            "appointment:state",
+            JSON.stringify({ type: "APPOINTMENT_LOCK_5M", appointmentId: appointment.id })
+          )
+          .then(() => {
+            console.log(`[SchedulerService] Successfully published APPOINTMENT_LOCK_5M for ${appointment.id}`);
+          })
+          .catch((e) =>
+            console.error("[SchedulerService] Redis publish LOCK_5M failed:", e.message)
+          );
+        break;
+      case "APPOINTMENT_JOIN_1M":
+        title = "Join Enabled";
+        body = ""; // Silent/System trigger
+        // Also push to consultation-events room for React Native app
+        console.log(`[SchedulerService] Attempting to publish APPOINTMENT_JOIN_1M for ${appointment.id}`);
+        redisPublisher
+          .publish(
+            "appointment:state",
+            JSON.stringify({ type: "APPOINTMENT_JOIN_1M", appointmentId: appointment.id })
+          )
+          .then(() => {
+            console.log(`[SchedulerService] Successfully published APPOINTMENT_JOIN_1M for ${appointment.id}`);
+          })
+          .catch((e) =>
+            console.error("[SchedulerService] Redis publish JOIN_1M failed:", e.message)
+          );
+        break;
       case "APPOINTMENT_APPROACHING":
         title = "Appointment Starting Soon";
         body = `Appointment with ${context.patientName} starts in 5 minutes.`;
@@ -138,14 +199,14 @@ class SchedulerService {
    */
   async triggerNoShowCheck(appointment) {
     console.log(`[SchedulerService] Executing No-Show check for appointment ${appointment.id}`);
-    
+
     // Appointment is passed from the cron job if it is still CONFIRMED or PENDING 10 mins after start time
     const updated = await prisma.appointment.update({
       where: { id: appointment.id },
       data: { status: "NO_SHOW" },
       include: { slot: true },
     });
-    
+
     console.log(`[SchedulerService] Appointment ${appointment.id} automatically marked as NO_SHOW`);
 
     const context = await this.fetchAppointmentContext(updated);
@@ -155,7 +216,7 @@ class SchedulerService {
       doctorName: context.doctorName,
       patientName: context.patientName,
     };
-    
+
     await this.notifyAppointmentParty(
       updated,
       "DOCTOR",

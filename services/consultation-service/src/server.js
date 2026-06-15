@@ -11,11 +11,12 @@ const HOST = process.env.HOST || 'localhost';
 const server = http.createServer(app);
 
 // Initialize WebSocket server
-const { initializeSocket } = require('./utils/socket');
+const { initializeSocket, initializeAppointmentStateSubscriber } = require('./utils/socket');
 
 (async () => {
   try {
     await initializeSocket(server);
+    await initializeAppointmentStateSubscriber();
     
     server.listen(PORT, () => {
       console.log('=================================');
