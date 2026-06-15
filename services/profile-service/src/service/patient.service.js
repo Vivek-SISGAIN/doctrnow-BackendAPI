@@ -232,8 +232,16 @@ class PatientService {
   /**
    * Update patient by ID
    */
-  update(id, data) {
+  async update(id, data) {
     const updateData = { ...data };
+
+    // ── Sanitize Data ────────────────────────────────────────────────────────
+    // Remove fields that are NOT in the Prisma schema or are immutable
+    delete updateData.id;
+    delete updateData.userId;
+    delete updateData.createdAt;
+    delete updateData.updatedAt;
+
     if (updateData.dateOfBirth) {
       const d = new Date(updateData.dateOfBirth);
       if (!isNaN(d.getTime())) {
@@ -243,6 +251,7 @@ class PatientService {
       }
     }
 
+    // Use updateMany to support finding by either id or userId (auth user id)
     return prisma.patient.updateMany({
       where: {
         OR: [{ id }, { userId: id }]

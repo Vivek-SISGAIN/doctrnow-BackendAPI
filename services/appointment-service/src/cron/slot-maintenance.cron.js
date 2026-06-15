@@ -124,78 +124,84 @@ async function generateSlotsInRange(doctorId, schedule, fromDate, toDate) {
 
 async function runSlotMaintenance() {
   console.log(
-    `[SlotCron] Starting maintenance at ${dayjs().tz(UAE_TZ).format("YYYY-MM-DD HH:mm")} UAE`,
+    `[SlotCron] Starting rolling-window maintenance at ${dayjs().tz(UAE_TZ).format("YYYY-MM-DD HH:mm")} UAE`,
   );
 
-  // ── Step 1: Delete past AVAILABLE slots ──────────────────────────────────
-  const { deleted } = await slotService.deletePastAvailableSlots();
-  console.log(`[SlotCron] Deleted ${deleted} past AVAILABLE slots`);
+  // ── Step 1: Delete AVAILABLE slots from yesterday (UAE time) ─────────────
+  // This is the new targeted delete — only yesterday's unbooked slots.
+  // The old deletePastAvailableSlots() deleted ALL past available slots;
+  // we now delegate that work to the new per-day method.
+  const { deleted, date: deletedDate } = await slotService.deleteYesterdayAvailableSlots();
+  console.log(
+    `[SlotCron] Deleted ${deleted} unbooked AVAILABLE slots from ${deletedDate}`,
+  );
 
   // ── Step 2: Fetch all active doctors ─────────────────────────────────────
-  // NOTE: schedule is stored as JSON on the doctor record in profile-service.
-  // If your appointment-service DB does not have doctor records, call the
-  // profile-service API here instead of querying prisma directly.
-  //
-  // Option A — if appointment-service has access to doctor records:
-  const doctors = await prisma.doctor.findMany({
-    where: { status: "ACTIVE" },
-    select: { id: true, hospitalId: true, schedule: true },
-  });
+  // NOTE: doctor records are in profile-service. Fetch via Gateway or internal URL.
+  let doctors = [];
+  try {
+    const gatewayUrl = process.env.BASE_URL; // e.g. http://localhost:8080/api/v1/
+    if (!gatewayUrl) throw new Error("BASE_URL not configured");
 
-  // Option B — if you need to call profile-service (uncomment and remove Option A):
-  // const res = await axios.get(`${process.env.PROFILE_SERVICE_URL}/internal/doctors/active`);
-  // const doctors = res.data?.data ?? [];
+    const baseUrl = gatewayUrl.endsWith("/") ? gatewayUrl : `${gatewayUrl}/`;
+    const url = `${baseUrl}profiles/doctors?status=ACTIVE`;
+
+    const res = await axios.get(url, {
+      headers: {
+        ...(process.env.INTERNAL_SERVICE_SECRET
+          ? { "x-internal-service-key": process.env.INTERNAL_SERVICE_SECRET }
+          : {}),
+      },
+      timeout: 5000,
+    });
+
+    doctors = res.data?.data || [];
+  } catch (err) {
+    console.error(`[SlotCron] Failed to fetch active doctors from profile-service: ${err.message}`);
+    return; // Cannot proceed without doctor list
+  }
 
   console.log(
-    `[SlotCron] Extending slots for ${doctors.length} active doctors`,
+    `[SlotCron] Extending by one day for ${doctors.length} active doctors`,
   );
 
-  const sixtyDaysFromNow = dayjs().tz(UAE_TZ).add(60, "day").startOf("day");
   let totalGenerated = 0;
+  let totalSkipped   = 0;
 
+  // ── Step 3: For each doctor, extend slots by exactly one day ─────────────
   for (const doctor of doctors) {
-    if (!doctor.schedule) continue;
+    if (!doctor.schedule) {
+      totalSkipped++;
+      continue;
+    }
 
     try {
-      // Find the furthest existing future slot for this doctor
-      const lastSlot = await prisma.slot.findFirst({
-        where: { doctorId: doctor.id, startTime: { gte: new Date() } },
-        orderBy: { startTime: "desc" },
-        select: { startTime: true },
-      });
-
-      // Start from the day after the last slot (or today if none)
-      const generateFrom = lastSlot
-        ? dayjs(lastSlot.startTime).tz(UAE_TZ).add(1, "day").startOf("day")
-        : dayjs().tz(UAE_TZ).startOf("day");
-
-      // Nothing to fill if already covered
-      if (!generateFrom.isBefore(sixtyDaysFromNow)) continue;
-
-      const { generated } = await generateSlotsInRange(
+      const { generated, newDate } = await slotService.extendSlotsByOneDay(
         doctor.id,
         doctor.schedule,
-        generateFrom.toDate(),
-        sixtyDaysFromNow.toDate(),
       );
 
       if (generated > 0) {
         console.log(
-          `[SlotCron] Doctor ${doctor.id}: +${generated} slots (${generateFrom.format("MMM D")} → ${sixtyDaysFromNow.format("MMM D")})`,
+          `[SlotCron] Doctor ${doctor.id}: +${generated} slots on ${newDate}`,
         );
         totalGenerated += generated;
+      } else if (newDate) {
+        // Doctor has no working hours on that day (e.g. Friday off)
+        console.log(
+          `[SlotCron] Doctor ${doctor.id}: no working hours on ${newDate} — skipped`,
+        );
       }
     } catch (err) {
       // One doctor failing must not stop the rest
       console.error(
-        `[SlotCron] Failed to extend slots for doctor ${doctor.id}:`,
-        err.message,
+        `[SlotCron] Failed to extend slots for doctor ${doctor.id}: ${err.message}`,
       );
     }
   }
 
   console.log(
-    `[SlotCron] Done. Deleted: ${deleted}, Generated: ${totalGenerated}`,
+    `[SlotCron] Done. Deleted: ${deleted} (${deletedDate}), Generated: ${totalGenerated}, Skipped (no schedule): ${totalSkipped}`,
   );
 }
 

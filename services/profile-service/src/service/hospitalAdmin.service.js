@@ -181,9 +181,17 @@ class HospitalAdminService {
    * Update hospital admin by ID
    */
   update(id, data) {
+    const {
+      id: _id,
+      userId: _userId,
+      createdAt,
+      updatedAt,
+      ...prismaData
+    } = data;
+
     return prisma.hospitalAdmin.update({
       where: { userId: id },
-      data
+      data: prismaData
     });
   }
 
