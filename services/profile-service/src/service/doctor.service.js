@@ -459,14 +459,27 @@ class DoctorService {
   }
 
   async update(id, data) {
+    // ── Sanitize Data ────────────────────────────────────────────────────────
+    // Remove virtual/enriched fields that are NOT in the Prisma schema
+    // Also remove immutable fields to avoid Prisma validation errors
+    const {
+      id: _id,
+      createdAt,
+      updatedAt,
+      documents,
+      rating,
+      hospital,
+      ...prismaData
+    } = data;
+
     const doctor = await prisma.doctor.update({
       where: { id },
-      data
+      data: prismaData
     });
 
     // If schedule is updated, trigger slot regeneration in appointment-service
-    if (data.schedule) {
-      this._triggerSlotRegeneration(doctor.id, doctor.hospitalId, data.schedule, true).catch(
+    if (prismaData.schedule) {
+      this._triggerSlotRegeneration(doctor.id, doctor.hospitalId, doctor.schedule, true).catch(
         (err) => console.error('[ProfileService] Slot regeneration failed:', err.message)
       );
     }

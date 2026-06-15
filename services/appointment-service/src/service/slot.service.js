@@ -301,6 +301,9 @@ class SlotService {
    * Mirrors the logic from hospital-admin-service for consistency.
    */
   _generateSlotsFromSchedule(doctorId, schedule, fromDate, toDate) {
+    if (!fromDate || !toDate || new Date(toDate) <= new Date(fromDate)) {
+      return [];
+    }
     const DAY_NAME_MAP = {
       0: "SUNDAY",
       1: "MONDAY",
@@ -610,6 +613,148 @@ class SlotService {
       generateFrom.toDate(),
       sixtyDaysFromNow.toDate(),
     );
+  }
+
+  /**
+   * Delete AVAILABLE slots that belong to yesterday (UAE time) only.
+   *
+   * "Yesterday" means the calendar day before today in Asia/Dubai timezone.
+   * We delete only slots whose startTime falls within that calendar day
+   * AND whose status is AVAILABLE (never booked).
+   *
+   * Why yesterday only (not all past)?
+   *   - Keeps the operation narrow and predictable — one day at a time.
+   *   - Avoids accidentally touching old historical data on first run.
+   *   - Idempotent: re-running on the same night produces the same result.
+   *
+   * Safety guards (same as deletePastAvailableSlots):
+   *   - status = AVAILABLE    → no active appointment
+   *   - appointments: none    → double check no appointment row references it
+   *   - slotLock: null        → not mid-booking (expired locks cleared first)
+   *
+   * @returns {{ deleted: number, date: string }}
+   */
+  async deleteYesterdayAvailableSlots() {
+    await this.cleanExpiredLocks();
+
+    // Calculate yesterday's calendar boundaries in UAE time
+    const yesterdayStart = dayjs()
+      .tz(UAE_TZ)
+      .subtract(1, "day")
+      .startOf("day")
+      .toDate();
+
+    const yesterdayEnd = dayjs()
+      .tz(UAE_TZ)
+      .subtract(1, "day")
+      .endOf("day")
+      .toDate();
+
+    const yesterdayLabel = dayjs()
+      .tz(UAE_TZ)
+      .subtract(1, "day")
+      .format("YYYY-MM-DD");
+
+    // Find all unbooked slots that fall within yesterday
+    const slotsToDelete = await prisma.slot.findMany({
+      where: {
+        status: "AVAILABLE",
+        startTime: {
+          gte: yesterdayStart,
+          lte: yesterdayEnd,
+        },
+        appointments: {
+          none: {
+            status: { not: "CANCELLED" },
+          },
+        },
+        slotLock: null,
+      },
+      select: { id: true },
+    });
+
+    if (slotsToDelete.length === 0) {
+      return { deleted: 0, date: yesterdayLabel };
+    }
+
+    const ids = slotsToDelete.map((s) => s.id);
+
+    await prisma.slot.deleteMany({
+      where: { id: { in: ids } },
+    });
+
+    return { deleted: ids.length, date: yesterdayLabel };
+  }
+
+  /**
+   * For a single doctor, find the furthest existing slot date and generate
+   * slots for exactly ONE new day beyond it.
+   *
+   * This is called every night for every active doctor, giving a rolling
+   * window that advances by one day each night without ever shrinking.
+   *
+   * Logic:
+   *   1. Find the furthest slot (max startTime) for this doctor — any status.
+   *      We check ALL statuses (not just AVAILABLE) so that booked slots
+   *      at the end of the window still anchor the extension point correctly.
+   *   2. The "new day" = the calendar day after that furthest slot's date (UAE time).
+   *   3. Generate slots for that entire new day using the doctor's schedule.
+   *   4. Insert with skipDuplicates:true so re-runs are safe.
+   *
+   * @param {string}              doctorId
+   * @param {Object}              schedule  - doctor's weekly schedule JSON
+   * @returns {{ generated: number, newDate: string | null }}
+   */
+  async extendSlotsByOneDay(doctorId, schedule) {
+    if (!schedule) return { generated: 0, newDate: null };
+
+    // Find the furthest slot for this doctor (any status)
+    const lastSlot = await prisma.slot.findFirst({
+      where: { doctorId },
+      orderBy: { startTime: "desc" },
+      select: { startTime: true },
+    });
+
+    // If the doctor has no slots at all, do not generate here —
+    // the 60-day initial fill cron handles first-time generation.
+    if (!lastSlot) {
+      return { generated: 0, newDate: null };
+    }
+
+    // The new day to generate = day after the last existing slot
+    const newDayStart = dayjs(lastSlot.startTime)
+      .tz(UAE_TZ)
+      .add(1, "day")
+      .startOf("day");
+
+    const newDayEnd = newDayStart.add(1, "day"); // exclusive end for generation loop
+
+    const newDateLabel = newDayStart.format("YYYY-MM-DD");
+
+    // Generate slots for exactly that one day using the existing schedule helper
+    const generatedSlots = this._generateSlotsFromSchedule(
+      doctorId,
+      schedule,
+      newDayStart.toDate(),
+      newDayEnd.toDate(),
+    );
+
+    if (generatedSlots.length === 0) {
+      // Doctor has no working hours on this day of the week — that is fine
+      return { generated: 0, newDate: newDateLabel };
+    }
+
+    const result = await prisma.slot.createMany({
+      data: generatedSlots.map((slot) => ({
+        doctorId: slot.doctorId,
+        startTime: new Date(slot.startTime),
+        endTime: new Date(slot.endTime),
+        status: "AVAILABLE",
+      })),
+      skipDuplicates: true, // safe against re-runs on same night
+    });
+
+    return { generated: result.count, newDate: newDateLabel };
   }
 }
 

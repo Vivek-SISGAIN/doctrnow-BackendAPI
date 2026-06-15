@@ -294,4 +294,72 @@ router.post("/:id/lock", lockSlot);
  */
 router.post("/:id/unlock", unlockSlot);
 
+// Internal-only: trigger slot maintenance manually (for testing/ops)
+// Should be protected by internal service secret in production
+router.post("/internal/slot-maintenance/run", async (req, res, next) => {
+  try {
+    const slotService = require("../service/slot.service");
+    const prisma = require("../prisma/prisma");
+    const dayjs = require("dayjs");
+    const utc = require("dayjs/plugin/utc");
+    const timezone = require("dayjs/plugin/timezone");
+    dayjs.extend(utc);
+    dayjs.extend(timezone);
+
+    const UAE_TZ = "Asia/Dubai";
+
+    // Step 1: delete yesterday's unbooked slots
+    const deleteResult = await slotService.deleteYesterdayAvailableSlots();
+
+    // Step 2: fetch each active doctor from profile-service
+    let doctors = [];
+    try {
+      const axios = require("axios");
+      const gatewayUrl = process.env.BASE_URL;
+      if (!gatewayUrl) throw new Error("BASE_URL not configured");
+
+      const baseUrl = gatewayUrl.endsWith("/") ? gatewayUrl : `${gatewayUrl}/`;
+      const url = `${baseUrl}profiles/doctors?status=ACTIVE`;
+
+      const res = await axios.get(url, {
+        headers: {
+          ...(process.env.INTERNAL_SERVICE_SECRET
+            ? { "x-internal-service-key": process.env.INTERNAL_SERVICE_SECRET }
+            : {}),
+        },
+        timeout: 5000,
+      });
+
+      doctors = res.data?.data || [];
+    } catch (err) {
+      console.error(`[SlotMaintenanceRoute] Failed to fetch active doctors: ${err.message}`);
+      return res.status(502).json({
+        success: false,
+        message: "Failed to fetch active doctors from profile-service",
+        error: err.message,
+      });
+    }
+
+    const results = [];
+    for (const doctor of doctors) {
+      if (!doctor.schedule) continue;
+      const r = await slotService.extendSlotsByOneDay(doctor.id, doctor.schedule);
+      if (r.generated > 0 || r.newDate) {
+        results.push({ doctorId: doctor.id, ...r });
+      }
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        deleted: deleteResult.deleted,
+        deletedDate: deleteResult.date,
+        extensions: results,
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 module.exports = router;
