@@ -76,7 +76,8 @@ export class HttpProxyService {
     const doRequest = async () => client.request(axiosConfig);
 
     try {
-      const response = this.configService.get<boolean>('CIRCUIT_BREAKER_ENABLED', false)
+      const isCircuitBreakerEnabled = String(this.configService.get('CIRCUIT_BREAKER_ENABLED', 'false')) === 'true';
+      const response = isCircuitBreakerEnabled
         ? await this.circuitBreakerService.execute(serviceName, doRequest)
         : await doRequest();
 
@@ -158,4 +159,3 @@ export class HttpProxyService {
     return this.httpClients.get(serviceName)!;
   }
 }
-

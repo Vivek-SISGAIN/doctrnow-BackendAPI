@@ -39,7 +39,20 @@ export const connectRabbitMQ = async () => {
     const otpConfig = getOtpRabbitMQConfig();
 
     connection = await amqp.connect(rmqUrl);
+    connection.on("error", (err) => {
+      console.warn("[RabbitMQ] Connection error:", err.message);
+    });
+    connection.on("close", () => {
+      console.warn("[RabbitMQ] Connection closed.");
+    });
+
     channel = await connection.createChannel();
+    channel.on("error", (err) => {
+      console.warn("[RabbitMQ] Channel error:", err.message);
+    });
+    channel.on("close", () => {
+      console.warn("[RabbitMQ] Channel closed.");
+    });
 
     await channel.assertExchange(EXCHANGES.MAIN, "direct", { durable: true });
     await channel.assertExchange(EXCHANGES.RETRY, "direct", { durable: true });

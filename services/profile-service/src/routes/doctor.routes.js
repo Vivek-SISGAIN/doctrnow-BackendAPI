@@ -13,6 +13,7 @@ const {
   getDoctorsByBulkIds,
   getDocByHospitalId,
   assignDoctorToHospital,
+  removeDoctorFromHospital,
   updateDoctorProfileImage
 } = require('../controllers/doctor.controller');
 const { profileImageUpload } = require('../middleware/upload.middleware');
@@ -285,5 +286,6 @@ router.post('/check-exists', checkExists);
 router.get('/hospital/:hospitalId', getDocByHospitalId);
 
 router.patch('/:id/assign-hospital', assignDoctorToHospital);
+router.patch('/:id/remove-hospital', removeDoctorFromHospital);
 
 module.exports = router;

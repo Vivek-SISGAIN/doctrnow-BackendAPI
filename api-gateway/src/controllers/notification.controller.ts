@@ -302,13 +302,20 @@ export class NotificationController {
   }
 
   private handleError(res: Response, error: any, correlationId: string): void {
-    const status = error.status || HttpStatus.INTERNAL_SERVER_ERROR;
+    const status = error.response?.status || error.status || HttpStatus.INTERNAL_SERVER_ERROR;
+    const message =
+      error.response?.data?.error ||
+      error.response?.data?.message ||
+      error.message ||
+      'Internal server error';
+    const details = error.response?.data || error.data;
+
     res.status(status).json({
       error: {
         code: 'PROXY_ERROR',
-        message: error.message || 'Internal server error',
+        message,
         correlationId,
-        ...(error?.data && { details: error.data }),
+        ...(details && { details }),
       },
     });
   }

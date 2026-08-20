@@ -3,6 +3,7 @@ const router = express.Router();
 const {
   getAllAppointments,
   getAppointmentById,
+  getDoctorAppointmentStats,
   createAppointment,
   updateAppointment,
   cancelAppointment,
@@ -92,11 +93,8 @@ const validate = require("../middleware/validation");
 router.get("/", getAllAppointments);
 // router.get('/v123', getAllAppointmentsV1); // New version with improved filtering and pagination
 
-/** POST /api/appointments/mark-missed-no-shows - must be before /:id to avoid matching as id */
-router.post("/mark-missed-no-shows", markMissedAsNoShow);
-
-/** POST /api/appointments/mark-missed-no-shows - must be before /:id to avoid matching as id */
-router.post("/mark-missed-no-shows", markMissedAsNoShow);
+/** GET /api/appointments/stats/doctor/:doctorId */
+router.get("/stats/doctor/:doctorId", getDoctorAppointmentStats);
 
 /** POST /api/appointments/mark-missed-no-shows - must be before /:id to avoid matching as id */
 router.post("/mark-missed-no-shows", markMissedAsNoShow);

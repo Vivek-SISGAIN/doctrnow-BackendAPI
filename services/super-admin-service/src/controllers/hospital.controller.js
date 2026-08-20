@@ -1,31 +1,34 @@
 import hospitalService from "../services/hospital.service.js";
 import asyncHandler from "../utils/asyncHandler.js";
 
+const extractUserContext = (req) => ({
+  userId: req.headers["x-user-id"] || req.user?.id || req.user?.userId || "admin",
+  role: req.headers["x-user-role"] || req.user?.role || "SUPER_ADMIN",
+});
+
 class HospitalController {
-
   createHospital = asyncHandler(async (req, res) => {
-
-    const hospital = await hospitalService.createHospital(req.body);
+    const userContext = extractUserContext(req);
+    const hospital = await hospitalService.createHospital(req.body, userContext);
 
     res.status(201).json({
       success: true,
       message: "Hospital created successfully",
-      data: hospital
+      data: hospital,
     });
-
   });
 
   getHospitals = asyncHandler(async (req, res) => {
     const {
       search,
       location,
-      specialties,       // "Cardiology,Neurology" or repeated ?specialties[]=…
-      status,            // "ACTIVE,PENDING" or repeated ?status[]=…
+      specialties,
+      status,
       doctorMin,
       doctorMax,
       consultationMin,
       consultationMax,
-      page  = 1,
+      page = 1,
       limit = 20,
     } = req.query;
 
@@ -51,14 +54,12 @@ class HospitalController {
   });
 
   getHospitalById = asyncHandler(async (req, res) => {
-
     const hospital = await hospitalService.getHospitalById(req.params.id);
 
     res.status(200).json({
       success: true,
-      data: hospital
+      data: hospital,
     });
-
   });
 
   getHospitalsBulk = asyncHandler(async (req, res) => {
@@ -67,47 +68,161 @@ class HospitalController {
 
     res.status(200).json({
       success: true,
-      data: hospitalMap
+      data: hospitalMap,
     });
   });
 
   updateHospital = asyncHandler(async (req, res) => {
-
+    const userContext = extractUserContext(req);
     const hospital = await hospitalService.updateHospital(
       req.params.id,
-      req.body
+      req.body,
+      userContext,
     );
 
     res.status(200).json({
       success: true,
       message: "Hospital updated successfully",
-      data: hospital
+      data: hospital,
     });
-
   });
 
   deleteHospital = asyncHandler(async (req, res) => {
-
-    const result = await hospitalService.deleteHospital(req.params.id);
+    const userContext = extractUserContext(req);
+    const result = await hospitalService.deleteHospital(req.params.id, userContext);
 
     res.status(200).json({
       success: true,
-      ...result
+      ...result,
     });
-
   });
 
-  /**
-   * POST /hospital/:id/documents
-   * Accepts multipart/form-data with fields:
-   *   tradeLicenseDocument      (single file)
-   *   dhaLicenseDocument        (single file)
-   *   insuranceDocuments        (up to 5 files)
-   *   establishmentCard         (single file)
-   *   accreditationCertificates (up to 5 files)
-   */
-  uploadDocuments = asyncHandler(async (req, res) => {
+  // ─── Lifecycle Workflow Handlers ──────────────────────────────────────────
 
+  submitForApproval = asyncHandler(async (req, res) => {
+    const userContext = extractUserContext(req);
+    const { remarks } = req.body || {};
+    const hospital = await hospitalService.submitForApproval(req.params.id, {
+      userContext,
+      remarks,
+    });
+
+    res.status(200).json({
+      success: true,
+      message: "Hospital submitted for approval successfully",
+      data: hospital,
+    });
+  });
+
+  approveHospital = asyncHandler(async (req, res) => {
+    const userContext = extractUserContext(req);
+    const { remarks } = req.body || {};
+    const hospital = await hospitalService.approveHospital(req.params.id, {
+      userContext,
+      remarks,
+    });
+
+    res.status(200).json({
+      success: true,
+      message: "Hospital approved successfully",
+      data: hospital,
+    });
+  });
+
+  rejectHospital = asyncHandler(async (req, res) => {
+    const userContext = extractUserContext(req);
+    const { remarks } = req.body || {};
+    const hospital = await hospitalService.rejectHospital(req.params.id, {
+      userContext,
+      remarks,
+    });
+
+    res.status(200).json({
+      success: true,
+      message: "Hospital rejected successfully",
+      data: hospital,
+    });
+  });
+
+  sendBackHospital = asyncHandler(async (req, res) => {
+    const userContext = extractUserContext(req);
+    const { remarks } = req.body || {};
+    const hospital = await hospitalService.sendBackHospital(req.params.id, {
+      userContext,
+      remarks,
+    });
+
+    res.status(200).json({
+      success: true,
+      message: "Hospital sent back for correction successfully",
+      data: hospital,
+    });
+  });
+
+  resubmitHospital = asyncHandler(async (req, res) => {
+    const userContext = extractUserContext(req);
+    const { remarks } = req.body || {};
+    const hospital = await hospitalService.resubmitHospital(req.params.id, {
+      userContext,
+      remarks,
+    });
+
+    res.status(200).json({
+      success: true,
+      message: "Hospital resubmitted successfully",
+      data: hospital,
+    });
+  });
+
+  activateHospital = asyncHandler(async (req, res) => {
+    const userContext = extractUserContext(req);
+    const { remarks } = req.body || {};
+    const hospital = await hospitalService.activateHospital(req.params.id, {
+      userContext,
+      remarks,
+    });
+
+    res.status(200).json({
+      success: true,
+      message: "Hospital activated successfully",
+      data: hospital,
+    });
+  });
+
+  deactivateHospital = asyncHandler(async (req, res) => {
+    const userContext = extractUserContext(req);
+    const { remarks } = req.body || {};
+    const hospital = await hospitalService.deactivateHospital(req.params.id, {
+      userContext,
+      remarks,
+    });
+
+    res.status(200).json({
+      success: true,
+      message: "Hospital deactivated successfully",
+      data: hospital,
+    });
+  });
+
+  adminOverrideHospital = asyncHandler(async (req, res) => {
+    const userContext = extractUserContext(req);
+    const { remarks, ...payload } = req.body || {};
+    const hospital = await hospitalService.adminOverrideHospital(req.params.id, {
+      userContext,
+      remarks,
+      payload,
+    });
+
+    res.status(200).json({
+      success: true,
+      message: "Hospital admin override executed successfully",
+      data: hospital,
+    });
+  });
+
+  // ── Document & Branding Uploads ──────────────────────────────────────────
+
+  uploadDocuments = asyncHandler(async (req, res) => {
     if (!req.files || Object.keys(req.files).length === 0) {
       return res.status(400).json({
         success: false,
@@ -117,59 +232,43 @@ class HospitalController {
 
     const hospital = await hospitalService.uploadDocuments(
       req.params.id,
-      req.files
+      req.files,
     );
 
     res.status(200).json({
       success: true,
-      message: "Documents uploaded successfully",
+      message: "Documents uploaded and saved successfully.",
       data: hospital,
     });
-
   });
 
-  getHospitalIds = asyncHandler(async (req, res) => {
-    const { emirate, facility, distanceRange, lat, lng } = req.query;
-    const ids = await hospitalService.getHospitalIdsByFilters({
-      emirate,
-      facility,
-      distanceRange,
-      lat,
-      lng,
-    });
-
-    res.status(200).json({
-      success: true,
-      data: ids,
-    });
-  });
-
-  /**
-   * POST /hospital/:id/branding
-   * Accepts multipart/form-data with fields:
-   *   logo   (single image file – PNG preferred)
-   *   banner (single image file)
-   * Plus optional body text fields:
-   *   primaryColor   (hex e.g. "#1A73E8")
-   *   secondaryColor (hex e.g. "#FBBC04")
-   */
   uploadBranding = asyncHandler(async (req, res) => {
-    const { primaryColor, secondaryColor } = req.body || {};
+    const { id } = req.params;
+    const { primaryColor, secondaryColor } = req.body;
+    const files = req.files || {};
 
     const hospital = await hospitalService.uploadBranding(
-      req.params.id,
-      req.files || {},
+      id,
+      files,
       primaryColor,
       secondaryColor,
     );
 
     res.status(200).json({
       success: true,
-      message: "Branding updated successfully",
+      message: "Branding updated successfully.",
       data: hospital,
     });
   });
 
+  getHospitalIds = asyncHandler(async (req, res) => {
+    const hospitals = await hospitalService.getHospitalIds(req.query);
+
+    res.status(200).json({
+      success: true,
+      data: hospitals,
+    });
+  });
 }
 
 export default new HospitalController();

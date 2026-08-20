@@ -937,6 +937,145 @@ class AppointmentService {
       return updatedAppointment;
     });
   }
+
+  /**
+   * Compute comprehensive doctor appointment statistics
+   */
+  async getDoctorStats(doctorId, { now = new Date() } = {}) {
+    const todayStart = dayjs(now).startOf("day").toDate();
+    const todayEnd = dayjs(now).endOf("day").toDate();
+
+    const yesterdayStart = dayjs(now).subtract(1, "day").startOf("day").toDate();
+    const yesterdayEnd = dayjs(now).subtract(1, "day").endOf("day").toDate();
+
+    const thisMonthStart = dayjs(now).startOf("month").toDate();
+    const thisMonthEnd = dayjs(now).endOf("month").toDate();
+
+    // Fetch all doctor appointment records with status and slot time
+    const appointments = await prisma.appointment.findMany({
+      where: { doctorId },
+      select: {
+        id: true,
+        status: true,
+        slot: {
+          select: {
+            startTime: true,
+            endTime: true,
+          },
+        },
+      },
+    });
+
+    const stats = {
+      today: { total: 0, completed: 0, noShow: 0, cancelled: 0 },
+      yesterday: { total: 0, completed: 0, rate: 0 },
+      thisMonth: { total: 0, completed: 0 },
+      allTime: {
+        total: appointments.length,
+        completed: 0,
+        cancelled: 0,
+        noShow: 0,
+        completionRate: 0,
+        noShowRate: 0,
+        cancellationRate: 0,
+        avgDurationMinutes: 0,
+      },
+      trend: [],
+    };
+
+    // Initialize 6 monthly buckets for trend (oldest to newest)
+    const trendBuckets = [];
+    for (let i = 5; i >= 0; i--) {
+      const monthDate = dayjs(now).subtract(i, "month");
+      trendBuckets.push({
+        label: monthDate.format("MMM"),
+        yearMonth: monthDate.format("YYYY-MM"),
+        start: monthDate.startOf("month").toDate(),
+        end: monthDate.endOf("month").toDate(),
+        total: 0,
+        completed: 0,
+      });
+    }
+
+    let totalCompletedDurationMs = 0;
+    let completedWithDurationCount = 0;
+
+    for (const apt of appointments) {
+      const status = apt.status;
+      const startTime = apt.slot?.startTime ? new Date(apt.slot.startTime) : null;
+      const endTime = apt.slot?.endTime ? new Date(apt.slot.endTime) : null;
+
+      // All-time counts
+      if (status === "COMPLETED") {
+        stats.allTime.completed++;
+        if (startTime && endTime) {
+          const duration = endTime.getTime() - startTime.getTime();
+          if (duration > 0) {
+            totalCompletedDurationMs += duration;
+            completedWithDurationCount++;
+          }
+        }
+      } else if (status === "CANCELLED") {
+        stats.allTime.cancelled++;
+      } else if (status === "NO_SHOW") {
+        stats.allTime.noShow++;
+      }
+
+      if (startTime) {
+        // Today
+        if (startTime >= todayStart && startTime <= todayEnd) {
+          stats.today.total++;
+          if (status === "COMPLETED") stats.today.completed++;
+          else if (status === "NO_SHOW") stats.today.noShow++;
+          else if (status === "CANCELLED") stats.today.cancelled++;
+        }
+
+        // Yesterday
+        if (startTime >= yesterdayStart && startTime <= yesterdayEnd) {
+          stats.yesterday.total++;
+          if (status === "COMPLETED") stats.yesterday.completed++;
+        }
+
+        // This Month
+        if (startTime >= thisMonthStart && startTime <= thisMonthEnd) {
+          stats.thisMonth.total++;
+          if (status === "COMPLETED") stats.thisMonth.completed++;
+        }
+
+        // Trend buckets
+        for (const bucket of trendBuckets) {
+          if (startTime >= bucket.start && startTime <= bucket.end) {
+            bucket.total++;
+            if (status === "COMPLETED") bucket.completed++;
+            break;
+          }
+        }
+      }
+    }
+
+    // Rates & Averages
+    if (stats.allTime.total > 0) {
+      stats.allTime.completionRate = Math.round((stats.allTime.completed / stats.allTime.total) * 100);
+      stats.allTime.noShowRate = Math.round((stats.allTime.noShow / stats.allTime.total) * 100);
+      stats.allTime.cancellationRate = Math.round((stats.allTime.cancelled / stats.allTime.total) * 100);
+    }
+
+    if (stats.yesterday.total > 0) {
+      stats.yesterday.rate = Math.round((stats.yesterday.completed / stats.yesterday.total) * 100);
+    }
+
+    stats.allTime.avgDurationMinutes = completedWithDurationCount > 0
+      ? Math.round(totalCompletedDurationMs / (completedWithDurationCount * 60 * 1000))
+      : 15;
+
+    stats.trend = trendBuckets.map(({ label, total, completed }) => ({
+      label,
+      total,
+      completed,
+    }));
+
+    return stats;
+  }
 }
 
 module.exports = new AppointmentService();

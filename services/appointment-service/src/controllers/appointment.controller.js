@@ -1,6 +1,7 @@
 const appointmentService = require("../service/appointment.service");
 const ApiError = require("../utils/ApiError");
 const asyncHandler = require("../utils/asyncHandler");
+const { publishAuditEvent, extractActor } = require("../utils/auditPublisher");
 const axios = require("axios");
 
 const baseUrl = process.env.BASE_URL;
@@ -360,6 +361,30 @@ const getAppointmentById = asyncHandler(async (req, res) => {
 
 const createAppointment = asyncHandler(async (req, res) => {
   const appointment = await appointmentService.create(req.body);
+  const actor = extractActor(req);
+
+  publishAuditEvent({
+    hospitalId: appointment.hospitalId,
+    entityType: 'APPOINTMENT',
+    actionPerformed: 'Appointment Created',
+    actionType: 'DATA_CHANGE',
+    performedByUserId: actor.userId,
+    performedByRole: actor.userRole,
+    userId: actor.userId,
+    userRole: actor.userRole,
+    previousValue: null,
+    newValue: appointment,
+    remarks: `Appointment created for patient ${appointment.patientId}`,
+    path: `/appointments/${appointment.id}`,
+    method: 'POST',
+    metadata: {
+      appointmentId: appointment.id,
+      doctorId: appointment.doctorId,
+      patientId: appointment.patientId,
+      slotId: appointment.slotId,
+      type: appointment.type,
+    },
+  });
 
   res.status(201).json({
     success: true,
@@ -378,6 +403,28 @@ const updateAppointment = asyncHandler(async (req, res) => {
   }
 
   const updatedAppointment = await appointmentService.update(id, req.body);
+  const actor = extractActor(req);
+
+  publishAuditEvent({
+    hospitalId: appointment.hospitalId,
+    entityType: 'APPOINTMENT',
+    actionPerformed: 'Appointment Updated',
+    actionType: 'DATA_CHANGE',
+    performedByUserId: actor.userId,
+    performedByRole: actor.userRole,
+    userId: actor.userId,
+    userRole: actor.userRole,
+    previousValue: appointment,
+    newValue: updatedAppointment,
+    remarks: req.body?.remarks || `Appointment ${id} details updated`,
+    path: `/appointments/${id}`,
+    method: 'PATCH',
+    metadata: {
+      appointmentId: id,
+      doctorId: appointment.doctorId,
+      patientId: appointment.patientId,
+    },
+  });
 
   res.status(200).json({
     success: true,
@@ -398,6 +445,28 @@ const cancelAppointment = asyncHandler(async (req, res) => {
   }
 
   const cancelledAppointment = await appointmentService.cancel(id, reason, actorRole);
+  const actor = extractActor(req);
+
+  publishAuditEvent({
+    hospitalId: appointment.hospitalId,
+    entityType: 'APPOINTMENT',
+    actionPerformed: 'Appointment Cancelled',
+    actionType: 'WORKFLOW',
+    performedByUserId: actor.userId,
+    performedByRole: actorRole || actor.userRole,
+    userId: actor.userId,
+    userRole: actorRole || actor.userRole,
+    previousValue: { status: appointment.status },
+    newValue: { status: 'CANCELLED' },
+    statusChange: { from: appointment.status, to: 'CANCELLED' },
+    remarks: reason || `Appointment ${id} cancelled`,
+    path: `/appointments/${id}/cancel`,
+    method: 'PATCH',
+    metadata: {
+      appointmentId: id,
+      reason,
+    },
+  });
 
   res.status(200).json({
     success: true,
@@ -422,6 +491,29 @@ const rescheduleAppointment = asyncHandler(async (req, res) => {
     newSlotId,
     actorRole,
   );
+  const actor = extractActor(req);
+
+  publishAuditEvent({
+    hospitalId: appointment.hospitalId,
+    entityType: 'APPOINTMENT',
+    actionPerformed: 'Appointment Rescheduled',
+    actionType: 'WORKFLOW',
+    performedByUserId: actor.userId,
+    performedByRole: actorRole || actor.userRole,
+    userId: actor.userId,
+    userRole: actorRole || actor.userRole,
+    previousValue: { slotId: appointment.slotId },
+    newValue: { slotId: newSlotId },
+    statusChange: { from: appointment.status, to: rescheduledAppointment.status || appointment.status },
+    remarks: req.body?.reason || `Appointment ${id} rescheduled to new slot`,
+    path: `/appointments/${id}/reschedule`,
+    method: 'PATCH',
+    metadata: {
+      appointmentId: id,
+      oldSlotId: appointment.slotId,
+      newSlotId,
+    },
+  });
 
   res.status(200).json({
     success: true,
@@ -440,6 +532,25 @@ const confirmAppointment = asyncHandler(async (req, res) => {
   }
 
   const confirmedAppointment = await appointmentService.confirm(id);
+  const actor = extractActor(req);
+
+  publishAuditEvent({
+    hospitalId: appointment.hospitalId,
+    entityType: 'APPOINTMENT',
+    actionPerformed: 'Appointment Confirmed',
+    actionType: 'WORKFLOW',
+    performedByUserId: actor.userId,
+    performedByRole: actor.userRole,
+    userId: actor.userId,
+    userRole: actor.userRole,
+    previousValue: { status: appointment.status },
+    newValue: { status: 'CONFIRMED' },
+    statusChange: { from: appointment.status, to: 'CONFIRMED' },
+    remarks: `Appointment ${id} confirmed`,
+    path: `/appointments/${id}/confirm`,
+    method: 'PATCH',
+    metadata: { appointmentId: id },
+  });
 
   res.status(200).json({
     success: true,
@@ -458,6 +569,25 @@ const completeAppointment = asyncHandler(async (req, res) => {
   }
 
   const completedAppointment = await appointmentService.complete(id);
+  const actor = extractActor(req);
+
+  publishAuditEvent({
+    hospitalId: appointment.hospitalId,
+    entityType: 'APPOINTMENT',
+    actionPerformed: 'Appointment Completed',
+    actionType: 'WORKFLOW',
+    performedByUserId: actor.userId,
+    performedByRole: actor.userRole,
+    userId: actor.userId,
+    userRole: actor.userRole,
+    previousValue: { status: appointment.status },
+    newValue: { status: 'COMPLETED' },
+    statusChange: { from: appointment.status, to: 'COMPLETED' },
+    remarks: `Appointment ${id} marked completed`,
+    path: `/appointments/${id}/complete`,
+    method: 'PATCH',
+    metadata: { appointmentId: id },
+  });
 
   res.status(200).json({
     success: true,
@@ -486,6 +616,26 @@ const markNoShow = asyncHandler(async (req, res) => {
   }
 
   const updatedAppointment = await appointmentService.markNoShow(id);
+  const actor = extractActor(req);
+
+  publishAuditEvent({
+    hospitalId: appointment.hospitalId,
+    entityType: 'APPOINTMENT',
+    actionPerformed: 'Appointment Marked No-Show',
+    actionType: 'WORKFLOW',
+    performedByUserId: actor.userId,
+    performedByRole: actor.userRole,
+    userId: actor.userId,
+    userRole: actor.userRole,
+    previousValue: { status: appointment.status },
+    newValue: { status: 'NO_SHOW' },
+    statusChange: { from: appointment.status, to: 'NO_SHOW' },
+    remarks: `Appointment ${id} marked as no-show`,
+    path: `/appointments/${id}/no-show`,
+    method: 'PATCH',
+    metadata: { appointmentId: id },
+  });
+
   res.status(200).json({
     success: true,
     message: "Appointment marked as no-show",
@@ -668,9 +818,25 @@ const getPreviouslyConsultedDoctors = asyncHandler(async (req, res) => {
   });
 });
 
+const getDoctorAppointmentStats = asyncHandler(async (req, res) => {
+  const { doctorId } = req.params;
+
+  if (!doctorId) {
+    throw new ApiError(400, "Doctor ID is required");
+  }
+
+  const stats = await appointmentService.getDoctorStats(doctorId);
+
+  res.status(200).json({
+    success: true,
+    data: stats,
+  });
+});
+
 module.exports = {
   getAllAppointments,
   getAppointmentById,
+  getDoctorAppointmentStats,
   getPreviouslyConsultedDoctors,
   createAppointment,
   updateAppointment,

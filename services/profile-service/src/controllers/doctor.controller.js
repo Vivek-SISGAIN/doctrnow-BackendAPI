@@ -4,6 +4,7 @@ const specialtyService = require('../service/specialty.service');
 const ApiError = require('../utils/ApiError');
 const asyncHandler = require('../utils/asyncHandler');
 const { uploadToS3 } = require('../utils/s3Handler');
+const { publishAuditEvent, extractActor } = require('../utils/auditPublisher');
 
 const getAllDoctors = asyncHandler(async (req, res) => {
   const {
@@ -210,7 +211,42 @@ const updateDoctor = asyncHandler(async (req, res) => {
     }
   }
 
-  const updatedDoctor = await doctorService.update(id, req.body);
+  const { remarks, ...cleanUpdateData } = req.body;
+  const updatedDoctor = await doctorService.update(id, cleanUpdateData);
+  const actor = extractActor(req);
+
+  const statusChanged = req.body.status && req.body.status !== doctor.status;
+  const targetHospitalId =
+    (doctor.assignedHospitalIds && doctor.assignedHospitalIds[0]) ||
+    doctor.hospitalId ||
+    req.body.hospitalId ||
+    null;
+
+  publishAuditEvent({
+    hospitalId: targetHospitalId,
+    entityType: 'DOCTOR',
+    actionPerformed: statusChanged ? 'Doctor Status Changed' : 'Doctor Profile Updated',
+    actionType: statusChanged ? 'WORKFLOW' : 'DATA_CHANGE',
+    performedByUserId: actor.userId,
+    performedByRole: actor.userRole,
+    userId: actor.userId,
+    userRole: actor.userRole,
+    previousValue: statusChanged ? { status: doctor.status } : doctor,
+    newValue: statusChanged ? { status: updatedDoctor.status } : updatedDoctor,
+    statusChange: statusChanged ? { from: doctor.status || null, to: updatedDoctor.status } : null,
+    remarks:
+      remarks ||
+      (statusChanged
+        ? `Doctor status changed from ${doctor.status || 'UNSET'} to ${updatedDoctor.status}`
+        : `Doctor ${doctor.fullName || id} profile updated`),
+    path: `/profiles/doctors/${id}`,
+    method: 'PATCH',
+    metadata: {
+      doctorId: id,
+      doctorName: doctor.fullName,
+      email: doctor.email,
+    },
+  });
 
   res.status(200).json({
     success: true,
@@ -229,6 +265,33 @@ const deleteDoctor = asyncHandler(async (req, res) => {
   }
 
   await doctorService.delete(id);
+  const actor = extractActor(req);
+
+  const targetHospitalId =
+    (doctor.assignedHospitalIds && doctor.assignedHospitalIds[0]) ||
+    doctor.hospitalId ||
+    null;
+
+  publishAuditEvent({
+    hospitalId: targetHospitalId,
+    entityType: 'DOCTOR',
+    actionPerformed: 'Doctor Deleted',
+    actionType: 'WORKFLOW',
+    performedByUserId: actor.userId,
+    performedByRole: actor.userRole,
+    userId: actor.userId,
+    userRole: actor.userRole,
+    previousValue: doctor,
+    newValue: null,
+    statusChange: { from: doctor.status || null, to: 'DELETED' },
+    remarks: req.body?.remarks || `Doctor ${doctor.fullName || id} deleted`,
+    path: `/profiles/doctors/${id}`,
+    method: 'DELETE',
+    metadata: {
+      doctorId: id,
+      doctorName: doctor.fullName,
+    },
+  });
 
   res.status(200).json({
     success: true,
@@ -265,7 +328,7 @@ const getAvailability = asyncHandler(async (req, res) => {
 
 const setAvailability = asyncHandler(async (req, res) => {
   const { id } = req.params;
-  const { status } = req.body;
+  const { status, remarks } = req.body;
   const valid = ['ONLINE', 'OFFLINE', 'BUSY'];
   if (!status || !valid.includes(status)) {
     throw ApiError.badRequest('status must be one of: ONLINE, OFFLINE, BUSY');
@@ -274,6 +337,32 @@ const setAvailability = asyncHandler(async (req, res) => {
   if (!doctor) {
     throw ApiError.notFound('Doctor not found');
   }
+  const actor = extractActor(req);
+
+  publishAuditEvent({
+    hospitalId:
+      (doctor.assignedHospitalIds && doctor.assignedHospitalIds[0]) ||
+      doctor.hospitalId ||
+      null,
+    entityType: 'DOCTOR',
+    actionPerformed: 'Doctor Availability Changed',
+    actionType: 'WORKFLOW',
+    performedByUserId: actor.userId,
+    performedByRole: actor.userRole,
+    userId: actor.userId,
+    userRole: actor.userRole,
+    previousValue: { availabilityStatus: doctor.availabilityStatus },
+    newValue: { availabilityStatus: status },
+    statusChange: { from: doctor.availabilityStatus || null, to: status },
+    remarks: remarks || `Doctor availability set to ${status}`,
+    path: `/profiles/doctors/${id}/availability`,
+    method: 'PATCH',
+    metadata: {
+      doctorId: id,
+      doctorName: doctor.fullName,
+    },
+  });
+
   res.status(200).json({
     success: true,
     data: { status: doctor.availabilityStatus }
@@ -359,6 +448,34 @@ const createDoctor = asyncHandler(async (req, res) => {
     platformSharePercent
   });
 
+  const actor = extractActor(req);
+  const targetHospitalId =
+    (doctor.assignedHospitalIds && doctor.assignedHospitalIds[0]) ||
+    doctor.hospitalId ||
+    hospitalId ||
+    null;
+
+  publishAuditEvent({
+    hospitalId: targetHospitalId,
+    entityType: 'DOCTOR',
+    actionPerformed: 'Doctor Created',
+    actionType: 'WORKFLOW',
+    performedByUserId: actor.userId,
+    performedByRole: actor.userRole,
+    userId: actor.userId,
+    userRole: actor.userRole,
+    previousValue: null,
+    newValue: doctor,
+    statusChange: { from: null, to: doctor.status || 'ACTIVE' },
+    remarks: `Doctor ${doctor.fullName || doctor.id} profile created`,
+    path: `/profiles/doctors`,
+    method: 'POST',
+    metadata: {
+      doctorId: doctor.id,
+      doctorName: doctor.fullName,
+    },
+  });
+
   res.status(201).json({
     success: true,
     message: 'Doctor created successfully',
@@ -428,15 +545,79 @@ const assignDoctorToHospital = asyncHandler(async (req, res) => {
     where: { id },
     data: {
       assignedHospitalIds: {
-        push: hospitalId
-      }
-    }
+        push: hospitalId,
+      },
+    },
+  });
+
+  const actor = extractActor(req);
+
+  publishAuditEvent({
+    hospitalId,
+    entityType: 'DOCTOR',
+    actionPerformed: 'Doctor Assigned',
+    actionType: 'DATA_CHANGE',
+    performedByUserId: actor.userId,
+    performedByRole: actor.userRole,
+    previousValue: null,
+    newValue: { doctorId: id, doctorName: doctor.fullName },
+    remarks: `Doctor ${doctor.fullName || id} assigned to hospital`,
+    path: `/profiles/doctors/${id}/assign-hospital`,
+    method: 'PATCH',
   });
 
   res.status(200).json({
     success: true,
     message: 'Doctor assigned to hospital successfully',
-    data: updatedDoctor
+    data: updatedDoctor,
+  });
+});
+
+const removeDoctorFromHospital = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const { hospitalId } = req.body;
+
+  if (!hospitalId) {
+    throw ApiError.badRequest('hospitalId is required');
+  }
+
+  const doctor = await doctorService.findById(id);
+  if (!doctor) {
+    throw ApiError.notFound('Doctor not found');
+  }
+
+  const currentAssigned = doctor.assignedHospitalIds || [];
+  const updatedAssigned = currentAssigned.filter((hId) => hId !== hospitalId);
+
+  const updatedDoctor = await prisma.doctor.update({
+    where: { id },
+    data: {
+      assignedHospitalIds: {
+        set: updatedAssigned,
+      },
+    },
+  });
+
+  const actor = extractActor(req);
+
+  publishAuditEvent({
+    hospitalId,
+    entityType: 'DOCTOR',
+    actionPerformed: 'Doctor Removed',
+    actionType: 'DATA_CHANGE',
+    performedByUserId: actor.userId,
+    performedByRole: actor.userRole,
+    previousValue: { doctorId: id, doctorName: doctor.fullName },
+    newValue: null,
+    remarks: `Doctor ${doctor.fullName || id} removed from hospital`,
+    path: `/profiles/doctors/${id}/remove-hospital`,
+    method: 'PATCH',
+  });
+
+  res.status(200).json({
+    success: true,
+    message: 'Doctor removed from hospital successfully',
+    data: updatedDoctor,
   });
 });
 
@@ -459,7 +640,7 @@ const updateDoctorProfileImage = asyncHandler(async (req, res) => {
     res.status(200).json({
       success: true,
       message: 'Profile image updated successfully',
-      data: updatedDoctor
+      data: updatedDoctor,
     });
   } catch (error) {
     console.error('[DoctorController] updateDoctorProfileImage error:', error.message);
@@ -480,5 +661,6 @@ module.exports = {
   getDoctorsByBulkIds,
   getDocByHospitalId,
   assignDoctorToHospital,
-  updateDoctorProfileImage
+  removeDoctorFromHospital,
+  updateDoctorProfileImage,
 };

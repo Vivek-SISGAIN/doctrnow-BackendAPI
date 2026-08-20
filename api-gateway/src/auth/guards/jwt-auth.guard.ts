@@ -20,6 +20,7 @@ interface JwtPayload {
   userId?: string;
   role?: string;
   tenantId?: string;
+  hospitalId?: string;
   exp?: number;
   iat?: number;
 }
@@ -29,6 +30,7 @@ interface NormalizedUser {
   sub: string;
   role: string;
   tenantId: string | null;
+  hospitalId: string | null;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -69,14 +71,17 @@ function extractBearerToken(authHeader: unknown): string | null {
  * Returns null if a userId cannot be derived.
  */
 function buildUserFromPayload(payload: JwtPayload): NormalizedUser | null {
-  const userId = payload.userId ?? payload.sub;
+  const userId = payload.userId ?? payload.sub ?? (payload as any).id;
   if (!userId) return null;
+
+  const hospitalId = payload.hospitalId ?? payload.tenantId ?? null;
 
   return {
     userId,
     sub: userId,
     role: payload.role ?? 'USER',
     tenantId: payload.tenantId ?? null,
+    hospitalId,
   };
 }
 
@@ -93,6 +98,8 @@ const ALWAYS_PUBLIC_PATHS: { method: string; pattern: RegExp }[] = [
   { method: 'GET', pattern: /profiles\/specialties/ },
   // GET /profiles/doctors       — list doctors (NOT a single doctor detail)
   { method: 'GET', pattern: /profiles\/doctors(?!\/[^/]+$)/ },
+  // POST /audit/events/internal — internal microservice audit event ingestion (secured by x-internal-service-key)
+  { method: 'POST', pattern: /audit\/events\/internal/ },
 ];
 
 /**

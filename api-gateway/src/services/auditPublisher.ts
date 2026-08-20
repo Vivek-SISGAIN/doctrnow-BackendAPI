@@ -1,4 +1,5 @@
-import { AuditLog, AuditEvent } from '../models/AuditLog';
+import { AuditLog, AuditEvent, AuditLogDocument } from '../models/AuditLog';
+import { v4 as uuidv4 } from 'uuid';
 
 const redactSensitiveData = (body: any): any => {
   if (!body) return body;
@@ -50,5 +51,39 @@ export const auditPublisher = async (event: Omit<AuditEvent, 'service'> & { serv
   } catch (error) {
     // Never throw error in auditPublisher
     console.error('Error constructing or saving audit log:', error);
+  }
+};
+
+export const publishBusinessAuditEvent = async (event: Partial<AuditEvent>): Promise<AuditLogDocument | null> => {
+  try {
+    const auditEvent = new AuditLog({
+      eventId: event.eventId || uuidv4(),
+      timestamp: event.timestamp || new Date().toISOString(),
+      service: event.service || 'super-admin-service',
+      action: event.actionPerformed || event.action || 'BUSINESS_EVENT',
+      actionPerformed: event.actionPerformed,
+      actionType: event.actionType || 'WORKFLOW',
+      hospitalId: event.hospitalId,
+      entityType: event.entityType,
+      performedByUserId: event.performedByUserId || event.userId,
+      performedByRole: event.performedByRole || event.userRole,
+      userId: event.userId || event.performedByUserId,
+      userRole: event.userRole || event.performedByRole,
+      previousValue: event.previousValue ? redactSensitiveData(event.previousValue) : null,
+      newValue: event.newValue ? redactSensitiveData(event.newValue) : null,
+      statusChange: event.statusChange || null,
+      remarks: event.remarks || null,
+      ipAddress: event.ipAddress || 'internal',
+      path: event.path || `/hospital/${event.hospitalId || 'audit'}`,
+      method: event.method || 'POST',
+      fullUrl: event.fullUrl || '',
+      statusCode: event.statusCode || 200,
+      metadata: event.metadata || {},
+    });
+
+    return await auditEvent.save();
+  } catch (error) {
+    console.error('Error saving business audit log:', error);
+    return null;
   }
 };

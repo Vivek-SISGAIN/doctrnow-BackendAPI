@@ -14,6 +14,16 @@ router.get("/hospital/:id", hospitalController.getHospitalById);
 router.patch("/hospital/:id", hospitalController.updateHospital);
 router.delete("/hospital/:id", hospitalController.deleteHospital);
 
+// ── Lifecycle Workflow Routes ───────────────────────────────────────────────
+router.post("/hospital/:id/submit-for-approval", hospitalController.submitForApproval);
+router.post("/hospital/:id/approve", hospitalController.approveHospital);
+router.post("/hospital/:id/reject", hospitalController.rejectHospital);
+router.post("/hospital/:id/send-back", hospitalController.sendBackHospital);
+router.post("/hospital/:id/resubmit", hospitalController.resubmitHospital);
+router.post("/hospital/:id/activate", hospitalController.activateHospital);
+router.post("/hospital/:id/deactivate", hospitalController.deactivateHospital);
+router.post("/hospital/:id/override", hospitalController.adminOverrideHospital);
+
 // ── Document Upload ──────────────────────────────────────────────────────────
 // POST /hospital/:id/documents
 // Content-Type: multipart/form-data

@@ -3,6 +3,7 @@ const doctorService = require('../service/doctor.service');
 const familyMemberService = require('../service/familyMember.service');
 const ApiError = require('../utils/ApiError');
 const asyncHandler = require('../utils/asyncHandler');
+const { publishAuditEvent, extractActor } = require('../utils/auditPublisher');
 const axios = require('axios');
 
 const getAllPatients = asyncHandler(async (req, res) => {
@@ -196,6 +197,30 @@ const createCurrentPatient = asyncHandler(async (req, res) => {
   }
 
   const patient = await patientService.createForUser(userId, req.body);
+  const actor = extractActor(req);
+  const hospitalId = actor.hospitalId || req.headers['x-hospital-id'] || req.body.hospitalId || null;
+
+  publishAuditEvent({
+    hospitalId,
+    entityType: 'PATIENT',
+    actionPerformed: 'Patient Created',
+    actionType: 'DATA_CHANGE',
+    performedByUserId: actor.userId,
+    performedByRole: actor.userRole,
+    userId: actor.userId,
+    userRole: actor.userRole,
+    previousValue: null,
+    newValue: patient,
+    remarks: `Patient ${patient.firstName || ''} ${patient.lastName || ''}`.trim() + ' profile created',
+    path: `/profiles/patients/${patient.id}`,
+    method: 'POST',
+    metadata: {
+      patientId: patient.id,
+      patientName: `${patient.firstName || ''} ${patient.lastName || ''}`.trim(),
+      email: patient.email,
+    },
+  });
+
   res.status(201).json({
     success: true,
     message: 'Patient profile created successfully',
@@ -239,7 +264,31 @@ const updatePatient = asyncHandler(async (req, res) => {
     }
   }
 
-  const updatedPatient = await patientService.update(id, req.body);
+  const { remarks, ...cleanUpdateData } = req.body;
+  const updatedPatient = await patientService.update(id, cleanUpdateData);
+  const actor = extractActor(req);
+  const hospitalId = actor.hospitalId || req.headers['x-hospital-id'] || req.body.hospitalId || null;
+
+  publishAuditEvent({
+    hospitalId,
+    entityType: 'PATIENT',
+    actionPerformed: 'Patient Profile Updated',
+    actionType: 'DATA_CHANGE',
+    performedByUserId: actor.userId,
+    performedByRole: actor.userRole,
+    userId: actor.userId,
+    userRole: actor.userRole,
+    previousValue: patient,
+    newValue: updatedPatient,
+    remarks: remarks || `Patient ${patient.firstName || ''} ${patient.lastName || ''}`.trim() + ' profile updated',
+    path: `/profiles/patients/${id}`,
+    method: 'PATCH',
+    metadata: {
+      patientId: id,
+      patientName: `${patient.firstName || ''} ${patient.lastName || ''}`.trim(),
+      email: patient.email,
+    },
+  });
 
   res.status(200).json({
     success: true,
@@ -258,6 +307,29 @@ const deletePatient = asyncHandler(async (req, res) => {
   }
 
   await patientService.delete(id);
+  const actor = extractActor(req);
+  const hospitalId = actor.hospitalId || req.headers['x-hospital-id'] || null;
+
+  publishAuditEvent({
+    hospitalId,
+    entityType: 'PATIENT',
+    actionPerformed: 'Patient Deleted',
+    actionType: 'WORKFLOW',
+    performedByUserId: actor.userId,
+    performedByRole: actor.userRole,
+    userId: actor.userId,
+    userRole: actor.userRole,
+    previousValue: patient,
+    newValue: null,
+    statusChange: patient.status ? { from: patient.status, to: 'DELETED' } : null,
+    remarks: req.body?.remarks || `Patient ${patient.firstName || ''} ${patient.lastName || ''}`.trim() + ' deleted',
+    path: `/profiles/patients/${id}`,
+    method: 'DELETE',
+    metadata: {
+      patientId: id,
+      patientName: `${patient.firstName || ''} ${patient.lastName || ''}`.trim(),
+    },
+  });
 
   res.status(200).json({
     success: true,
@@ -317,6 +389,29 @@ const updatePatientStatus = asyncHandler(async (req, res) => {
   });
 
   const updatedPatient = await patientService.update(id, { status });
+  const actor = extractActor(req);
+  const hospitalId = actor.hospitalId || req.headers['x-hospital-id'] || req.body.hospitalId || null;
+
+  publishAuditEvent({
+    hospitalId,
+    entityType: 'PATIENT',
+    actionPerformed: 'Patient Status Changed',
+    actionType: 'WORKFLOW',
+    performedByUserId: actor.userId,
+    performedByRole: actor.userRole,
+    userId: actor.userId,
+    userRole: actor.userRole,
+    previousValue: { status: patient.status },
+    newValue: { status: updatedPatient.status },
+    statusChange: { from: patient.status || null, to: status },
+    remarks: `Patient status updated from ${patient.status || 'UNSET'} to ${status}`,
+    path: `/profiles/patients/${id}/status`,
+    method: 'PATCH',
+    metadata: {
+      patientId: id,
+      patientName: `${patient.firstName || ''} ${patient.lastName || ''}`.trim(),
+    },
+  });
 
   res.status(200).json({
     success: true,

@@ -1,9 +1,10 @@
 import prisma from "../prisma/client.js";
 import axios from "axios";
 import s3Handler from "../utils/s3Handler.js";
+import { publishAuditEvent, computeDiff } from "../utils/auditPublisher.js";
 
 class HospitalService {
-  async createHospital(data) {
+  async createHospital(data, userContext = {}) {
     const parentHospitalId = data.parentHospitalId || null;
 
     const hospital = await prisma.$transaction(async (tx) => {
@@ -32,6 +33,7 @@ class HospitalService {
           operations: data.operations,
           servicesOffered: data.servicesOffered || [],
           specializationsAvailable: data.specializationsAvailable || [],
+          status: data.status || "PENDING",
         },
         include: {
           finance: true,
@@ -48,6 +50,21 @@ class HospitalService {
       }
 
       return created;
+    });
+
+    // Publish Audit Event for Hospital Creation
+    publishAuditEvent({
+      hospitalId: hospital.id,
+      actionPerformed: "Create",
+      actionType: "WORKFLOW",
+      performedByUserId: userContext.userId || "admin",
+      performedByRole: userContext.role || "SUPER_ADMIN",
+      previousValue: null,
+      newValue: hospital,
+      statusChange: { from: null, to: hospital.status || "PENDING" },
+      remarks: data.remarks || "Hospital created",
+      path: `/hospital/${hospital.id}`,
+      method: "POST",
     });
 
     return hospital;
@@ -71,7 +88,7 @@ class HospitalService {
 
     const hospitals = await prisma.hospital.findMany({
       where: {
-        id: { in: ids }
+        id: { in: ids },
       },
       select: {
         id: true,
@@ -80,43 +97,308 @@ class HospitalService {
         hospitalType: true,
         emirate: true,
         area: true,
-        fullAddress: true
-      }
+        fullAddress: true,
+      },
     });
 
     const map = {};
-    hospitals.forEach(h => {
+    hospitals.forEach((h) => {
       map[h.id] = h;
     });
     return map;
   }
 
-  async updateHospital(id, data) {
+  async updateHospital(id, data, userContext = {}) {
+    const previous = await prisma.hospital.findUnique({
+      where: { id },
+      include: { finance: true },
+    });
+
+    if (!previous) {
+      throw new Error("Hospital not found");
+    }
+
+    const { remarks, ...updateData } = data;
+
     const hospital = await prisma.hospital.update({
       where: { id },
-      data,
+      data: updateData,
       include: {
         finance: true,
       },
     });
 
+    const diffResult = computeDiff(previous, hospital);
+
+    publishAuditEvent({
+      hospitalId: id,
+      actionPerformed: "Edit",
+      actionType: "DATA_CHANGE",
+      performedByUserId: userContext.userId || "admin",
+      performedByRole: userContext.role || "SUPER_ADMIN",
+      previousValue: diffResult.previousValue,
+      newValue: diffResult.newValue,
+      statusChange: diffResult.statusChange,
+      remarks: remarks || "Hospital details updated",
+      path: `/hospital/${id}`,
+      method: "PATCH",
+    });
+
     return hospital;
   }
 
-  async deleteHospital(id) {
+  async deleteHospital(id, userContext = {}) {
+    const previous = await prisma.hospital.findUnique({
+      where: { id },
+    });
+
+    if (!previous) {
+      throw new Error("Hospital not found");
+    }
+
     await prisma.hospital.delete({
       where: { id },
+    });
+
+    publishAuditEvent({
+      hospitalId: id,
+      actionPerformed: "Delete",
+      actionType: "WORKFLOW",
+      performedByUserId: userContext.userId || "admin",
+      performedByRole: userContext.role || "SUPER_ADMIN",
+      previousValue: previous,
+      newValue: null,
+      statusChange: { from: previous.status || null, to: "DELETED" },
+      remarks: userContext.remarks || "Hospital deleted",
+      path: `/hospital/${id}`,
+      method: "DELETE",
     });
 
     return { message: "Hospital deleted successfully" };
   }
 
+  // ─── Lifecycle Workflow Methods ──────────────────────────────────────────
+
+  async submitForApproval(id, { userContext = {}, remarks = null } = {}) {
+    const previous = await this.getHospitalById(id);
+    const updated = await prisma.hospital.update({
+      where: { id },
+      data: { status: "UNDER_REVIEW" },
+    });
+
+    publishAuditEvent({
+      hospitalId: id,
+      actionPerformed: "Submit for Approval",
+      actionType: "WORKFLOW",
+      performedByUserId: userContext.userId || "admin",
+      performedByRole: userContext.role || "HOSPITAL_ADMIN",
+      previousValue: { status: previous.status },
+      newValue: { status: "UNDER_REVIEW" },
+      statusChange: { from: previous.status, to: "UNDER_REVIEW" },
+      remarks: remarks || "Submitted for compliance review and approval",
+      path: `/hospital/${id}/submit-for-approval`,
+      method: "POST",
+    });
+
+    return updated;
+  }
+
+  async approveHospital(id, { userContext = {}, remarks = null } = {}) {
+    const previous = await this.getHospitalById(id);
+    const updated = await prisma.hospital.update({
+      where: { id },
+      data: { status: "APPROVED" },
+    });
+
+    publishAuditEvent({
+      hospitalId: id,
+      actionPerformed: "Approve",
+      actionType: "WORKFLOW",
+      performedByUserId: userContext.userId || "admin",
+      performedByRole: userContext.role || "SUPER_ADMIN",
+      previousValue: { status: previous.status },
+      newValue: { status: "APPROVED" },
+      statusChange: { from: previous.status, to: "APPROVED" },
+      remarks: remarks || "Hospital application approved",
+      path: `/hospital/${id}/approve`,
+      method: "POST",
+    });
+
+    return updated;
+  }
+
+  async rejectHospital(id, { userContext = {}, remarks } = {}) {
+    if (!remarks || !remarks.trim()) {
+      const err = new Error("Remarks are required for rejecting a hospital");
+      err.statusCode = 400;
+      throw err;
+    }
+
+    const previous = await this.getHospitalById(id);
+    const updated = await prisma.hospital.update({
+      where: { id },
+      data: { status: "REJECTED" },
+    });
+
+    publishAuditEvent({
+      hospitalId: id,
+      actionPerformed: "Reject",
+      actionType: "WORKFLOW",
+      performedByUserId: userContext.userId || "admin",
+      performedByRole: userContext.role || "SUPER_ADMIN",
+      previousValue: { status: previous.status },
+      newValue: { status: "REJECTED" },
+      statusChange: { from: previous.status, to: "REJECTED" },
+      remarks,
+      path: `/hospital/${id}/reject`,
+      method: "POST",
+    });
+
+    return updated;
+  }
+
+  async sendBackHospital(id, { userContext = {}, remarks } = {}) {
+    if (!remarks || !remarks.trim()) {
+      const err = new Error("Remarks are required for sending back for correction");
+      err.statusCode = 400;
+      throw err;
+    }
+
+    const previous = await this.getHospitalById(id);
+    const updated = await prisma.hospital.update({
+      where: { id },
+      data: { status: "SENT_BACK" },
+    });
+
+    publishAuditEvent({
+      hospitalId: id,
+      actionPerformed: "Send Back",
+      actionType: "WORKFLOW",
+      performedByUserId: userContext.userId || "admin",
+      performedByRole: userContext.role || "SUPER_ADMIN",
+      previousValue: { status: previous.status },
+      newValue: { status: "SENT_BACK" },
+      statusChange: { from: previous.status, to: "SENT_BACK" },
+      remarks,
+      path: `/hospital/${id}/send-back`,
+      method: "POST",
+    });
+
+    return updated;
+  }
+
+  async resubmitHospital(id, { userContext = {}, remarks = null } = {}) {
+    const previous = await this.getHospitalById(id);
+    const updated = await prisma.hospital.update({
+      where: { id },
+      data: { status: "PENDING" },
+    });
+
+    publishAuditEvent({
+      hospitalId: id,
+      actionPerformed: "Resubmit",
+      actionType: "WORKFLOW",
+      performedByUserId: userContext.userId || "admin",
+      performedByRole: userContext.role || "HOSPITAL_ADMIN",
+      previousValue: { status: previous.status },
+      newValue: { status: "PENDING" },
+      statusChange: { from: previous.status, to: "PENDING" },
+      remarks: remarks || "Resubmitted with updated corrections",
+      path: `/hospital/${id}/resubmit`,
+      method: "POST",
+    });
+
+    return updated;
+  }
+
+  async activateHospital(id, { userContext = {}, remarks = null } = {}) {
+    const previous = await this.getHospitalById(id);
+    const updated = await prisma.hospital.update({
+      where: { id },
+      data: { status: "ACTIVE" },
+    });
+
+    publishAuditEvent({
+      hospitalId: id,
+      actionPerformed: "Activate",
+      actionType: "WORKFLOW",
+      performedByUserId: userContext.userId || "admin",
+      performedByRole: userContext.role || "SUPER_ADMIN",
+      previousValue: { status: previous.status },
+      newValue: { status: "ACTIVE" },
+      statusChange: { from: previous.status, to: "ACTIVE" },
+      remarks: remarks || "Hospital activated",
+      path: `/hospital/${id}/activate`,
+      method: "POST",
+    });
+
+    return updated;
+  }
+
+  async deactivateHospital(id, { userContext = {}, remarks = null } = {}) {
+    const previous = await this.getHospitalById(id);
+    const updated = await prisma.hospital.update({
+      where: { id },
+      data: { status: "INACTIVE" },
+    });
+
+    publishAuditEvent({
+      hospitalId: id,
+      actionPerformed: "Deactivate",
+      actionType: "WORKFLOW",
+      performedByUserId: userContext.userId || "admin",
+      performedByRole: userContext.role || "SUPER_ADMIN",
+      previousValue: { status: previous.status },
+      newValue: { status: "INACTIVE" },
+      statusChange: { from: previous.status, to: "INACTIVE" },
+      remarks: remarks || "Hospital deactivated",
+      path: `/hospital/${id}/deactivate`,
+      method: "POST",
+    });
+
+    return updated;
+  }
+
+  async adminOverrideHospital(id, { userContext = {}, remarks, payload = {} } = {}) {
+    if (!remarks || !remarks.trim()) {
+      const err = new Error("Remarks are required for admin override justification");
+      err.statusCode = 400;
+      throw err;
+    }
+
+    const previous = await this.getHospitalById(id);
+    const updated = await prisma.hospital.update({
+      where: { id },
+      data: payload,
+    });
+
+    const diffResult = computeDiff(previous, updated);
+
+    publishAuditEvent({
+      hospitalId: id,
+      actionPerformed: "Admin Override",
+      actionType: "SYSTEM",
+      performedByUserId: userContext.userId || "admin",
+      performedByRole: userContext.role || "SUPER_ADMIN",
+      previousValue: diffResult.previousValue || previous,
+      newValue: diffResult.newValue || updated,
+      statusChange: diffResult.statusChange,
+      remarks,
+      path: `/hospital/${id}/override`,
+      method: "POST",
+    });
+
+    return updated;
+  }
+
+  // ─── Query & Documents Methods ───────────────────────────────────────────
+
   async getHospitals(filters = {}, pagination = {}) {
     const {
       search,
       location,
-      specialties, // comma-separated string or array
-      status, // comma-separated string or array
+      specialties,
+      status,
       doctorMin,
       doctorMax,
       consultationMin,
@@ -126,10 +408,8 @@ class HospitalService {
     const { page = 1, limit = 20 } = pagination;
     const skip = (page - 1) * limit;
 
-    // ── Build Prisma where clause ───────────────────────────────────────────
     const where = {};
 
-    // Hospital name – partial / full match
     if (search) {
       where.OR = [
         { officialName: { contains: search, mode: "insensitive" } },
@@ -138,7 +418,6 @@ class HospitalService {
       ];
     }
 
-    // Location – matches emirate, area, fullAddress, or branchId
     if (location) {
       const locConditions = [
         { emirate: { contains: location, mode: "insensitive" } },
@@ -146,9 +425,7 @@ class HospitalService {
         { fullAddress: { contains: location, mode: "insensitive" } },
         { branchId: { contains: location, mode: "insensitive" } },
       ];
-      // Merge with existing OR or create a new AND block
       if (where.OR) {
-        // Wrap into AND: (name matches) AND (location matches)
         where.AND = [{ OR: where.OR }, { OR: locConditions }];
         delete where.OR;
       } else {
@@ -156,20 +433,16 @@ class HospitalService {
       }
     }
 
-    // Specialties – multi-select (array or comma-separated
     const specialtyList = parseList(specialties);
     if (specialtyList.length > 0) {
       where.specializationsAvailable = { hasSome: specialtyList };
     }
 
-    // Status – multi-select
     const statusList = parseList(status);
     if (statusList.length > 0) {
-      // Map to uppercase to match typical enum storage
-      where.state = { in: statusList.map((s) => s.toUpperCase()) };
+      where.status = { in: statusList.map((s) => s.toUpperCase()) };
     }
 
-    // ── Query DB ────────────────────────────────────────────────────────────
     const [hospitals, total] = await Promise.all([
       prisma.hospital.findMany({
         where,
@@ -181,7 +454,6 @@ class HospitalService {
       prisma.hospital.count({ where }),
     ]);
 
-    // ── Enrich with external counts ─────────────────────────────────────────
     const enriched = await Promise.all(
       hospitals.map(async (hospital) => {
         const [totalConsultations, doctors] = await Promise.all([
@@ -192,7 +464,6 @@ class HospitalService {
       }),
     );
 
-    // ── Post-enrichment filter: doctor / consultation count ranges ──────────
     const dMin = doctorMin !== undefined ? parseInt(doctorMin, 10) : null;
     const dMax = doctorMax !== undefined ? parseInt(doctorMax, 10) : null;
     const cMin =
@@ -211,7 +482,7 @@ class HospitalService {
     return {
       hospitals: filtered,
       pagination: {
-        total, // DB total (before count-range filter)
+        total,
         page: parseInt(page, 10),
         limit: parseInt(limit, 10),
         totalPages: Math.ceil(total / limit),
@@ -219,15 +490,7 @@ class HospitalService {
     };
   }
 
-  /**
-   * Upload hospital compliance documents to S3 and persist URLs in the DB.
-   * Allows saving any combination of documents at once.
-   *
-   * @param {string} hospitalId
-   * @param {object} files  – req.files from multer .fields()
-   */
   async uploadDocuments(hospitalId, files) {
-    // 1. Verify hospital exists
     const hospital = await prisma.hospital.findUnique({
       where: { id: hospitalId },
     });
@@ -235,7 +498,6 @@ class HospitalService {
 
     const patch = {};
 
-    // 2. Process Single Fields
     const singleFields = [
       { field: "tradeLicenseDocument", keyCol: "tradeLicenseDocumentKey" },
       { field: "dhaLicenseDocument", keyCol: "dhaLicenseDocumentKey" },
@@ -244,7 +506,6 @@ class HospitalService {
 
     for (const { field, keyCol } of singleFields) {
       if (files[field] && files[field].length > 0) {
-        // Just take the first/last one if it was provided
         const file = files[field][0];
         const { key, url } = await s3Handler.uploadToS3(file);
         patch[field] = url;
@@ -252,7 +513,6 @@ class HospitalService {
       }
     }
 
-    // 3. Process Array Fields
     const arrayFields = [
       { field: "insuranceDocuments", keyCol: "insuranceDocumentKeys" },
       {
@@ -281,7 +541,6 @@ class HospitalService {
       throw new Error("No valid files were provided for upload.");
     }
 
-    // 4. Update the Hospital directly
     return prisma.hospital.update({
       where: { id: hospitalId },
       data: patch,
@@ -291,40 +550,29 @@ class HospitalService {
     });
   }
 
-  /**
-   * Upload hospital branding assets (logo, banner) and save hex color codes.
-   *
-   * @param {string} hospitalId
-   * @param {object} files         – req.files from multer .fields()
-   * @param {string} primaryColor  – hex code e.g. "#1A73E8"
-   * @param {string} secondaryColor – hex code e.g. "#FBBC04"
-   */
   async uploadBranding(hospitalId, files = {}, primaryColor, secondaryColor) {
     const hospital = await prisma.hospital.findUnique({ where: { id: hospitalId } });
     if (!hospital) throw new Error("Hospital not found");
 
     const patch = {};
 
-    // Logo (single file)
     if (files.logo && files.logo.length > 0) {
       const { key, url } = await s3Handler.uploadToS3(files.logo[0], "branding/logos");
       patch.logoKey = key;
       patch.logoUrl = url;
     }
 
-    // Promotional banner (single file)
     if (files.banner && files.banner.length > 0) {
       const { key, url } = await s3Handler.uploadToS3(files.banner[0], "branding/banners");
       patch.bannerKey = key;
       patch.bannerUrl = url;
     }
 
-    // Hex color codes (no upload needed)
     if (primaryColor) patch.primaryColor = primaryColor;
     if (secondaryColor) patch.secondaryColor = secondaryColor;
 
     if (Object.keys(patch).length === 0) {
-      throw new Error("No branding data provided.");
+      throw new Error("No branding files or colors provided.");
     }
 
     return prisma.hospital.update({
@@ -334,34 +582,22 @@ class HospitalService {
     });
   }
 
-  async getHospitalIdsByFilters(filters) {
-    const { emirate, facility, distanceRange, lat, lng } = filters;
-    const where = {};
-
-    if (emirate) {
-      where.emirate = { contains: emirate, mode: "insensitive" };
-    }
-
-    if (facility) {
-      const facilityConditions = [
-        { officialName: { contains: facility, mode: "insensitive" } },
-        { shortName: { contains: facility, mode: "insensitive" } },
-      ];
-      if (where.OR) {
-        where.AND = [{ OR: where.OR }, { OR: facilityConditions }];
-        delete where.OR;
-      } else {
-        where.OR = facilityConditions;
-      }
-    }
+  async getHospitalIds(query) {
+    const { lat, lng, distanceRange } = query;
 
     const hospitals = await prisma.hospital.findMany({
-      where,
-      select: { id: true, latitude: true, longitude: true },
+      where: {
+        status: "ACTIVE",
+      },
+      select: {
+        id: true,
+        latitude: true,
+        longitude: true,
+      },
     });
 
     if (distanceRange && lat && lng) {
-      const R = 6371; // Radius of the earth in km
+      const R = 6371;
       const centerLat = parseFloat(lat);
       const centerLng = parseFloat(lng);
       const range = parseFloat(distanceRange);
@@ -378,7 +614,7 @@ class HospitalService {
               Math.sin(dLon / 2) *
               Math.sin(dLon / 2);
           const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-          const d = R * c; // Distance in km
+          const d = R * c;
           return d <= range;
         })
         .map((h) => h.id);
@@ -402,7 +638,7 @@ async function fetchConsultationCount(hospitalId) {
     if (Array.isArray(data?.data)) return data.data.length;
     return 0;
   } catch {
-    return 0; // never let one failure break the whole list
+    return 0;
   }
 }
 
@@ -416,21 +652,10 @@ async function fetchDoctorCount(hospitalId) {
     if (Array.isArray(data?.data)) return data.data.length;
     return 0;
   } catch (err) {
-    console.log(
-      err.response?.data ||
-        err.message ||
-        "Unknown error while fetching doctor count",
-    );
     return 0;
   }
 }
 
-/**
- * Normalises a filter value that can be:
- *   - undefined / null          → []
- *   - a comma-separated string  → ["Cardiology","Neurology"]
- *   - already an array          → returned as-is (trimmed)
- */
 function parseList(value) {
   if (!value) return [];
   if (Array.isArray(value)) return value.map((v) => v.trim()).filter(Boolean);

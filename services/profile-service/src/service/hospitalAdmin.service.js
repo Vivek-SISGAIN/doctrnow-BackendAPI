@@ -43,11 +43,16 @@ class HospitalAdminService {
   }
 
   /**
-   * Find hospital admin by ID
+   * Find hospital admin by ID or userId
    */
   findById(id) {
-    return prisma.hospitalAdmin.findUnique({
-      where: { userId: id }
+    return prisma.hospitalAdmin.findFirst({
+      where: {
+        OR: [
+          { id },
+          { userId: id }
+        ]
+      }
     });
   }
 
@@ -178,9 +183,12 @@ class HospitalAdminService {
   }
 
   /**
-   * Update hospital admin by ID
+   * Update hospital admin by ID or userId
    */
-  update(id, data) {
+  async update(id, data) {
+    const admin = await this.findById(id);
+    if (!admin) return null;
+
     const {
       id: _id,
       userId: _userId,
@@ -190,17 +198,20 @@ class HospitalAdminService {
     } = data;
 
     return prisma.hospitalAdmin.update({
-      where: { userId: id },
+      where: { id: admin.id },
       data: prismaData
     });
   }
 
   /**
-   * Delete hospital admin by ID
+   * Delete hospital admin by ID or userId
    */
-  delete(id) {
+  async delete(id) {
+    const admin = await this.findById(id);
+    if (!admin) return null;
+
     return prisma.hospitalAdmin.delete({
-      where: { id }
+      where: { id: admin.id }
     });
   }
 }
