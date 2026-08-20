@@ -583,16 +583,34 @@ class HospitalService {
   }
 
   async getHospitalIds(query) {
-    const { lat, lng, distanceRange } = query;
+    const { lat, lng, distanceRange, emirate, emirates, facility } = query;
+
+    const where = {};
+
+    const effectiveEmirates = emirate || emirates;
+    if (effectiveEmirates) {
+      const emiratesList = Array.isArray(effectiveEmirates)
+        ? effectiveEmirates
+        : typeof effectiveEmirates === "string"
+        ? effectiveEmirates.split(",").map((e) => e.trim())
+        : [effectiveEmirates];
+
+      where.OR = emiratesList.map((em) => ({
+        emirate: { equals: em, mode: "insensitive" }
+      }));
+    }
+
+    if (facility) {
+      where.hospitalType = { contains: facility, mode: "insensitive" };
+    }
 
     const hospitals = await prisma.hospital.findMany({
-      where: {
-        status: "ACTIVE",
-      },
+      where,
       select: {
         id: true,
         latitude: true,
         longitude: true,
+        emirate: true,
       },
     });
 

@@ -331,6 +331,7 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
       sub: 'dev-anonymous',
       role: 'USER',
       tenantId: null,
+      hospitalId: null,
     };
   }
 }

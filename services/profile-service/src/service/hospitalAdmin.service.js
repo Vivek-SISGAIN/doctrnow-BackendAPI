@@ -120,7 +120,8 @@ class HospitalAdminService {
         department: data.department || null,
 
         profileImage: data.profileImage || '',
-        subRole: data.subRole || 'ADMIN'
+        subRole: data.subRole || 'ADMIN',
+        permissions: Array.isArray(data.permissions) ? data.permissions : []
       }
     });
   }

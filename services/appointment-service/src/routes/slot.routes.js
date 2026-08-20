@@ -11,6 +11,7 @@ const {
   lockSlot,
   unlockSlot,
   getNextAvailableSlotsBulk,
+  getDoctorsWithAvailableSlots,
 } = require("../controllers/slot.controller");
 const {
   createSlotSchema,
@@ -18,6 +19,9 @@ const {
   updateSlotSchema,
 } = require("../validations/slot.validation");
 const validate = require("../middleware/validation");
+
+router.get("/available-doctors", getDoctorsWithAvailableSlots);
+router.post("/available-doctors", getDoctorsWithAvailableSlots);
 
 /**
  * @swagger

@@ -13,6 +13,7 @@ export interface ProxyRequest {
   userId?: string;
   role?: string;
   tenantId?: string;
+  hospitalId?: string;
 }
 
 @Injectable()
@@ -49,6 +50,7 @@ export class HttpProxyService {
         ...(request.userId && { 'X-User-ID': request.userId }),
         ...(request.role && { 'X-User-Role': request.role }),
         ...(request.tenantId && { 'X-Tenant-ID': request.tenantId }),
+        ...(request.hospitalId && { 'X-Hospital-ID': request.hospitalId }),
         ...request.headers,
         ...(!request.headers?.['content-type'] && !request.headers?.['Content-Type']
           ? { 'Content-Type': 'application/json' }

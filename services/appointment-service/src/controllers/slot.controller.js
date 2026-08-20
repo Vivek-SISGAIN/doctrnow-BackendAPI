@@ -154,6 +154,27 @@ const getNextAvailableSlotsBulk = asyncHandler(async (req, res) => {
   });
 });
 
+const getDoctorsWithAvailableSlots = asyncHandler(async (req, res) => {
+  const { startDate, endDate, doctorIds } = { ...req.query, ...req.body };
+
+  const parsedDoctorIds = Array.isArray(doctorIds)
+    ? doctorIds
+    : (typeof doctorIds === 'string' && doctorIds.length > 0)
+    ? doctorIds.split(',').map((id) => id.trim())
+    : [];
+
+  const availableDoctorIds = await slotService.findDoctorsWithAvailableSlots({
+    startDate,
+    endDate,
+    doctorIds: parsedDoctorIds
+  });
+
+  res.status(200).json({
+    success: true,
+    data: availableDoctorIds
+  });
+});
+
 module.exports = {
   getAvailableSlots,
   getSlotsByDoctor,
@@ -164,5 +185,6 @@ module.exports = {
   deleteSlot,
   lockSlot,
   unlockSlot,
-  getNextAvailableSlotsBulk
+  getNextAvailableSlotsBulk,
+  getDoctorsWithAvailableSlots
 };

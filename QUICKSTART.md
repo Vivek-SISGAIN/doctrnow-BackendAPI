@@ -71,7 +71,27 @@ docker-compose -f docker-compose.services.yml build
 docker-compose -f docker-compose.services.yml up
 ```
 
-### Option B: Run Locally
+### Option B: Run All Services Simultaneously (Single Terminal)
+
+```bash
+# Start all microservices + API Gateway in a single terminal:
+npm start
+
+# Or using concurrently:
+npm run dev
+
+# Or with PowerShell:
+.\start-all.ps1
+
+# Run only core services (Gateway, Auth, Profile, Appointments, Consultations, Records):
+npm run dev:core
+# or: .\start-all.ps1 -Core
+
+# Run specific services:
+node dev-runner.js --only=gateway,auth,profile,appointment
+```
+
+### Option C: Run Locally (Individual Services)
 
 ```bash
 # Start each service individually

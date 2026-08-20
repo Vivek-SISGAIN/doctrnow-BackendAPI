@@ -71,6 +71,25 @@ class DoctorService {
       ...this.buildWhereClause(filters)
     };
 
+    // ── Date Range / Strict Slot Availability Filtering ────────────────────
+    const effectiveStartDate = filters.startDate || filters.fromDate || filters.from || filters.dateFrom;
+    const effectiveEndDate = filters.endDate || filters.toDate || filters.to || filters.dateTo;
+    const isExplicitDbDateField = filters.dateField && ['createdAt', 'updatedAt', 'licenseExpiry'].includes(filters.dateField);
+
+    if ((effectiveStartDate || effectiveEndDate) && !isExplicitDbDateField) {
+      const slotDoctorIds = await this._fetchDoctorIdsWithAvailableSlots(effectiveStartDate, effectiveEndDate);
+
+      if (Array.isArray(slotDoctorIds)) {
+        if (slotDoctorIds.length === 0) {
+          return {
+            doctors: [],
+            pagination: { page: parseInt(page, 10), limit: parseInt(limit, 10), total: 0, totalPages: 0 }
+          };
+        }
+        where.id = { in: slotDoctorIds };
+      }
+    }
+
     const orderBy = this.buildOrderBy(sortBy);
 
     const [doctors, total] = await Promise.all([
@@ -255,6 +274,20 @@ class DoctorService {
                 { assignedHospitalIds: { has: value } }
               ];
             }
+            break;
+
+          case 'startDate':
+          case 'endDate':
+          case 'fromDate':
+          case 'toDate':
+          case 'from':
+          case 'to':
+          case 'dateFrom':
+          case 'dateTo':
+          case 'dateField':
+            // Handled in Date Range Filtering below
+            break;
+
           case 'facility':
           case 'emirate':
           case 'distanceRange':
@@ -270,63 +303,90 @@ class DoctorService {
       }
     });
 
+    // ── Explicit Database Field Date Range Filtering (createdAt, updatedAt, licenseExpiry) ──
+    const effectiveStartDate = filters.startDate || filters.fromDate || filters.from || filters.dateFrom;
+    const effectiveEndDate = filters.endDate || filters.toDate || filters.to || filters.dateTo;
+    const isExplicitDbDateField = filters.dateField && ['createdAt', 'updatedAt', 'licenseExpiry'].includes(filters.dateField);
+
+    if ((effectiveStartDate || effectiveEndDate) && isExplicitDbDateField) {
+      const targetField = filters.dateField;
+
+      where[targetField] = where[targetField] || {};
+
+      if (effectiveStartDate) {
+        const start = new Date(effectiveStartDate);
+        if (!isNaN(start.getTime())) {
+          where[targetField].gte = start;
+        }
+      }
+
+      if (effectiveEndDate) {
+        let end = new Date(effectiveEndDate);
+        if (!isNaN(end.getTime())) {
+          // If YYYY-MM-DD format, extend to end of day
+          if (typeof effectiveEndDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(effectiveEndDate.trim())) {
+            end = new Date(`${effectiveEndDate.trim()}T23:59:59.999Z`);
+          }
+          where[targetField].lte = end;
+        }
+      }
+    }
+
     return where;
   }
 
   applyOperator(op, value) {
-    const operators = {
-      equals: (val) => ({ equals: val }),
-      contains: (val) => ({ contains: val, mode: 'insensitive' }),
-      startsWith: (val) => ({ startsWith: val, mode: 'insensitive' }),
-      endsWith: (val) => ({ endsWith: val, mode: 'insensitive' }),
-      gt: (val) => ({ gt: this.parseValue(val) }),
-      gte: (val) => ({ gte: this.parseValue(val) }),
-      lt: (val) => ({ lt: this.parseValue(val) }),
-      lte: (val) => ({ lte: this.parseValue(val) }),
-      in: (val) => ({ in: Array.isArray(val) ? val : [val] }),
-      notIn: (val) => ({ notIn: Array.isArray(val) ? val : [val] }),
-      not: (val) => ({ not: val }),
-      has: (val) => ({ has: val }),
-      hasSome: (val) => ({ hasSome: Array.isArray(val) ? val : [val] }),
-      hasEvery: (val) => ({ hasEvery: Array.isArray(val) ? val : [val] })
-    };
-
-    return operators[op] ? operators[op](value) : { equals: value };
-  }
-  /**
-   * Build orderBy clause
-   */
-  buildOrderBy(sortBy = 'name') {
-    switch (sortBy) {
-      case 'experience':
-        return [{ yearsOfExperience: 'desc' }, { fullName: 'asc' }];
-      case 'fee-low':
-        return [{ videoConsultationFee: 'asc' }, { fullName: 'asc' }];
-      case 'fee-high':
-        return [{ videoConsultationFee: 'desc' }, { fullName: 'asc' }];
-      case 'recent':
-        return { createdAt: 'desc' };
-      case 'name':
+    switch (op) {
+      case 'eq':
+        return { equals: value };
+      case 'neq':
+        return { not: value };
+      case 'gt':
+        return { gt: value };
+      case 'gte':
+        return { gte: value };
+      case 'lt':
+        return { lt: value };
+      case 'lte':
+        return { lte: value };
+      case 'in':
+        return { in: Array.isArray(value) ? value : [value] };
+      case 'nin':
+        return { notIn: Array.isArray(value) ? value : [value] };
+      case 'contains':
+        return { contains: value, mode: 'insensitive' };
+      case 'startsWith':
+        return { startsWith: value, mode: 'insensitive' };
+      case 'endsWith':
+        return { endsWith: value, mode: 'insensitive' };
       default:
-        return { fullName: 'asc' };
+        return value;
     }
   }
 
-  parseValue(val) {
-    if (typeof val === 'number') {
-      return val;
+  buildOrderBy(sortBy) {
+    switch (sortBy) {
+      case 'name':
+      case 'fullName':
+        return { fullName: 'asc' };
+      case 'experience':
+      case 'yearsOfExperience':
+        return { yearsOfExperience: 'desc' };
+      case 'fee':
+      case 'videoConsultationFee':
+        return { videoConsultationFee: 'asc' };
+      case 'rating':
+        // Rating sorting is handled in memory after aggregation
+        return { fullName: 'asc' };
+      default:
+        return { createdAt: 'desc' };
     }
-    const num = parseFloat(val);
-    return isNaN(num) ? val : num;
   }
-  /**
-   * Find doctor by ID
-   */
-  async findById(id) {
-    const doctor = await prisma.doctor.findUnique({
+
+  findById(id) {
+    return prisma.doctor.findUnique({
       where: { id }
     });
-    return this._enrichDoctorProfiles(doctor);
   }
 
   /**
@@ -380,6 +440,25 @@ class DoctorService {
 
     const where = this.buildWhereClause(filters);
 
+    // ── Date Range / Strict Slot Availability Filtering ────────────────────
+    const effectiveStartDate = filters.startDate || filters.fromDate || filters.from || filters.dateFrom;
+    const effectiveEndDate = filters.endDate || filters.toDate || filters.to || filters.dateTo;
+    const isExplicitDbDateField = filters.dateField && ['createdAt', 'updatedAt', 'licenseExpiry'].includes(filters.dateField);
+
+    if ((effectiveStartDate || effectiveEndDate) && !isExplicitDbDateField) {
+      const slotDoctorIds = await this._fetchDoctorIdsWithAvailableSlots(effectiveStartDate, effectiveEndDate);
+
+      if (Array.isArray(slotDoctorIds)) {
+        if (slotDoctorIds.length === 0) {
+          return {
+            doctors: [],
+            pagination: { page: parseInt(page, 10), limit: parseInt(limit, 10), total: 0, totalPages: 0 }
+          };
+        }
+        where.id = { in: slotDoctorIds };
+      }
+    }
+
     // If hospital filters were applied, restrict the doctor query
     if (filteredHospitalIds !== null) {
       if (filteredHospitalIds.length === 0) {
@@ -388,7 +467,13 @@ class DoctorService {
           pagination: { page: parseInt(page, 10), limit: parseInt(limit, 10), total: 0, totalPages: 0 }
         };
       }
-      where.hospitalId = { in: filteredHospitalIds };
+      where.AND = where.AND || [];
+      where.AND.push({
+        OR: [
+          { hospitalId: { in: filteredHospitalIds } },
+          { assignedHospitalIds: { hasSome: filteredHospitalIds } }
+        ]
+      });
     }
 
     const orderBy = this.buildOrderBy(sortBy);
@@ -792,24 +877,92 @@ class DoctorService {
   }
 
   async _fetchHospitalIdsByFilters(filters) {
-    const { emirate, facility, distanceRange, lat, lng } = filters;
-    if (!emirate && !facility && !distanceRange) return null;
+    const { emirate, emirates, facility, distanceRange, lat, lng } = filters;
+    const effectiveEmirate = emirate || emirates;
+    if (!effectiveEmirate && !facility && !distanceRange) return null;
 
     const baseUrl = process.env.API_BASE_URL || 'http://localhost:8080/api/v1';
+    const superAdminDirectUrl = process.env.SUPER_ADMIN_SERVICE_URL || 'http://localhost:5001';
     const internalSecret = process.env.INTERNAL_SERVICE_SECRET || 'super_secret_internal_key_123';
 
     try {
       const response = await axios.get(`${baseUrl}/super-admins/hospital/search/ids`, {
-        params: { emirate, facility, distanceRange, lat, lng },
+        params: { emirate: effectiveEmirate, facility, distanceRange, lat, lng },
         headers: {
           'x-internal-service-key': internalSecret
-        }
+        },
+        timeout: 4000
       });
       return response.data?.data || [];
     } catch (err) {
-      console.error('[ProfileService] Failed to fetch hospital IDs by filters:', err.message);
-      return [];
+      try {
+        const directResponse = await axios.get(`${superAdminDirectUrl}/api/super-admins/hospital/search/ids`, {
+          params: { emirate: effectiveEmirate, facility, distanceRange, lat, lng },
+          headers: {
+            'x-internal-service-key': internalSecret
+          },
+          timeout: 4000
+        });
+        return directResponse.data?.data || [];
+      } catch (directErr) {
+        console.error('[ProfileService] Failed to fetch hospital IDs by filters:', directErr.message);
+        return [];
+      }
     }
+  }
+
+  async _fetchDoctorIdsWithAvailableSlots(startDate, endDate) {
+    if (!startDate && !endDate) return null;
+
+    const baseUrl = process.env.API_BASE_URL || 'http://localhost:8080/api/v1';
+    const appointmentDirectUrl = process.env.APPOINTMENT_SERVICE_URL || 'http://localhost:3003';
+    const internalSecret = process.env.INTERNAL_SERVICE_SECRET || 'super_secret_internal_key_123';
+
+    try {
+      const response = await axios.post(
+        `${baseUrl}/appointments/slots/available-doctors`,
+        {
+          startDate,
+          endDate: endDate || startDate
+        },
+        {
+          headers: {
+            'x-internal-service-key': internalSecret,
+            'Content-Type': 'application/json'
+          },
+          timeout: 4000
+        }
+      );
+
+      if (response.data && Array.isArray(response.data.data)) {
+        return response.data.data;
+      }
+    } catch (err) {
+      try {
+        const directResponse = await axios.post(
+          `${appointmentDirectUrl}/api/slots/available-doctors`,
+          {
+            startDate,
+            endDate: endDate || startDate
+          },
+          {
+            headers: {
+              'x-internal-service-key': internalSecret,
+              'Content-Type': 'application/json'
+            },
+            timeout: 4000
+          }
+        );
+
+        if (directResponse.data && Array.isArray(directResponse.data.data)) {
+          return directResponse.data.data;
+        }
+      } catch (directErr) {
+        console.warn('[ProfileService] Failed to query doctor slots from appointment-service:', directErr.message);
+      }
+    }
+
+    return [];
   }
 }
 

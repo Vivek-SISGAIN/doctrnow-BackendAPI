@@ -19,16 +19,21 @@ const getAllDoctors = asyncHandler(async (req, res) => {
     minExperience,
     countries,
     emirate,
+    emirates,
     workingDay,
     status,
     availabilityStatus,
     hospitalId,
+    startDate,
+    endDate,
+    fromDate,
+    toDate,
+    dateField,
     page = 1,
     limit = 20,
     sortBy = 'experience',
     filters: dynamicFilters // New: Accept filters from query or body
   } = { ...req.query, ...req.body }; // Merge query params and body
-
   let specialtyName = specialty;
   if (specialtyId && !specialtyName) {
     const spec = await specialtyService.findById(specialtyId);
@@ -59,14 +64,16 @@ const getAllDoctors = asyncHandler(async (req, res) => {
       maxFee,
       minExperience,
       countries,
-      emirate,
+      emirate: emirate || emirates,
       workingDay,
       status,
       availabilityStatus,
-      hospitalId
+      hospitalId,
+      startDate: startDate || fromDate,
+      endDate: endDate || toDate,
+      dateField
     };
   }
-
   const pagination = {
     page: parseInt(page, 10),
     limit: parseInt(limit, 10)
@@ -92,10 +99,16 @@ const getDocByHospitalId = asyncHandler(async (req, res) => {
     minExperience,
     countries,
     emirate,
+    emirates,
     specialization,
     workingDay,
     status,
     availabilityStatus,
+    startDate,
+    endDate,
+    fromDate,
+    toDate,
+    dateField,
     page = 1,
     limit = 20,
     sortBy = 'name',
@@ -121,11 +134,14 @@ const getDocByHospitalId = asyncHandler(async (req, res) => {
       maxFee,
       minExperience,
       countries,
-      emirate,
+      emirate: emirate || emirates,
       specialization,
       workingDay,
       status,
-      availabilityStatus
+      availabilityStatus,
+      startDate: startDate || fromDate,
+      endDate: endDate || toDate,
+      dateField
     };
   }
 
@@ -244,8 +260,8 @@ const updateDoctor = asyncHandler(async (req, res) => {
     metadata: {
       doctorId: id,
       doctorName: doctor.fullName,
-      email: doctor.email,
-    },
+      email: doctor.email
+    }
   });
 
   res.status(200).json({
@@ -268,9 +284,7 @@ const deleteDoctor = asyncHandler(async (req, res) => {
   const actor = extractActor(req);
 
   const targetHospitalId =
-    (doctor.assignedHospitalIds && doctor.assignedHospitalIds[0]) ||
-    doctor.hospitalId ||
-    null;
+    (doctor.assignedHospitalIds && doctor.assignedHospitalIds[0]) || doctor.hospitalId || null;
 
   publishAuditEvent({
     hospitalId: targetHospitalId,
@@ -289,8 +303,8 @@ const deleteDoctor = asyncHandler(async (req, res) => {
     method: 'DELETE',
     metadata: {
       doctorId: id,
-      doctorName: doctor.fullName,
-    },
+      doctorName: doctor.fullName
+    }
   });
 
   res.status(200).json({
@@ -341,9 +355,7 @@ const setAvailability = asyncHandler(async (req, res) => {
 
   publishAuditEvent({
     hospitalId:
-      (doctor.assignedHospitalIds && doctor.assignedHospitalIds[0]) ||
-      doctor.hospitalId ||
-      null,
+      (doctor.assignedHospitalIds && doctor.assignedHospitalIds[0]) || doctor.hospitalId || null,
     entityType: 'DOCTOR',
     actionPerformed: 'Doctor Availability Changed',
     actionType: 'WORKFLOW',
@@ -359,8 +371,8 @@ const setAvailability = asyncHandler(async (req, res) => {
     method: 'PATCH',
     metadata: {
       doctorId: id,
-      doctorName: doctor.fullName,
-    },
+      doctorName: doctor.fullName
+    }
   });
 
   res.status(200).json({
@@ -472,8 +484,8 @@ const createDoctor = asyncHandler(async (req, res) => {
     method: 'POST',
     metadata: {
       doctorId: doctor.id,
-      doctorName: doctor.fullName,
-    },
+      doctorName: doctor.fullName
+    }
   });
 
   res.status(201).json({
@@ -545,9 +557,9 @@ const assignDoctorToHospital = asyncHandler(async (req, res) => {
     where: { id },
     data: {
       assignedHospitalIds: {
-        push: hospitalId,
-      },
-    },
+        push: hospitalId
+      }
+    }
   });
 
   const actor = extractActor(req);
@@ -563,13 +575,13 @@ const assignDoctorToHospital = asyncHandler(async (req, res) => {
     newValue: { doctorId: id, doctorName: doctor.fullName },
     remarks: `Doctor ${doctor.fullName || id} assigned to hospital`,
     path: `/profiles/doctors/${id}/assign-hospital`,
-    method: 'PATCH',
+    method: 'PATCH'
   });
 
   res.status(200).json({
     success: true,
     message: 'Doctor assigned to hospital successfully',
-    data: updatedDoctor,
+    data: updatedDoctor
   });
 });
 
@@ -593,9 +605,9 @@ const removeDoctorFromHospital = asyncHandler(async (req, res) => {
     where: { id },
     data: {
       assignedHospitalIds: {
-        set: updatedAssigned,
-      },
-    },
+        set: updatedAssigned
+      }
+    }
   });
 
   const actor = extractActor(req);
@@ -611,13 +623,13 @@ const removeDoctorFromHospital = asyncHandler(async (req, res) => {
     newValue: null,
     remarks: `Doctor ${doctor.fullName || id} removed from hospital`,
     path: `/profiles/doctors/${id}/remove-hospital`,
-    method: 'PATCH',
+    method: 'PATCH'
   });
 
   res.status(200).json({
     success: true,
     message: 'Doctor removed from hospital successfully',
-    data: updatedDoctor,
+    data: updatedDoctor
   });
 });
 
@@ -640,7 +652,7 @@ const updateDoctorProfileImage = asyncHandler(async (req, res) => {
     res.status(200).json({
       success: true,
       message: 'Profile image updated successfully',
-      data: updatedDoctor,
+      data: updatedDoctor
     });
   } catch (error) {
     console.error('[DoctorController] updateDoctorProfileImage error:', error.message);
@@ -662,5 +674,5 @@ module.exports = {
   getDocByHospitalId,
   assignDoctorToHospital,
   removeDoctorFromHospital,
-  updateDoctorProfileImage,
+  updateDoctorProfileImage
 };

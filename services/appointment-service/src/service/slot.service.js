@@ -160,6 +160,47 @@ class SlotService {
   }
 
   /**
+   * Find all unique doctor IDs that have at least one AVAILABLE slot in the given date range.
+   */
+  async findDoctorsWithAvailableSlots({ startDate, endDate, doctorIds = [] }) {
+    if (!startDate && !endDate) return [];
+
+    const start = startDate ? dayjs(startDate).startOf('day').toDate() : new Date();
+    const end = endDate ? dayjs(endDate).endOf('day').toDate() : dayjs(startDate).endOf('day').toDate();
+
+    const now = new Date();
+    const effectiveStart = start < now ? now : start;
+
+    const where = {
+      status: 'AVAILABLE',
+      startTime: {
+        gte: effectiveStart,
+        lte: end,
+      },
+      slotLock: null,
+      appointments: {
+        none: {
+          status: { not: 'CANCELLED' }
+        }
+      }
+    };
+
+    if (Array.isArray(doctorIds) && doctorIds.length > 0) {
+      where.doctorId = { in: doctorIds };
+    }
+
+    const slots = await prisma.slot.findMany({
+      where,
+      select: {
+        doctorId: true,
+      },
+      distinct: ['doctorId'],
+    });
+
+    return slots.map((s) => s.doctorId);
+  }
+
+  /**
    * Find slots by doctor ID with optional filters.
    * Never returns past AVAILABLE slots — those are stale.
    */

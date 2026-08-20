@@ -1,0 +1,26 @@
+{
+  "name": "doctrnow-backend",
+  "version": "1.0.0",
+  "description": "DoctorNow Backend Microservices Platform",
+  "scripts": {
+    "start": "node dev-runner.js",
+    "dev": "concurrently --kill-others-on-fail --prefix \"[{name}]\" --names \"GATEWAY,AUTH,PROFILE,APPT,CONSULT,RECORDS,NOTIF,HOSPITAL,SUPER,VIDEO\" --prefix-colors \"bgBlue.bold,bgMagenta.bold,bgCyan.bold,bgGreen.bold,bgYellow.bold,bgRed.bold,bgWhite.black.bold,bgGreen.black.bold,bgMagenta.black.bold,bgCyan.black.bold\" \"npm run start:dev --prefix api-gateway\" \"npm run start:dev --prefix services/auth-service\" \"npm run dev --prefix services/profile-service\" \"npm run dev --prefix services/appointment-service\" \"npm run dev --prefix services/consultation-service\" \"npm run dev --prefix services/medical-records-service\" \"npm run dev --prefix services/notification-service\" \"npm run dev --prefix services/hospital-admin-service\" \"npm run dev --prefix services/super-admin-service\" \"npm run dev --prefix services/video-chat-service\"",
+    "dev:all": "node dev-runner.js",
+    "dev:core": "node dev-runner.js --core",
+    "dev:gateway": "npm run start:dev --prefix api-gateway",
+    "dev:auth": "npm run start:dev --prefix services/auth-service",
+    "dev:profile": "npm run dev --prefix services/profile-service",
+    "dev:appointment": "npm run dev --prefix services/appointment-service",
+    "dev:consultation": "npm run dev --prefix services/consultation-service",
+    "dev:medical-records": "npm run dev --prefix services/medical-records-service",
+    "dev:notification": "npm run dev --prefix services/notification-service",
+    "dev:hospital": "npm run dev --prefix services/hospital-admin-service",
+    "dev:superadmin": "npm run dev --prefix services/super-admin-service",
+    "dev:video": "npm run dev --prefix services/video-chat-service",
+    "install:all": "node -e \"const fs = require('fs'), cp = require('child_process'), path = require('path'); const dirs = ['api-gateway', ...fs.readdirSync('services').map(s => path.join('services', s)).filter(d => fs.existsSync(path.join(d, 'package.json')))]; dirs.forEach(d => { console.log('Installing in ' + d + '...'); cp.execSync('npm install', { cwd: d, stdio: 'inherit', shell: true }); });\"",
+    "seed:all": "node -e \"const fs = require('fs'), cp = require('child_process'); const seeds = [{ dir: 'services/auth-service', cmd: 'npm run db:seed' }, { dir: 'services/profile-service', cmd: 'npx prisma db seed' }, { dir: 'services/appointment-service', cmd: 'npm run seed' }, { dir: 'services/consultation-service', cmd: 'npm run seed' }, { dir: 'services/medical-records-service', cmd: 'npm run seed' }, { dir: 'services/hospital-admin-service', cmd: 'npm run db:seed' }]; seeds.forEach(s => { console.log('Seeding ' + s.dir + '...'); try { cp.execSync(s.cmd, { cwd: s.dir, stdio: 'inherit', shell: true }); } catch (e) { console.error('Failed seeding ' + s.dir, e.message); } });\""
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}

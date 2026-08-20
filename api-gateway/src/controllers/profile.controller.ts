@@ -55,6 +55,7 @@ export class ProfileController {
         userId,
         role: user?.role,
         tenantId: user?.tenantId,
+        hospitalId: user?.hospitalId || user?.tenantId,
       });
 
       res.status(response.status).json(response.data);
@@ -74,7 +75,7 @@ export class ProfileController {
 
   private extractHeaders(req: Request): Record<string, string> {
     const headers: Record<string, string> = {};
-    const allowedHeaders = ['content-type', 'accept', 'x-tenant-id', 'authorization'];
+    const allowedHeaders = ['content-type', 'accept', 'x-tenant-id', 'x-hospital-id', 'authorization'];
 
     for (const [key, value] of Object.entries(req.headers)) {
       if (allowedHeaders.includes(key.toLowerCase())) {
