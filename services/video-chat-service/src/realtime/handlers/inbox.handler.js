@@ -46,6 +46,7 @@ const registerInboxHandler = (io, socket) => {
             socket
                 .to(`user:${userId}`)
                 .emit("inbox_update", {
+                    type: "read",
                     conversationId,
                     readAt: result.readAt.toISOString(),
                     unreadCount: 0   // optimistic: this device just read everything
