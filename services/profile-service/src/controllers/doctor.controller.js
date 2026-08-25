@@ -1,4 +1,5 @@
 const prisma = require('../prisma/prisma');
+const axios = require('axios');
 const doctorService = require('../service/doctor.service');
 const specialtyService = require('../service/specialty.service');
 const ApiError = require('../utils/ApiError');
@@ -229,6 +230,21 @@ const updateDoctor = asyncHandler(async (req, res) => {
 
   const { remarks, ...cleanUpdateData } = req.body;
   const updatedDoctor = await doctorService.update(id, cleanUpdateData);
+
+  // If schedule was updated, trigger automatic 60-day slot regeneration in appointment-service
+  if (cleanUpdateData.schedule) {
+    const gatewayUrl = process.env.API_BASE_URL || 'http://localhost:8080/api/v1';
+    const appointmentUrl = gatewayUrl.endsWith('/') ? `${gatewayUrl}appointments/slots/bulk` : `${gatewayUrl}/appointments/slots/bulk`;
+    axios.post(appointmentUrl, {
+      doctorId: updatedDoctor.id,
+      hospitalId: updatedDoctor.hospitalId,
+      schedule: updatedDoctor.schedule,
+      isUpdate: true
+    }).catch(err => {
+      console.error('[DoctorController] Automatic slot regeneration error:', err?.response?.data || err.message);
+    });
+  }
+
   const actor = extractActor(req);
 
   const statusChanged = req.body.status && req.body.status !== doctor.status;

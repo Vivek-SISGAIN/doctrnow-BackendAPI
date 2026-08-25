@@ -12,6 +12,7 @@ const {
   endByAppointment,
   getHistoryByPatient,
   getHistoryByDoctor,
+  getDoctorPerformanceMetrics,
   updateConsultation,
   markNoShow,
   saveHealthDetails,
@@ -114,6 +115,8 @@ router.get('/history/patient/:patientId', getHistoryByPatient);
  *         description: List of consultations for doctor
  */
 router.get('/history/doctor/:doctorId', getHistoryByDoctor);
+router.get('/doctors/:doctorId/performance-metrics', getDoctorPerformanceMetrics);
+router.get('/history/doctor/:doctorId/performance-metrics', getDoctorPerformanceMetrics);
 
 /**
  * @swagger

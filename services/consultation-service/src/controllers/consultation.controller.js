@@ -829,6 +829,18 @@ const getDoctorPatientIds = asyncHandler(async (req, res) => {
   });
 });
 
+const getDoctorPerformanceMetrics = asyncHandler(async (req, res) => {
+  const { doctorId } = req.params;
+  const { period = 'all' } = req.query;
+
+  const metrics = await consultationService.getPerformanceMetrics(doctorId, period);
+
+  res.status(200).json({
+    success: true,
+    data: metrics
+  });
+});
+
 module.exports = {
   createConsultation,
   getConsultationById,
@@ -841,6 +853,7 @@ module.exports = {
   endByAppointment,
   getHistoryByPatient,
   getHistoryByDoctor,
+  getDoctorPerformanceMetrics,
   updateConsultation,
   markNoShow,
   saveHealthDetails,

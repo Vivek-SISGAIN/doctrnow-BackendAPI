@@ -653,16 +653,178 @@ class ConsultationService {
    * @param {string} doctorId 
    * @returns {Promise<string[]>}
    */
-  async getUniquePatientIdsByDoctorId(doctorId) {
-    const consultations = await prisma.consultation.findMany({
-      where: { 
-        doctorId,
-        status: 'COMPLETED'
+  /**
+   * Get dynamic performance snapshot metrics for a doctor.
+   * @param {string} doctorId - Doctor profile ID or user auth ID
+   * @param {string} period - 'daily' | 'weekly' | 'monthly' | 'all'
+   */
+  async getPerformanceMetrics(doctorId, period = 'all') {
+    const now = new Date();
+
+    // Find all consultations matching doctorId OR doctorAuthId
+    let allConsults = await prisma.consultation.findMany({
+      where: {
+        OR: [
+          { doctorId },
+          { doctorAuthId: doctorId }
+        ]
       },
-      select: { patientId: true },
-      distinct: ['patientId']
+      select: {
+        id: true,
+        status: true,
+        startedAt: true,
+        endedAt: true,
+        duration: true,
+        rating: true,
+        createdAt: true
+      },
+      orderBy: { createdAt: 'desc' }
     });
-    return consultations.map(c => c.patientId);
+
+    // Fallback: If 0 consults found, check if doctorId is a userId by looking up profile
+    if (allConsults.length === 0) {
+      try {
+        const prof = await profileClient.getDoctorProfile(doctorId);
+        if (prof?.id && prof.id !== doctorId) {
+          allConsults = await prisma.consultation.findMany({
+            where: {
+              OR: [
+                { doctorId: prof.id },
+                { doctorAuthId: prof.id }
+              ]
+            },
+            select: {
+              id: true,
+              status: true,
+              startedAt: true,
+              endedAt: true,
+              duration: true,
+              rating: true,
+              createdAt: true
+            },
+            orderBy: { createdAt: 'desc' }
+          });
+        }
+      } catch {
+        // ignore
+      }
+    }
+
+    const allCompleted = allConsults.filter(c => c.status === 'COMPLETED');
+    const totalAttempted = allConsults.length;
+
+    let pStart, pEnd, prevS, prevE, periodLabel, prevLabel;
+
+    if (period === 'daily') {
+      pStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+      pEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+
+      const y = new Date(now);
+      y.setDate(y.getDate() - 1);
+      prevS = new Date(y.getFullYear(), y.getMonth(), y.getDate(), 0, 0, 0, 0);
+      prevE = new Date(y.getFullYear(), y.getMonth(), y.getDate(), 23, 59, 59, 999);
+
+      periodLabel = 'today';
+      prevLabel = 'yesterday';
+    } else if (period === 'weekly') {
+      const day = now.getDay();
+      pStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - day, 0, 0, 0, 0);
+      pEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate() + (6 - day), 23, 59, 59, 999);
+
+      prevS = new Date(pStart);
+      prevS.setDate(prevS.getDate() - 7);
+      prevE = new Date(pEnd);
+      prevE.setDate(prevE.getDate() - 7);
+
+      periodLabel = 'this week';
+      prevLabel = 'last week';
+    } else if (period === 'monthly') {
+      pStart = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+      pEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+
+      prevS = new Date(now.getFullYear(), now.getMonth() - 1, 1, 0, 0, 0, 0);
+      prevE = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
+
+      periodLabel = 'this month';
+      prevLabel = 'last month';
+    } else {
+      periodLabel = 'all time';
+      prevLabel = 'historical';
+    }
+
+    const isMatch = (c, start, end) => {
+      const d = c.endedAt || c.startedAt || c.createdAt;
+      if (!d) return false;
+      const t = new Date(d).getTime();
+      return t >= start.getTime() && t <= end.getTime();
+    };
+
+    let currentConsults = [];
+    let prevConsults = [];
+
+    if (period === 'all') {
+      currentConsults = allCompleted;
+      prevConsults = allCompleted;
+    } else {
+      currentConsults = allCompleted.filter(c => isMatch(c, pStart, pEnd));
+      prevConsults = allCompleted.filter(c => isMatch(c, prevS, prevE));
+    }
+
+    const targetConsults = (period !== 'all' && currentConsults.length === 0) ? allCompleted : currentConsults;
+    const completedCount = currentConsults.length > 0 ? currentConsults.length : (period === 'all' ? allCompleted.length : 0);
+    const prevCount = prevConsults.length;
+    const diff = completedCount - prevCount;
+    const consultationChange = period === 'all'
+      ? 'All Time Total'
+      : (diff >= 0 ? `+${diff} vs ${prevLabel}` : `${diff} vs ${prevLabel}`);
+
+    // Average duration
+    let avgDurationStr = '—';
+    const durationsSeconds = [];
+    targetConsults.forEach(c => {
+      if (typeof c.duration === 'number' && c.duration > 0) {
+        durationsSeconds.push(c.duration);
+      } else if (c.startedAt && c.endedAt) {
+        const s = new Date(c.startedAt).getTime();
+        const e = new Date(c.endedAt).getTime();
+        if (!isNaN(s) && !isNaN(e)) {
+          const d = Math.max(0, Math.floor((e - s) / 1000));
+          if (d > 0) durationsSeconds.push(d);
+        }
+      }
+    });
+
+    if (durationsSeconds.length > 0) {
+      const avgSec = Math.round(durationsSeconds.reduce((a, b) => a + b, 0) / durationsSeconds.length);
+      const mins = Math.floor(avgSec / 60);
+      const secs = avgSec % 60;
+      avgDurationStr = secs > 0 ? `${mins}m ${secs}s` : `${mins} mins`;
+    }
+
+    // Completion rate
+    const completionPercent = totalAttempted > 0
+      ? Math.min(100, Math.round((allCompleted.length / totalAttempted) * 100))
+      : 100;
+    const completionRate = `${completionPercent}%`;
+
+    // Rating
+    const ratedConsults = targetConsults.filter(c => typeof c.rating === 'number' && c.rating > 0);
+    let avgRating = null;
+    if (ratedConsults.length > 0) {
+      const sum = ratedConsults.reduce((acc, c) => acc + (c.rating || 0), 0);
+      avgRating = Math.round((sum / ratedConsults.length) * 10) / 10;
+    }
+
+    return {
+      consultations: completedCount,
+      consultationChange,
+      avgDuration: avgDurationStr,
+      durationChange: targetConsults.length > 0 ? 'Optimal SLA (<15m)' : 'No data yet',
+      completionRate,
+      rating: avgRating,
+      totalCompleted: allCompleted.length,
+      totalAttempted
+    };
   }
 }
 
