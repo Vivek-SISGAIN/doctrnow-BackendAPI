@@ -134,6 +134,16 @@ const ALL_SERVICES = [
     color: c.bgCyan,
     isCore: false,
     description: 'Video Chat & WebRTC'
+  },
+  {
+    id: 'payment',
+    name: 'PAYMENT',
+    dir: 'services/payment-insurance-service',
+    script: 'dev',
+    port: 3006,
+    color: c.bgYellow,
+    isCore: false,
+    description: 'Payment, Insurance & Cerner FHIR'
   }
 ];
 

@@ -20,6 +20,7 @@ export interface AuditEvent {
 
   // Structured Business Audit Trail fields
   hospitalId?: string;
+  correlationId?: string;
   entityType?: 'DOCTOR' | 'PATIENT' | 'APPOINTMENT' | 'HOSPITAL' | string;
   actionPerformed?: string;
   actionType?: 'WORKFLOW' | 'DATA_CHANGE' | 'SYSTEM';
@@ -34,7 +35,8 @@ export interface AuditEvent {
 export interface AuditLogDocument extends AuditEvent, Document {}
 
 const AuditLogSchema: Schema = new Schema({
-  eventId: { type: String, required: true, unique: true },
+  eventId: { type: String, required: true, unique: true, default: () => new mongoose.Types.ObjectId().toString() },
+  correlationId: { type: String, index: true },
   timestamp: { type: String, required: true, index: true },
   service: { type: String, required: true, default: 'api-gateway' },
   action: { type: String, required: true },
@@ -69,7 +71,6 @@ const AuditLogSchema: Schema = new Schema({
 
 AuditLogSchema.index({ hospitalId: 1, timestamp: -1 });
 AuditLogSchema.index({ hospitalId: 1, entityType: 1, timestamp: -1 });
-AuditLogSchema.index({ actionType: 1, timestamp: -1 });
 AuditLogSchema.index({ actionType: 1, timestamp: -1 });
 AuditLogSchema.index({ performedByUserId: 1, timestamp: -1 });
 

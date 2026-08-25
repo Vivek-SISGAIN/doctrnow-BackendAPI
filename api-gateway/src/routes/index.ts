@@ -221,6 +221,34 @@ router.use(
   )
 );
 
+// Insurance Service Routes (requires authentication)
+router.use(
+  '/insurance',
+  authenticateJWT,
+  userRateLimiter,
+  createServiceProxy(
+    {
+      target: config.services.payment,
+      pathRewrite: { '^/api/v1/insurance': '/api/insurance' },
+    },
+    'payment-insurance-service'
+  )
+);
+
+// Cerner FHIR Integration Routes (requires authentication)
+router.use(
+  '/fhir',
+  authenticateJWT,
+  userRateLimiter,
+  createServiceProxy(
+    {
+      target: config.services.payment,
+      pathRewrite: { '^/api/v1/fhir': '/api/fhir' },
+    },
+    'cerner-fhir-service'
+  )
+);
+
 // Medical Records Service Routes (requires authentication)
 router.use(
   '/prescriptions',

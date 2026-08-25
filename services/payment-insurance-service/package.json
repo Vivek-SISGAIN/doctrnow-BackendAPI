@@ -1,0 +1,39 @@
+{
+  "name": "payment-insurance-service",
+  "version": "1.0.0",
+  "description": "Payment processing, insurance claims, copay and refund management for DoctorNow",
+  "main": "src/server.js",
+  "private": true,
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "nodemon src/server.js",
+    "build": "rimraf dist && copyfiles -u 1 \"src/**/*\" dist",
+    "test": "node scripts/verify-fhir.js",
+    "test:fhir": "node scripts/verify-fhir.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "axios": "^1.19.0",
+    "compression": "^1.8.1",
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.5",
+    "dotenv": "^16.6.1",
+    "express": "^4.22.1",
+    "express-rate-limit": "^8.2.1",
+    "helmet": "^8.1.0",
+    "hpp": "^0.2.3",
+    "joi": "^18.0.2",
+    "morgan": "^1.10.1",
+    "swagger-jsdoc": "^6.3.0",
+    "swagger-ui-express": "^5.0.1",
+    "uuid": "^10.0.0"
+  },
+  "devDependencies": {
+    "copyfiles": "^2.4.1",
+    "nodemon": "^3.1.11",
+    "rimraf": "^6.1.3"
+  }
+}

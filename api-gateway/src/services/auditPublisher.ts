@@ -40,12 +40,22 @@ export const auditPublisher = async (event: Omit<AuditEvent, 'service'> & { serv
 
     const auditEvent = new AuditLog({
       ...event,
+      eventId: event.eventId || uuidv4(),
+      correlationId: (event as any).correlationId || (event as any).eventId || uuidv4(),
       service: event.service || 'api-gateway',
       requestBody: sanitizedBody,
     });
 
     // Fire-and-forget
-    auditEvent.save().catch(err => {
+    auditEvent.save().catch(async (err: any) => {
+      // If duplicate key error on eventId, retry once with a freshly generated unique UUID
+      if (err?.code === 11000 && err?.keyPattern?.eventId) {
+        try {
+          auditEvent.eventId = uuidv4();
+          await auditEvent.save();
+          return;
+        } catch {}
+      }
       console.error('Failed to save audit log to MongoDB asynchronously', err);
     });
   } catch (error) {
@@ -58,6 +68,7 @@ export const publishBusinessAuditEvent = async (event: Partial<AuditEvent>): Pro
   try {
     const auditEvent = new AuditLog({
       eventId: event.eventId || uuidv4(),
+      correlationId: (event as any).correlationId || event.eventId || uuidv4(),
       timestamp: event.timestamp || new Date().toISOString(),
       service: event.service || 'super-admin-service',
       action: event.actionPerformed || event.action || 'BUSINESS_EVENT',
@@ -81,7 +92,15 @@ export const publishBusinessAuditEvent = async (event: Partial<AuditEvent>): Pro
       metadata: event.metadata || {},
     });
 
-    return await auditEvent.save();
+    try {
+      return await auditEvent.save();
+    } catch (err: any) {
+      if (err?.code === 11000 && err?.keyPattern?.eventId) {
+        auditEvent.eventId = uuidv4();
+        return await auditEvent.save();
+      }
+      throw err;
+    }
   } catch (error) {
     console.error('Error saving business audit log:', error);
     return null;
