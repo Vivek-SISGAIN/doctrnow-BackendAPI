@@ -658,15 +658,23 @@ class ConsultationService {
    * @param {string} doctorId - Doctor profile ID or user auth ID
    * @param {string} period - 'daily' | 'weekly' | 'monthly' | 'all'
    */
-  async getPerformanceMetrics(doctorId, period = 'all') {
+  async getPerformanceMetrics(inputDoctorId, period = 'all') {
     const now = new Date();
 
-    // Find all consultations matching doctorId OR doctorAuthId
+    // 1. Resolve all doctor IDs (profile id and auth user id)
+    const docIds = [inputDoctorId];
+    try {
+      const prof = await profileClient.getDoctorProfile(inputDoctorId);
+      if (prof?.id && !docIds.includes(prof.id)) docIds.push(prof.id);
+      if (prof?.userId && !docIds.includes(prof.userId)) docIds.push(prof.userId);
+    } catch {}
+
+    // Find all consultations matching any of the doctor's IDs
     let allConsults = await prisma.consultation.findMany({
       where: {
         OR: [
-          { doctorId },
-          { doctorAuthId: doctorId }
+          { doctorId: { in: docIds } },
+          { doctorAuthId: { in: docIds } }
         ]
       },
       select: {
@@ -680,35 +688,6 @@ class ConsultationService {
       },
       orderBy: { createdAt: 'desc' }
     });
-
-    // Fallback: If 0 consults found, check if doctorId is a userId by looking up profile
-    if (allConsults.length === 0) {
-      try {
-        const prof = await profileClient.getDoctorProfile(doctorId);
-        if (prof?.id && prof.id !== doctorId) {
-          allConsults = await prisma.consultation.findMany({
-            where: {
-              OR: [
-                { doctorId: prof.id },
-                { doctorAuthId: prof.id }
-              ]
-            },
-            select: {
-              id: true,
-              status: true,
-              startedAt: true,
-              endedAt: true,
-              duration: true,
-              rating: true,
-              createdAt: true
-            },
-            orderBy: { createdAt: 'desc' }
-          });
-        }
-      } catch {
-        // ignore
-      }
-    }
 
     const allCompleted = allConsults.filter(c => c.status === 'COMPLETED');
     const totalAttempted = allConsults.length;
@@ -771,7 +750,7 @@ class ConsultationService {
     }
 
     const targetConsults = (period !== 'all' && currentConsults.length === 0) ? allCompleted : currentConsults;
-    const completedCount = currentConsults.length > 0 ? currentConsults.length : (period === 'all' ? allCompleted.length : 0);
+    const completedCount = currentConsults.length;
     const prevCount = prevConsults.length;
     const diff = completedCount - prevCount;
     const consultationChange = period === 'all'
