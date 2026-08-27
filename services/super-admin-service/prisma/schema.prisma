@@ -18,6 +18,10 @@ enum STATE {
   PENDING
   APPROVED
   REJECTED
+  UNDER_REVIEW
+  SENT_BACK
+  ACTIVE
+  INACTIVE
 }
 
 model Hospital {

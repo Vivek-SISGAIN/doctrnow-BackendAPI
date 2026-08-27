@@ -3,6 +3,14 @@ import axios from "axios";
 import s3Handler from "../utils/s3Handler.js";
 import { publishAuditEvent, computeDiff } from "../utils/auditPublisher.js";
 
+const formatHospital = (h) => {
+  if (!h) return h;
+  return {
+    ...h,
+    status: h.state || h.status || "PENDING",
+  };
+};
+
 class HospitalService {
   async createHospital(data, userContext = {}) {
     const parentHospitalId = data.parentHospitalId || null;
@@ -33,7 +41,7 @@ class HospitalService {
           operations: data.operations,
           servicesOffered: data.servicesOffered || [],
           specializationsAvailable: data.specializationsAvailable || [],
-          status: data.status || "PENDING",
+          state: data.state || data.status || "PENDING",
         },
         include: {
           finance: true,
@@ -52,6 +60,8 @@ class HospitalService {
       return created;
     });
 
+    const formatted = formatHospital(hospital);
+
     // Publish Audit Event for Hospital Creation
     publishAuditEvent({
       hospitalId: hospital.id,
@@ -60,14 +70,14 @@ class HospitalService {
       performedByUserId: userContext.userId || "admin",
       performedByRole: userContext.role || "SUPER_ADMIN",
       previousValue: null,
-      newValue: hospital,
-      statusChange: { from: null, to: hospital.status || "PENDING" },
+      newValue: formatted,
+      statusChange: { from: null, to: formatted.status },
       remarks: data.remarks || "Hospital created",
       path: `/hospital/${hospital.id}`,
       method: "POST",
     });
 
-    return hospital;
+    return formatted;
   }
 
   async getHospitalById(id) {
@@ -80,7 +90,7 @@ class HospitalService {
       throw new Error("Hospital not found");
     }
 
-    return hospital;
+    return formatHospital(hospital);
   }
 
   async getHospitalByIds(ids) {
@@ -98,12 +108,13 @@ class HospitalService {
         emirate: true,
         area: true,
         fullAddress: true,
+        state: true,
       },
     });
 
     const map = {};
     hospitals.forEach((h) => {
-      map[h.id] = h;
+      map[h.id] = formatHospital(h);
     });
     return map;
   }
@@ -118,7 +129,11 @@ class HospitalService {
       throw new Error("Hospital not found");
     }
 
-    const { remarks, ...updateData } = data;
+    const { remarks, status, state, ...updateData } = data;
+    const resolvedState = state || status;
+    if (resolvedState !== undefined) {
+      updateData.state = resolvedState;
+    }
 
     const hospital = await prisma.hospital.update({
       where: { id },
@@ -128,6 +143,7 @@ class HospitalService {
       },
     });
 
+    const formatted = formatHospital(hospital);
     const diffResult = computeDiff(previous, hospital);
 
     publishAuditEvent({
@@ -144,7 +160,7 @@ class HospitalService {
       method: "PATCH",
     });
 
-    return hospital;
+    return formatted;
   }
 
   async deleteHospital(id, userContext = {}) {
@@ -168,7 +184,7 @@ class HospitalService {
       performedByRole: userContext.role || "SUPER_ADMIN",
       previousValue: previous,
       newValue: null,
-      statusChange: { from: previous.status || null, to: "DELETED" },
+      statusChange: { from: previous.state || previous.status || null, to: "DELETED" },
       remarks: userContext.remarks || "Hospital deleted",
       path: `/hospital/${id}`,
       method: "DELETE",
@@ -183,8 +199,10 @@ class HospitalService {
     const previous = await this.getHospitalById(id);
     const updated = await prisma.hospital.update({
       where: { id },
-      data: { status: "UNDER_REVIEW" },
+      data: { state: "UNDER_REVIEW" },
     });
+
+    const formatted = formatHospital(updated);
 
     publishAuditEvent({
       hospitalId: id,
@@ -200,15 +218,17 @@ class HospitalService {
       method: "POST",
     });
 
-    return updated;
+    return formatted;
   }
 
   async approveHospital(id, { userContext = {}, remarks = null } = {}) {
     const previous = await this.getHospitalById(id);
     const updated = await prisma.hospital.update({
       where: { id },
-      data: { status: "APPROVED" },
+      data: { state: "APPROVED" },
     });
+
+    const formatted = formatHospital(updated);
 
     publishAuditEvent({
       hospitalId: id,
@@ -224,7 +244,7 @@ class HospitalService {
       method: "POST",
     });
 
-    return updated;
+    return formatted;
   }
 
   async rejectHospital(id, { userContext = {}, remarks } = {}) {
@@ -237,8 +257,10 @@ class HospitalService {
     const previous = await this.getHospitalById(id);
     const updated = await prisma.hospital.update({
       where: { id },
-      data: { status: "REJECTED" },
+      data: { state: "REJECTED" },
     });
+
+    const formatted = formatHospital(updated);
 
     publishAuditEvent({
       hospitalId: id,
@@ -254,7 +276,7 @@ class HospitalService {
       method: "POST",
     });
 
-    return updated;
+    return formatted;
   }
 
   async sendBackHospital(id, { userContext = {}, remarks } = {}) {
@@ -267,8 +289,10 @@ class HospitalService {
     const previous = await this.getHospitalById(id);
     const updated = await prisma.hospital.update({
       where: { id },
-      data: { status: "SENT_BACK" },
+      data: { state: "SENT_BACK" },
     });
+
+    const formatted = formatHospital(updated);
 
     publishAuditEvent({
       hospitalId: id,
@@ -284,15 +308,17 @@ class HospitalService {
       method: "POST",
     });
 
-    return updated;
+    return formatted;
   }
 
   async resubmitHospital(id, { userContext = {}, remarks = null } = {}) {
     const previous = await this.getHospitalById(id);
     const updated = await prisma.hospital.update({
       where: { id },
-      data: { status: "PENDING" },
+      data: { state: "PENDING" },
     });
+
+    const formatted = formatHospital(updated);
 
     publishAuditEvent({
       hospitalId: id,
@@ -308,15 +334,17 @@ class HospitalService {
       method: "POST",
     });
 
-    return updated;
+    return formatted;
   }
 
   async activateHospital(id, { userContext = {}, remarks = null } = {}) {
     const previous = await this.getHospitalById(id);
     const updated = await prisma.hospital.update({
       where: { id },
-      data: { status: "ACTIVE" },
+      data: { state: "ACTIVE" },
     });
+
+    const formatted = formatHospital(updated);
 
     publishAuditEvent({
       hospitalId: id,
@@ -332,15 +360,17 @@ class HospitalService {
       method: "POST",
     });
 
-    return updated;
+    return formatted;
   }
 
   async deactivateHospital(id, { userContext = {}, remarks = null } = {}) {
     const previous = await this.getHospitalById(id);
     const updated = await prisma.hospital.update({
       where: { id },
-      data: { status: "INACTIVE" },
+      data: { state: "INACTIVE" },
     });
+
+    const formatted = formatHospital(updated);
 
     publishAuditEvent({
       hospitalId: id,
@@ -356,7 +386,7 @@ class HospitalService {
       method: "POST",
     });
 
-    return updated;
+    return formatted;
   }
 
   async adminOverrideHospital(id, { userContext = {}, remarks, payload = {} } = {}) {
@@ -367,11 +397,20 @@ class HospitalService {
     }
 
     const previous = await this.getHospitalById(id);
+    const sanitizedPayload = { ...payload };
+    if (sanitizedPayload.status !== undefined && sanitizedPayload.state === undefined) {
+      sanitizedPayload.state = sanitizedPayload.status;
+      delete sanitizedPayload.status;
+    } else if (sanitizedPayload.status !== undefined) {
+      delete sanitizedPayload.status;
+    }
+
     const updated = await prisma.hospital.update({
       where: { id },
-      data: payload,
+      data: sanitizedPayload,
     });
 
+    const formatted = formatHospital(updated);
     const diffResult = computeDiff(previous, updated);
 
     publishAuditEvent({
@@ -381,14 +420,14 @@ class HospitalService {
       performedByUserId: userContext.userId || "admin",
       performedByRole: userContext.role || "SUPER_ADMIN",
       previousValue: diffResult.previousValue || previous,
-      newValue: diffResult.newValue || updated,
+      newValue: diffResult.newValue || formatted,
       statusChange: diffResult.statusChange,
       remarks,
       path: `/hospital/${id}/override`,
       method: "POST",
     });
 
-    return updated;
+    return formatted;
   }
 
   // ─── Query & Documents Methods ───────────────────────────────────────────
@@ -440,7 +479,7 @@ class HospitalService {
 
     const statusList = parseList(status);
     if (statusList.length > 0) {
-      where.status = { in: statusList.map((s) => s.toUpperCase()) };
+      where.state = { in: statusList.map((s) => s.toUpperCase()) };
     }
 
     const [hospitals, total] = await Promise.all([
@@ -460,7 +499,7 @@ class HospitalService {
           fetchConsultationCount(hospital.id),
           fetchDoctorCount(hospital.id),
         ]);
-        return { ...hospital, totalConsultations, doctors };
+        return formatHospital({ ...hospital, totalConsultations, doctors });
       }),
     );
 
@@ -541,13 +580,15 @@ class HospitalService {
       throw new Error("No valid files were provided for upload.");
     }
 
-    return prisma.hospital.update({
+    const result = await prisma.hospital.update({
       where: { id: hospitalId },
       data: patch,
       include: {
         finance: true,
       },
     });
+
+    return formatHospital(result);
   }
 
   async uploadBranding(hospitalId, files = {}, primaryColor, secondaryColor) {
@@ -575,11 +616,13 @@ class HospitalService {
       throw new Error("No branding files or colors provided.");
     }
 
-    return prisma.hospital.update({
+    const result = await prisma.hospital.update({
       where: { id: hospitalId },
       data: patch,
       include: { finance: true },
     });
+
+    return formatHospital(result);
   }
 
   async getHospitalIds(query) {
@@ -648,6 +691,10 @@ async function fetchConsultationCount(hospitalId) {
       `${process.env.API_GATEWAY}/appointments`,
       {
         params: { hospitalId },
+        headers: {
+          "x-internal-service-key": process.env.INTERNAL_SERVICE_SECRET || "super_secret_internal_key_123",
+        },
+        timeout: 3000,
       },
     );
 
@@ -664,6 +711,12 @@ async function fetchDoctorCount(hospitalId) {
   try {
     const { data } = await axios.get(
       `${process.env.API_GATEWAY}/profiles/doctors/hospital/${hospitalId}?status=ACTIVE`,
+      {
+        headers: {
+          "x-internal-service-key": process.env.INTERNAL_SERVICE_SECRET || "super_secret_internal_key_123",
+        },
+        timeout: 3000,
+      },
     );
     if (Array.isArray(data)) return data.length;
     if (typeof data?.total === "number") return data.total;

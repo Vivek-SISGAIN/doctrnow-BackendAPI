@@ -28,30 +28,42 @@ export class HospitalAdminService {
     let createdUserId: string | null = null;
     let createdProfileId: string | null = null;
 
-    try {
+    const internalSecret = process.env.INTERNAL_SERVICE_SECRET || 'super_secret_internal_key_123';
+    const baseUrl = process.env.API_BASE_URL || 'http://localhost:8080/';
+    const cleanBaseUrl = baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`;
 
+    try {
         // 1️⃣ Create user in auth-service
         const authResponse = await axios.post(
-            `${process.env.API_BASE_URL}api/v1/auth/register`,
+            `${cleanBaseUrl}api/v1/auth/register`,
             {
                 email: profilePayload.email,
                 password,
                 role,
                 tenantId
+            },
+            {
+                headers: {
+                    ...(authHeader ? { Authorization: authHeader } : {}),
+                    'x-internal-service-key': internalSecret,
+                }
             }
         );
 
         createdUserId = authResponse.data.userId;
+
         // 2️⃣ Create hospital admin profile
         const hospitalAdminResponse = await axios.post(
-            `${process.env.API_BASE_URL}api/v1/profiles/hospital-admins`,
+            `${cleanBaseUrl}api/v1/profiles/hospital-admins`,
             {
                 ...profilePayload,
                 userId: createdUserId
             },
             {
                 headers: {
-                    "X-Service-Name": "profile-service"
+                    ...(authHeader ? { Authorization: authHeader } : {}),
+                    'x-internal-service-key': internalSecret,
+                    'X-Service-Name': 'profile-service'
                 }
             }
         );
@@ -60,23 +72,37 @@ export class HospitalAdminService {
         return hospitalAdminResponse.data;
 
     } catch (error) {
-
+        if (createdUserId) {
             try {
                 await axios.delete(
-                    `${process.env.API_BASE_URL}api/v1/auth/users/${createdUserId}`,
-                    { headers: { Authorization: authHeader } }
-                );
-
-                 await axios.delete(
-                    `${process.env.API_BASE_URL}api/v1/profiles/hospital-admins/${createdProfileId}`,
-                    { headers: { Authorization: authHeader } }
+                    `${cleanBaseUrl}api/v1/auth/users/${createdUserId}`,
+                    {
+                        headers: {
+                            ...(authHeader ? { Authorization: authHeader } : {}),
+                            'x-internal-service-key': internalSecret,
+                        }
+                    }
                 );
             } catch (cleanupError) {
-                console.error(
-                    "Failed to rollback user creation",
-                );
+                console.error("Failed to rollback auth user creation:", cleanupError);
             }
-        
+        }
+
+        if (createdProfileId) {
+            try {
+                await axios.delete(
+                    `${cleanBaseUrl}api/v1/profiles/hospital-admins/${createdProfileId}`,
+                    {
+                        headers: {
+                            ...(authHeader ? { Authorization: authHeader } : {}),
+                            'x-internal-service-key': internalSecret,
+                        }
+                    }
+                );
+            } catch (cleanupError) {
+                console.error("Failed to rollback hospital admin profile creation:", cleanupError);
+            }
+        }
 
         throw error;
     }

@@ -39,6 +39,8 @@ export const computeDiff = (previous = {}, current = {}) => {
 
   const statusChange = diff.status
     ? { from: diff.status.from, to: diff.status.to }
+    : diff.state
+    ? { from: diff.state.from, to: diff.state.to }
     : null;
 
   return {
