@@ -262,7 +262,15 @@ class PatientService {
   /**
    * Delete patient by ID
    */
-  delete(id) {
+  async delete(id) {
+    try {
+      await prisma.familyMember.deleteMany({
+        where: { patientId: id }
+      });
+    } catch (e) {
+      console.warn(`[patientService.delete] Error cleaning family members for patient ${id}:`, e.message);
+    }
+
     return prisma.patient.delete({
       where: { id }
     });

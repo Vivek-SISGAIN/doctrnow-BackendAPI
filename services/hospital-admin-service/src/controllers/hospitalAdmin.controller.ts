@@ -18,6 +18,7 @@ export class HospitalAdminController {
             department,
             profileImage,
             role,
+            subRole,
             tenantId,
             password
         } = req.body;
@@ -76,6 +77,7 @@ export class HospitalAdminController {
                 department,
                 profileImage,
                 role,
+                subRole: subRole || 'MASTER_ADMIN',
                 password,
                 tenantId
             }, authHeader);

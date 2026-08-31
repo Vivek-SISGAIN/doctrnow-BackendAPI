@@ -15,6 +15,7 @@ export class HospitalAdminService {
     profileImage?: string;
     tenantId: string;
     role: string;
+    subRole?: string;
     password: string;
 }, authHeader: string) {
 

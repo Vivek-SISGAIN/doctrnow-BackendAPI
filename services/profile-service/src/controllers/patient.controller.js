@@ -306,7 +306,30 @@ const deletePatient = asyncHandler(async (req, res) => {
     throw ApiError.notFound('Patient not found');
   }
 
-  await patientService.delete(id);
+  // Delete user from auth service via API gateway
+  if (patient.userId) {
+    try {
+      const gatewayUrl = (process.env.API_BASE_URL || 'http://localhost:8080/api/v1').replace(/\/$/, '');
+      const authHeader = req.headers.authorization;
+      const internalKey = process.env.INTERNAL_SERVICE_SECRET || 'super_secret_internal_key_123';
+
+      await axios.delete(`${gatewayUrl}/auth/users/${patient.userId}`, {
+        headers: {
+          ...(authHeader ? { Authorization: authHeader } : {}),
+          'x-internal-service-key': internalKey,
+        },
+        timeout: 5000,
+      });
+      console.log(`[deletePatient] Successfully deleted user ${patient.userId} from auth service via gateway`);
+    } catch (authError) {
+      console.error(
+        `[deletePatient] Failed to delete user ${patient.userId} from auth service via gateway:`,
+        authError?.response?.data || authError.message
+      );
+    }
+  }
+
+  await patientService.delete(patient.id);
   const actor = extractActor(req);
   const hospitalId = actor.hospitalId || req.headers['x-hospital-id'] || null;
 
