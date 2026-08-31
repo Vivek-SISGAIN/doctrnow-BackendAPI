@@ -151,6 +151,8 @@ async function bootstrap(): Promise<void> {
     'http://127.0.0.1:5173',
     'http://localhost:8081',
     'http://localhost:1234',
+    'http://localhost:4321',
+    'http://127.0.0.1:4321',
   ];
   const allowedOrigins = parsedOrigins.length > 0 ? parsedOrigins : devFallbackOrigins;
 

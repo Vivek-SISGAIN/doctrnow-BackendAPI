@@ -543,14 +543,16 @@ class HospitalService {
       { field: "establishmentCard", keyCol: "establishmentCardKey" },
     ];
 
-    for (const { field, keyCol } of singleFields) {
-      if (files[field] && files[field].length > 0) {
-        const file = files[field][0];
-        const { key, url } = await s3Handler.uploadToS3(file);
-        patch[field] = url;
-        patch[keyCol] = key;
-      }
-    }
+    await Promise.all(
+      singleFields.map(async ({ field, keyCol }) => {
+        if (files[field] && files[field].length > 0) {
+          const file = files[field][0];
+          const { key, url } = await s3Handler.uploadToS3(file);
+          patch[field] = url;
+          patch[keyCol] = key;
+        }
+      })
+    );
 
     const arrayFields = [
       { field: "insuranceDocuments", keyCol: "insuranceDocumentKeys" },
@@ -560,21 +562,17 @@ class HospitalService {
       },
     ];
 
-    for (const { field, keyCol } of arrayFields) {
-      if (files[field] && files[field].length > 0) {
-        const uploadedUrls = [];
-        const uploadedKeys = [];
-
-        for (const file of files[field]) {
-          const { key, url } = await s3Handler.uploadToS3(file);
-          uploadedUrls.push(url);
-          uploadedKeys.push(key);
+    await Promise.all(
+      arrayFields.map(async ({ field, keyCol }) => {
+        if (files[field] && files[field].length > 0) {
+          const uploadResults = await Promise.all(
+            files[field].map((file) => s3Handler.uploadToS3(file))
+          );
+          patch[field] = { push: uploadResults.map((r) => r.url) };
+          patch[keyCol] = { push: uploadResults.map((r) => r.key) };
         }
-
-        patch[field] = { push: uploadedUrls };
-        patch[keyCol] = { push: uploadedKeys };
-      }
-    }
+      })
+    );
 
     if (Object.keys(patch).length === 0) {
       throw new Error("No valid files were provided for upload.");

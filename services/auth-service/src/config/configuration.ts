@@ -41,7 +41,14 @@ export default () => ({
   REDIS_PASSWORD: process.env.REDIS_PASSWORD || undefined,
 
   // CORS
-  CORS_ORIGINS: process.env.CORS_ORIGINS?.split(',') || ['http://localhost:3000'],
+  CORS_ORIGINS: process.env.CORS_ORIGINS?.split(',') || [
+    'http://localhost:3000',
+    'http://localhost:8080',
+    'http://localhost:4321',
+    'http://127.0.0.1:4321',
+    'http://localhost:5173',
+    'http://127.0.0.1:5173',
+  ],
   CORS_CREDENTIALS: process.env.CORS_CREDENTIALS === 'true' || true,
 
   // Event Bus (Kafka) – disabled by default so auth-service starts without Kafka in dev

@@ -19,6 +19,9 @@ const getAllDoctors = asyncHandler(async (req, res) => {
     maxFee,
     minExperience,
     countries,
+    countryOfEducation,
+    educationCountry,
+    educationCountries,
     emirate,
     emirates,
     workingDay,
@@ -65,6 +68,7 @@ const getAllDoctors = asyncHandler(async (req, res) => {
       maxFee,
       minExperience,
       countries,
+      countryOfEducation: countryOfEducation || educationCountry || educationCountries,
       emirate: emirate || emirates,
       workingDay,
       status,
@@ -99,6 +103,9 @@ const getDocByHospitalId = asyncHandler(async (req, res) => {
     maxFee,
     minExperience,
     countries,
+    countryOfEducation,
+    educationCountry,
+    educationCountries,
     emirate,
     emirates,
     specialization,
@@ -135,6 +142,7 @@ const getDocByHospitalId = asyncHandler(async (req, res) => {
       maxFee,
       minExperience,
       countries,
+      countryOfEducation: countryOfEducation || educationCountry || educationCountries,
       emirate: emirate || emirates,
       specialization,
       workingDay,
@@ -475,6 +483,20 @@ const createDoctor = asyncHandler(async (req, res) => {
     hospitalSharePercent,
     platformSharePercent
   });
+
+  // If doctor has a schedule, trigger automatic 60-day slot generation in appointment-service
+  if (doctor.schedule) {
+    const gatewayUrl = process.env.API_BASE_URL || 'http://localhost:8080/api/v1';
+    const appointmentUrl = gatewayUrl.endsWith('/') ? `${gatewayUrl}appointments/slots/bulk` : `${gatewayUrl}/appointments/slots/bulk`;
+    axios.post(appointmentUrl, {
+      doctorId: doctor.id,
+      hospitalId: doctor.hospitalId,
+      schedule: doctor.schedule,
+      isUpdate: true
+    }).catch(err => {
+      console.error('[DoctorController] Automatic slot generation on creation error:', err?.response?.data || err.message);
+    });
+  }
 
   const actor = extractActor(req);
   const targetHospitalId =

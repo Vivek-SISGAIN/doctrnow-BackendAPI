@@ -101,8 +101,24 @@ async function main() {
     },
   });
 
+  const opDoctor = await prisma.user.upsert({
+    where: { id: '11111111-1111-1111-1111-111111111115' },
+    update: { passwordHash },
+    create: {
+      id: '11111111-1111-1111-1111-111111111115',
+      tenantId: DEFAULT_TENANT_ID,
+      email: 'tariq.mansoor@doctornow.com',
+      mobile: '+971501234571',
+      passwordHash,
+      role: UserRole.DOCTOR,
+      status: UserStatus.ACTIVE,
+      failedLoginAttempts: 0,
+    },
+  });
+
   console.log('Auth seed completed:');
   console.log('  Doctor:', doctor.email, '(id:', doctor.id, ')');
+  console.log('  Ophthalmology Doctor:', opDoctor.email, '(id:', opDoctor.id, ')');
   console.log('  Patient:', patient.email, '(id:', patient.id, ')');
   console.log('  Test patient:', testPatient.email, '(id:', testPatient.id, ')');
   console.log('  Password for all:', SEED_PASSWORD);

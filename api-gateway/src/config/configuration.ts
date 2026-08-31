@@ -35,6 +35,8 @@ export default () => ({
     'http://127.0.0.1:3000',
     'http://localhost:8081',
     'http://localhost:1234',
+    'http://localhost:4321',
+    'http://127.0.0.1:4321',
   ],
   CORS_CREDENTIALS: process.env.CORS_CREDENTIALS === 'true' || true,
 

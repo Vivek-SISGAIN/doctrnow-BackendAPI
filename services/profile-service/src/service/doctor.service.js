@@ -247,6 +247,22 @@ class DoctorService {
             }
             break;
 
+          case 'countryOfEducation':
+          case 'educationCountry':
+          case 'educationCountries':
+            {
+              const counts = Array.isArray(value) ? value : value.split(',').map((c) => c.trim()).filter(Boolean);
+              if (counts.length > 0) {
+                const countryConditions = counts.flatMap((c) => [
+                  { countryOfEducation: { contains: c, mode: 'insensitive' } },
+                  { university: { contains: c, mode: 'insensitive' } }
+                ]);
+                where.AND = where.AND || [];
+                where.AND.push({ OR: countryConditions });
+              }
+            }
+            break;
+
           case 'minExperience':
             where.yearsOfExperience = { gte: parseInt(value, 10) };
             break;

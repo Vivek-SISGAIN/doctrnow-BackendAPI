@@ -284,7 +284,6 @@ async function main() {
       professionalMemberships: ['EMA'],
       professionalBio: 'Experienced general practitioner with focus on family medicine.',
       schedule: FULL_WEEK_SCHEDULE,
-      consultationDuration: 30,
       videoConsultationFee: 150,
       phoneConsultationFee: 100,
       followUpFee: 75,
@@ -310,7 +309,6 @@ async function main() {
     professionalMemberships: [],
     professionalBio: 'Experienced specialist.',
     schedule: WEEKDAY_SCHEDULE,
-    consultationDuration: 30,
     videoConsultationFee: 200,
     phoneConsultationFee: 150,
     followUpFee: 100,
@@ -349,6 +347,16 @@ async function main() {
       mobile: '+971501234570',
       licenseNumber: 'DHA-GP-2022-004',
       emiratesId: '784-1988-4444444-4'
+    },
+    {
+      userId: '11111111-1111-1111-1111-111111111115',
+      hospitalId: '7a8b9c0d-1e2f-4a3b-8c9d-0e1f2a3b4c5d',
+      primarySpecialization: 'Ophthalmology',
+      fullName: 'Dr. Tariq Al-Mansoor',
+      email: 'tariq.mansoor@doctornow.com',
+      mobile: '+971501234571',
+      licenseNumber: 'DHA-OPHTH-2023-005',
+      emiratesId: '784-1988-5555555-5'
     }
   ];
 
