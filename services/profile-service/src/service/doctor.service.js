@@ -260,9 +260,37 @@ class DoctorService {
             {
               const counts = Array.isArray(value) ? value : value.split(',').map((c) => c.trim()).filter(Boolean);
               if (counts.length > 0) {
-                const countryConditions = counts.flatMap((c) => [
-                  { university: { contains: c, mode: 'insensitive' } }
-                ]);
+                const countrySynonymsMap = {
+                  'usa': ['United States', 'USA', 'US', 'United States of America'],
+                  'united states': ['United States', 'USA', 'US', 'United States of America'],
+                  'us': ['United States', 'USA', 'US', 'United States of America'],
+                  'united states of america': ['United States', 'USA', 'US', 'United States of America'],
+                  'uk': ['United Kingdom', 'UK', 'Great Britain', 'Britain'],
+                  'united kingdom': ['United Kingdom', 'UK', 'Great Britain', 'Britain'],
+                  'uae': ['UAE', 'United Arab Emirates', 'Emirates'],
+                  'united arab emirates': ['UAE', 'United Arab Emirates', 'Emirates'],
+                };
+
+                const allCountryVariants = new Set();
+                counts.forEach((c) => {
+                  allCountryVariants.add(c);
+                  const syns = countrySynonymsMap[c.toLowerCase()];
+                  if (syns) {
+                    syns.forEach((s) => allCountryVariants.add(s));
+                  }
+                });
+
+                const countryConditions = [];
+                for (const c of allCountryVariants) {
+                  countryConditions.push(
+                    { educationDetails: { array_contains: [{ universityCountry: c }] } },
+                    { educationDetails: { array_contains: [{ countryOfEducation: c }] } },
+                    { educationDetails: { array_contains: [{ country: c }] } },
+                    { university: { contains: c, mode: 'insensitive' } },
+                    { medicalDegree: { contains: c, mode: 'insensitive' } }
+                  );
+                }
+
                 where.AND = where.AND || [];
                 where.AND.push({ OR: countryConditions });
               }
