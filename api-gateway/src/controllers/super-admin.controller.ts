@@ -123,12 +123,19 @@ export class SuperAdminController {
       res.status(response.status).json(response.data);
     } catch (error: any) {
       const status = error.status || HttpStatus.INTERNAL_SERVER_ERROR;
+      const downstream = error?.data || error?.response?.data;
+      const message =
+        downstream?.message ??
+        downstream?.error?.message ??
+        error.message ??
+        'Internal server error';
+
       res.status(status).json({
         error: {
-          code: 'PROXY_ERROR THis one',
-          message: error.message || 'Internal server error',
+          code: downstream?.error?.code ?? 'PROXY_ERROR',
+          message,
           correlationId,
-          ...(error?.data && { details: error.data }),
+          ...(downstream && { details: downstream }),
         },
       });
     }

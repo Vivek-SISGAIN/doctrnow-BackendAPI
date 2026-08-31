@@ -30,6 +30,9 @@ const createDoctorSchema = Joi.object({
 
   medicalDegree: Joi.string().required(),
   university: Joi.string().required(),
+  countryOfEducation: Joi.string().optional().allow(null, ''),
+  educationDetails: Joi.any().optional(),
+  experienceDetails: Joi.any().optional(),
 
   profileImage: Joi.string().uri().required(),
 

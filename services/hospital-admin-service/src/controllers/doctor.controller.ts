@@ -20,6 +20,9 @@ export class DoctorController {
             yearsOfExperience,
             medicalDegree,
             university,
+            countryOfEducation,
+            educationDetails,
+            experienceDetails,
             languagesSpoken,
             servicesOffered,
             certifications,
@@ -169,6 +172,9 @@ export class DoctorController {
                 yearsOfExperience: parseInt(yearsOfExperience),
                 medicalDegree,
                 university,
+                countryOfEducation,
+                educationDetails,
+                experienceDetails,
                 profileImage: profileImageKey,
                 languagesSpoken,
                 servicesOffered,
@@ -222,8 +228,8 @@ export class DoctorController {
             });
         } catch (error: any) {
             console.error('[DoctorController] createDoctor error:', error?.response?.data || error.message);
-            const status = error?.response?.status || 500;
-            const message = error?.response?.data?.message || error.message || 'Failed to create doctor';
+            const status = error?.status || error?.response?.status || (error.message?.includes('already exists') ? 409 : 500);
+            const message = error?.response?.data?.message || error?.response?.data?.error?.message || error.message || 'Failed to create doctor';
             return res.status(status).json({
                 success: false,
                 message: message

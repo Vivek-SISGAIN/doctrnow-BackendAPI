@@ -123,11 +123,19 @@ export class HospitalAdminController {
       res.status(response.status).json(response.data);
     } catch (error: any) {
       const status = error.status || HttpStatus.INTERNAL_SERVER_ERROR;
+      const downstream = error?.data || error?.response?.data;
+      const message =
+        downstream?.message ??
+        downstream?.error?.message ??
+        error.message ??
+        'Internal server error';
+
       res.status(status).json({
         error: {
-          code: 'PROXY_ERROR',
-          message: error.message || 'Internal server error',
+          code: downstream?.error?.code ?? 'PROXY_ERROR',
+          message,
           correlationId,
+          ...(downstream && { details: downstream }),
         },
       });
     }

@@ -89,12 +89,15 @@ const createDoctorSchema = Joi.object({
     'number.min': 'Years of experience cannot be negative',
     'any.required': 'Years of experience is required'
   }),
-  medicalDegree: Joi.string().min(2).max(100).required().messages({
+  medicalDegree: Joi.string().min(2).required().messages({
     'any.required': 'Medical degree is required'
   }),
-  university: Joi.string().min(2).max(200).required().messages({
+  university: Joi.string().min(2).required().messages({
     'any.required': 'University is required'
   }),
+  countryOfEducation: Joi.string().optional().allow(null, ''),
+  educationDetails: Joi.alternatives().try(Joi.array(), Joi.string(), Joi.object()).optional().allow(null),
+  experienceDetails: Joi.alternatives().try(Joi.array(), Joi.string(), Joi.object()).optional().allow(null),
   languagesSpoken: Joi.array().items(Joi.string()).min(1).required().messages({
     'array.min': 'At least one language must be specified',
     'any.required': 'Languages spoken is required'
@@ -193,8 +196,11 @@ const updateDoctorSchema = Joi.object({
     }),
   licenseExpiry: Joi.date().min('now').optional(),
   yearsOfExperience: Joi.number().integer().min(0).max(70).optional(),
-  medicalDegree: Joi.string().min(2).max(100).optional(),
-  university: Joi.string().min(2).max(200).optional(),
+  medicalDegree: Joi.string().min(2).optional(),
+  university: Joi.string().min(2).optional(),
+  countryOfEducation: Joi.string().optional().allow(null, ''),
+  educationDetails: Joi.alternatives().try(Joi.array(), Joi.string(), Joi.object()).optional().allow(null),
+  experienceDetails: Joi.alternatives().try(Joi.array(), Joi.string(), Joi.object()).optional().allow(null),
   languagesSpoken: Joi.array().items(Joi.string()).min(1).optional(),
   servicesOffered: Joi.array().items(Joi.string()).min(1).optional(),
   certifications: Joi.array().items(Joi.string()).optional(),

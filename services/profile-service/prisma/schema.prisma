@@ -110,6 +110,9 @@ model Doctor {
   yearsOfExperience       Int
   medicalDegree           String
   university              String
+  countryOfEducation      String?
+  educationDetails        Json?
+  experienceDetails       Json?
   profileImage            String
   languagesSpoken         String[]
   servicesOffered         String[]

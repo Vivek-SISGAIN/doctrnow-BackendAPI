@@ -35,6 +35,9 @@ class DoctorService {
     yearsOfExperience: number;
     medicalDegree: string;
     university: string;
+    countryOfEducation?: string;
+    educationDetails?: any;
+    experienceDetails?: any;
     profileImage: string;
     languagesSpoken?: string[];
     servicesOffered?: string[];
@@ -86,7 +89,9 @@ class DoctorService {
       const { exists, field } = checkResponse.data?.data || {};
 
       if (exists) {
-        throw new Error(`Doctor already exists with the provided ${field}`);
+        const err: any = new Error(`Doctor already exists with the provided ${field}`);
+        err.status = 409;
+        throw err;
       }
 
       // Step 1: Create auth user

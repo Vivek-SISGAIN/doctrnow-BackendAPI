@@ -151,6 +151,9 @@ class DoctorService {
         yearsOfExperience: data.yearsOfExperience,
         medicalDegree: data.medicalDegree,
         university: data.university,
+        countryOfEducation: data.countryOfEducation || null,
+        educationDetails: data.educationDetails ? (typeof data.educationDetails === 'string' ? (() => { try { return JSON.parse(data.educationDetails); } catch { return data.educationDetails; } })() : data.educationDetails) : undefined,
+        experienceDetails: data.experienceDetails ? (typeof data.experienceDetails === 'string' ? (() => { try { return JSON.parse(data.experienceDetails); } catch { return data.experienceDetails; } })() : data.experienceDetails) : undefined,
         profileImage: data.profileImage || '',
 
         languagesSpoken: data.languagesSpoken || [],
@@ -544,9 +547,6 @@ class DoctorService {
   }
 
   async update(id, data) {
-    // ── Sanitize Data ────────────────────────────────────────────────────────
-    // Remove virtual/enriched fields that are NOT in the Prisma schema
-    // Also remove immutable fields to avoid Prisma validation errors
     const {
       id: _id,
       createdAt,
@@ -554,8 +554,17 @@ class DoctorService {
       documents,
       rating,
       hospital,
+      user,
+      consultationDuration,
       ...prismaData
     } = data;
+
+    if (prismaData.educationDetails && typeof prismaData.educationDetails === 'string') {
+      try { prismaData.educationDetails = JSON.parse(prismaData.educationDetails); } catch {}
+    }
+    if (prismaData.experienceDetails && typeof prismaData.experienceDetails === 'string') {
+      try { prismaData.experienceDetails = JSON.parse(prismaData.experienceDetails); } catch {}
+    }
 
     const doctor = await prisma.doctor.update({
       where: { id },
