@@ -45,6 +45,12 @@ export class DoctorController {
         if (typeof req.body.certifications === 'string') certifications = JSON.parse(req.body.certifications);
         if (typeof req.body.professionalMemberships === 'string') professionalMemberships = JSON.parse(req.body.professionalMemberships);
         if (typeof req.body.schedule === 'string') schedule = JSON.parse(req.body.schedule);
+        if (typeof req.body.educationDetails === 'string') {
+            try { educationDetails = JSON.parse(req.body.educationDetails); } catch {}
+        }
+        if (typeof req.body.experienceDetails === 'string') {
+            try { experienceDetails = JSON.parse(req.body.experienceDetails); } catch {}
+        }
         // `createDoctorUpload` uses `multer.fields`, so uploaded files arrive on `req.files`.
         // Still support any older middleware that might populate `req.file`.
         const filesByField = (req.files ?? {}) as Record<string, any[]>;

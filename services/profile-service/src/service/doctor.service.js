@@ -151,9 +151,16 @@ class DoctorService {
         yearsOfExperience: data.yearsOfExperience,
         medicalDegree: data.medicalDegree,
         university: data.university,
-        countryOfEducation: data.countryOfEducation || null,
-        educationDetails: data.educationDetails ? (typeof data.educationDetails === 'string' ? (() => { try { return JSON.parse(data.educationDetails); } catch { return data.educationDetails; } })() : data.educationDetails) : undefined,
-        experienceDetails: data.experienceDetails ? (typeof data.experienceDetails === 'string' ? (() => { try { return JSON.parse(data.experienceDetails); } catch { return data.experienceDetails; } })() : data.experienceDetails) : undefined,
+        educationDetails: data.educationDetails !== undefined && data.educationDetails !== null
+          ? typeof data.educationDetails === 'string'
+            ? (() => { try { return JSON.parse(data.educationDetails); } catch { return data.educationDetails; } })()
+            : data.educationDetails
+          : null,
+        experienceDetails: data.experienceDetails !== undefined && data.experienceDetails !== null
+          ? typeof data.experienceDetails === 'string'
+            ? (() => { try { return JSON.parse(data.experienceDetails); } catch { return data.experienceDetails; } })()
+            : data.experienceDetails
+          : null,
         profileImage: data.profileImage || '',
 
         languagesSpoken: data.languagesSpoken || [],
@@ -254,7 +261,6 @@ class DoctorService {
               const counts = Array.isArray(value) ? value : value.split(',').map((c) => c.trim()).filter(Boolean);
               if (counts.length > 0) {
                 const countryConditions = counts.flatMap((c) => [
-                  { countryOfEducation: { contains: c, mode: 'insensitive' } },
                   { university: { contains: c, mode: 'insensitive' } }
                 ]);
                 where.AND = where.AND || [];

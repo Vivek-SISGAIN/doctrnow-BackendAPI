@@ -426,6 +426,8 @@ const createDoctor = asyncHandler(async (req, res) => {
     yearsOfExperience,
     medicalDegree,
     university,
+    educationDetails,
+    experienceDetails,
     profileImage,
 
     languagesSpoken,
@@ -465,6 +467,8 @@ const createDoctor = asyncHandler(async (req, res) => {
     yearsOfExperience,
     medicalDegree,
     university,
+    educationDetails,
+    experienceDetails,
     profileImage,
 
     languagesSpoken,

@@ -11,6 +11,66 @@ const formatHospital = (h) => {
   };
 };
 
+const populateHospitalPresignedUrls = async (h) => {
+  if (!h) return h;
+
+  try {
+    const [
+      tradeLicenseDownloadUrl,
+      dhaLicenseDownloadUrl,
+      establishmentCardDownloadUrl,
+      logoPresignedUrl,
+      bannerPresignedUrl,
+    ] = await Promise.all([
+      s3Handler.getPresignedS3Url(h.tradeLicenseDocumentKey || h.tradeLicenseDocument),
+      s3Handler.getPresignedS3Url(h.dhaLicenseDocumentKey || h.dhaLicenseDocument),
+      s3Handler.getPresignedS3Url(h.establishmentCardKey || h.establishmentCard),
+      s3Handler.getPresignedS3Url(h.logoKey || h.logoUrl || h.logo),
+      s3Handler.getPresignedS3Url(h.bannerKey || h.bannerUrl || h.banner),
+    ]);
+
+    // Insurance documents
+    const insuranceDocs = Array.isArray(h.insuranceDocuments) ? h.insuranceDocuments : [];
+    const insuranceKeys = Array.isArray(h.insuranceDocumentKeys) ? h.insuranceDocumentKeys : [];
+    const maxInsuranceLen = Math.max(insuranceDocs.length, insuranceKeys.length);
+    const insuranceDocumentsWithDownload = await Promise.all(
+      Array.from({ length: maxInsuranceLen }).map(async (_, idx) => {
+        const keyOrUrl = insuranceKeys[idx] || insuranceDocs[idx];
+        const origUrl = insuranceDocs[idx] || keyOrUrl;
+        const downloadUrl = await s3Handler.getPresignedS3Url(keyOrUrl);
+        return { url: origUrl, downloadUrl: downloadUrl || origUrl };
+      })
+    );
+
+    // Accreditation certificates
+    const accreditationDocs = Array.isArray(h.accreditationCertificates) ? h.accreditationCertificates : [];
+    const accreditationKeys = Array.isArray(h.accreditationCertificateKeys) ? h.accreditationCertificateKeys : [];
+    const maxAccreditationLen = Math.max(accreditationDocs.length, accreditationKeys.length);
+    const accreditationCertificatesWithDownload = await Promise.all(
+      Array.from({ length: maxAccreditationLen }).map(async (_, idx) => {
+        const keyOrUrl = accreditationKeys[idx] || accreditationDocs[idx];
+        const origUrl = accreditationDocs[idx] || keyOrUrl;
+        const downloadUrl = await s3Handler.getPresignedS3Url(keyOrUrl);
+        return { url: origUrl, downloadUrl: downloadUrl || origUrl };
+      })
+    );
+
+    return {
+      ...formatHospital(h),
+      tradeLicenseDownloadUrl: tradeLicenseDownloadUrl || h.tradeLicenseDocument,
+      dhaLicenseDownloadUrl: dhaLicenseDownloadUrl || h.dhaLicenseDocument,
+      establishmentCardDownloadUrl: establishmentCardDownloadUrl || h.establishmentCard,
+      logoUrl: logoPresignedUrl || h.logoUrl || h.logo,
+      bannerUrl: bannerPresignedUrl || h.bannerUrl || h.banner,
+      insuranceDocumentsWithDownload,
+      accreditationCertificatesWithDownload,
+    };
+  } catch (err) {
+    console.error("Error populating presigned URLs for hospital:", err);
+    return formatHospital(h);
+  }
+};
+
 class HospitalService {
   async createHospital(data, userContext = {}) {
     const parentHospitalId = data.parentHospitalId || null;
@@ -60,7 +120,7 @@ class HospitalService {
       return created;
     });
 
-    const formatted = formatHospital(hospital);
+    const formatted = await populateHospitalPresignedUrls(hospital);
 
     // Publish Audit Event for Hospital Creation
     publishAuditEvent({
@@ -90,7 +150,7 @@ class HospitalService {
       throw new Error("Hospital not found");
     }
 
-    return formatHospital(hospital);
+    return await populateHospitalPresignedUrls(hospital);
   }
 
   async getHospitalByIds(ids) {
@@ -143,7 +203,7 @@ class HospitalService {
       },
     });
 
-    const formatted = formatHospital(hospital);
+    const formatted = await populateHospitalPresignedUrls(hospital);
     const diffResult = computeDiff(previous, hospital);
 
     publishAuditEvent({
@@ -586,7 +646,7 @@ class HospitalService {
       },
     });
 
-    return formatHospital(result);
+    return await populateHospitalPresignedUrls(result);
   }
 
   async uploadBranding(hospitalId, files = {}, primaryColor, secondaryColor) {
@@ -620,7 +680,7 @@ class HospitalService {
       include: { finance: true },
     });
 
-    return formatHospital(result);
+    return await populateHospitalPresignedUrls(result);
   }
 
   async getHospitalIds(query) {
