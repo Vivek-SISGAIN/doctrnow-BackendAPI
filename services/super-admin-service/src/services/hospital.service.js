@@ -37,6 +37,25 @@ const formatHospital = (h) => {
   };
 };
 
+const populateHospitalListingUrls = async (h) => {
+  if (!h) return h;
+
+  try {
+    const [logoPresignedUrl, bannerPresignedUrl] = await Promise.all([
+      (h.logoKey || h.logoUrl || h.logo) ? s3Handler.getPresignedS3Url(h.logoKey || h.logoUrl || h.logo) : null,
+      (h.bannerKey || h.bannerUrl || h.banner) ? s3Handler.getPresignedS3Url(h.bannerKey || h.bannerUrl || h.banner) : null,
+    ]);
+
+    return {
+      ...formatHospital(h),
+      logoUrl: logoPresignedUrl || h.logoUrl || h.logo,
+      bannerUrl: bannerPresignedUrl || h.bannerUrl || h.banner,
+    };
+  } catch (err) {
+    return formatHospital(h);
+  }
+};
+
 const populateHospitalPresignedUrls = async (h) => {
   if (!h) return h;
 
@@ -628,7 +647,7 @@ class HospitalService {
       };
     }
 
-    // 5. Specialties / Specializations Available (with case variants)
+    // 5. Specialties / Specializations Available (with case variants and clinical synonyms)
     const effectiveSpecialties =
       specialties ||
       specialization ||
@@ -636,20 +655,9 @@ class HospitalService {
       specializationsAvailable;
     const specialtyList = parseList(effectiveSpecialties);
     if (specialtyList.length > 0) {
-      const specialtyVariants = [];
-      specialtyList.forEach((s) => {
-        const trimmed = s.trim();
-        if (trimmed) {
-          specialtyVariants.push(trimmed);
-          specialtyVariants.push(trimmed.toLowerCase());
-          specialtyVariants.push(trimmed.toUpperCase());
-          specialtyVariants.push(
-            trimmed.charAt(0).toUpperCase() + trimmed.slice(1).toLowerCase()
-          );
-        }
-      });
+      const searchTerms = expandSpecialtyTerms(specialtyList);
       where.specializationsAvailable = {
-        hasSome: [...new Set(specialtyVariants)],
+        hasSome: searchTerms,
       };
     }
 
@@ -1252,6 +1260,69 @@ function parseList(value) {
     .split(",")
     .map((v) => v.trim())
     .filter(Boolean);
+}
+
+function expandSpecialtyTerms(specialtyList) {
+  const variations = [];
+  for (const spec of specialtyList) {
+    if (!spec) continue;
+    const trimmed = spec.trim();
+    variations.push(trimmed);
+    variations.push(trimmed.toLowerCase());
+    variations.push(trimmed.toUpperCase());
+    variations.push(trimmed.charAt(0).toUpperCase() + trimmed.slice(1).toLowerCase());
+
+    const clean = trimmed.replace(/\s+/g, "");
+    variations.push(clean);
+
+    if (/general\s*(physician|medicine|practitioner|practice)/i.test(trimmed)) {
+      variations.push(
+        "General Physician",
+        "GeneralPhysician",
+        "General Medicine",
+        "GeneralMedicine",
+        "General Practitioner",
+        "GeneralPractitioner",
+        "Internal Medicine",
+        "InternalMedicine",
+        "General Practice"
+      );
+    }
+    if (/cardio/i.test(trimmed)) {
+      variations.push("Cardiology", "Cardiologist", "Cardiovascular", "Cardio");
+    }
+    if (/derma/i.test(trimmed)) {
+      variations.push("Dermatology", "Dermatologist", "Derma");
+    }
+    if (/ortho/i.test(trimmed)) {
+      variations.push("Orthopedics", "Orthopaedics", "Orthopedic", "Orthopaedic", "Ortho");
+    }
+    if (/pedia/i.test(trimmed)) {
+      variations.push("Pediatrics", "Paediatrics", "Pediatrician", "Paediatrician", "Pedia");
+    }
+    if (/neuro/i.test(trimmed)) {
+      variations.push("Neurology", "Neurologist", "Neurosurgery", "Neuro");
+    }
+    if (/ent|ear\s*nose/i.test(trimmed)) {
+      variations.push("ENT", "Otolaryngology", "Ear Nose Throat");
+    }
+    if (/ophthal|eye/i.test(trimmed)) {
+      variations.push("Ophthalmology", "Ophthalmologist", "Eye");
+    }
+    if (/psych/i.test(trimmed)) {
+      variations.push("Psychiatry", "Psychology", "Psychiatrist");
+    }
+    if (/gyn|obs/i.test(trimmed)) {
+      variations.push("Gynecology", "Gynaecology", "Obstetrics");
+    }
+    if (/nephro/i.test(trimmed)) {
+      variations.push("Nephrology", "Nephrologist");
+    }
+    if (/onco/i.test(trimmed)) {
+      variations.push("Oncology", "Oncologist");
+    }
+  }
+  return [...new Set(variations.filter(Boolean))];
 }
 
 function getDaysInRange(startStr, endStr) {
