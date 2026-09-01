@@ -5,6 +5,7 @@ import {
   BadRequestException,
   ConflictException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { PasswordService } from './password.service';
 import { SessionService } from './session.service';
@@ -45,6 +46,7 @@ export class AuthService {
     private readonly accountLockoutService: AccountLockoutService,
     private readonly eventsService: EventsService,
     private readonly otpService: OtpService,
+    private readonly configService: ConfigService,
   ) { }
 
   private normalizeMobile(mobile?: string): string | undefined {
@@ -56,6 +58,100 @@ export class AuthService {
     if (!digits) return undefined;
 
     return trimmed.startsWith('+') ? `+${digits}` : digits;
+  }
+
+  /**
+   * Cross-verify active status for the user in auth-service and, for DOCTOR role,
+   * in profile-service via the API Gateway. Normalizes status comparisons case-insensitively.
+   * Fails closed on any error, timeout, or missing/inactive record.
+   */
+  private async verifyDoctorActiveStatus(user: {
+    id: string;
+    email: string;
+    role: UserRole | string;
+    status: UserStatus | string;
+  }): Promise<void> {
+    const authStatus = (user.status || '').toString().trim().toLowerCase();
+    if (authStatus !== 'active') {
+      this.logger.warn(
+        `[Auth] Login rejected: user ${user.id} (${user.email}) auth-service status is '${user.status}' (expected 'active')`,
+      );
+      throw new UnauthorizedException('Account is inactive');
+    }
+
+    if (user.role?.toString().trim().toUpperCase() !== 'DOCTOR') {
+      return;
+    }
+
+    const apiGatewayUrl =
+      this.configService.get<string>('API_GATEWAY_URL') ||
+      process.env.API_GATEWAY_URL ||
+      process.env.API_GATEWAY ||
+      'http://localhost:8080/api/v1';
+    const internalSecret =
+      this.configService.get<string>('INTERNAL_SERVICE_SECRET') ||
+      process.env.INTERNAL_SERVICE_SECRET ||
+      'super_secret_internal_key_123';
+
+    const gatewayBase = apiGatewayUrl.replace(/\/+$/, '');
+
+    let response: Response;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
+
+    try {
+      response = await fetch(`${gatewayBase}/profiles/doctors/${user.id}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-internal-service-key': internalSecret,
+          'x-internal-secret': internalSecret,
+        },
+        signal: controller.signal,
+      });
+    } catch (error: any) {
+      clearTimeout(timeoutId);
+      this.logger.error(
+        `[Auth] Failed to reach API Gateway to verify doctor status for user ${user.id} (${user.email}): ${error?.message || error}`,
+      );
+      throw new UnauthorizedException('Unable to verify account status, try again');
+    } finally {
+      clearTimeout(timeoutId);
+    }
+
+    if (!response.ok) {
+      if (response.status === 404) {
+        this.logger.warn(
+          `[Auth] Doctor profile not found via API Gateway for user ${user.id} (${user.email}) (HTTP 404)`,
+        );
+        throw new UnauthorizedException('Account is inactive');
+      }
+      this.logger.error(
+        `[Auth] API Gateway returned HTTP status ${response.status} when verifying doctor status for user ${user.id}`,
+      );
+      throw new UnauthorizedException('Unable to verify account status, try again');
+    }
+
+    let data: any;
+    try {
+      data = await response.json();
+    } catch (parseError: any) {
+      this.logger.error(
+        `[Auth] Failed to parse API Gateway response for doctor user ${user.id}: ${parseError?.message || parseError}`,
+      );
+      throw new UnauthorizedException('Unable to verify account status, try again');
+    }
+
+    const doctorData = data?.data || data;
+    const rawProfileStatus = doctorData?.status;
+    const profileStatus = (rawProfileStatus || '').toString().trim().toLowerCase();
+
+    if (profileStatus !== 'active') {
+      this.logger.warn(
+        `[Auth] Login rejected: doctor ${user.id} (${user.email}) profile status is '${rawProfileStatus}' (expected 'active')`,
+      );
+      throw new UnauthorizedException('Account is inactive');
+    }
   }
 
   /**
@@ -261,10 +357,8 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    // Check user status
-    if (user.status !== UserStatus.ACTIVE) {
-      throw new UnauthorizedException(`Account is ${user.status.toLowerCase()}`);
-    }
+    // Cross-verify status across auth-service and profile-service
+    await this.verifyDoctorActiveStatus(user);
 
     // Reset failed attempts on successful login
     await this.accountLockoutService.resetFailedAttempts(user.id);
@@ -350,9 +444,8 @@ export class AuthService {
       throw new UnauthorizedException('User not found');
     }
 
-    if (user.status !== UserStatus.ACTIVE) {
-      throw new UnauthorizedException(`Account is ${user.status.toLowerCase()}`);
-    }
+    // Cross-verify status across auth-service and profile-service
+    await this.verifyDoctorActiveStatus(user);
 
     const session = await this.sessionService.createSession({
       userId: user.id,

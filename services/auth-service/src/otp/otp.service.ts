@@ -4,7 +4,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { EventsService } from '../events/events.service';
 import { createHash } from 'crypto';
 import { OtpPurpose } from '@prisma/client';
-import { SessionService } from 'src/auth/session.service';
+import { SessionService } from '../auth/session.service';
 
 export interface SendOtpDto {
   email?: string;

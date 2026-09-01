@@ -57,6 +57,10 @@ export default () => ({
   KAFKA_CLIENT_ID: process.env.KAFKA_CLIENT_ID || 'auth-service',
   KAFKA_GROUP_ID: process.env.KAFKA_GROUP_ID || 'auth-service-group',
 
+  // API Gateway Integration (routes inter-service calls through gateway)
+  API_GATEWAY_URL: process.env.API_GATEWAY_URL || process.env.API_GATEWAY || 'http://localhost:8080/api/v1',
+  INTERNAL_SERVICE_SECRET: process.env.INTERNAL_SERVICE_SECRET || 'super_secret_internal_key_123',
+
   // Encryption (for private keys)
   ENCRYPTION_KEY: process.env.ENCRYPTION_KEY || '', // Must be set in production
 
