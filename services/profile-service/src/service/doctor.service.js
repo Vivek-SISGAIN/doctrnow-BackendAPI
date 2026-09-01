@@ -308,10 +308,29 @@ class DoctorService {
             break;
 
           case 'workingDay':
-            where.schedule = {
-              path: [value.toUpperCase()],
-              not: Prisma.AnyNull
-            };
+          case 'workingDays':
+            {
+              const days = (Array.isArray(value) ? value : value.split(','))
+                .map((d) => d.trim().toUpperCase())
+                .filter(Boolean);
+
+              if (days.length === 1) {
+                where.schedule = {
+                  path: [days[0]],
+                  not: Prisma.AnyNull
+                };
+              } else if (days.length > 1) {
+                where.AND = where.AND || [];
+                where.AND.push({
+                  OR: days.map((day) => ({
+                    schedule: {
+                      path: [day],
+                      not: Prisma.AnyNull
+                    }
+                  }))
+                });
+              }
+            }
             break;
 
           case 'status':
