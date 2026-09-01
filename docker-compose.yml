@@ -167,6 +167,13 @@ services:
     depends_on:
       - postgres-audit
       - redis
+  payment-insurance-service:
+    build: ./services/payment-insurance-service
+    container_name: payment-insurance-service
+    restart: always
+    env_file: ./services/payment-insurance-service/.env
+    depends_on:
+      - postgres-payments
   api-gateway:
     build: ./api-gateway
     container_name: api-gateway

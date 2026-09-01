@@ -227,6 +227,9 @@ async function bootstrap(): Promise<void> {
       .addTag('hospital-admin', 'Hospital admin (health services, packages, doctors)')
       .addTag('consultations', 'Consultation management')
       .addTag('notifications', 'Notification management (push, email, SMS, OTP)')
+      .addTag('payments', 'Payment processing and refunds')
+      .addTag('insurance', 'Insurance coverage checks and claims')
+      .addTag('fhir', 'Cerner FHIR R4 interoperability (patients, observations, conditions, encounters, medications)')
       .build();
 
     const document = SwaggerModule.createDocument(app, swaggerConfig);

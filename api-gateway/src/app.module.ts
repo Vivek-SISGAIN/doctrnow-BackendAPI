@@ -32,6 +32,9 @@ import { NotificationController } from './controllers/notification.controller';
 import { SearchController } from './controllers/search.controller';
 import { AuditController } from './controllers/audit.controller';
 import { SlotController } from './controllers/slot.controller';
+import { PaymentController } from './controllers/payment.controller';
+import { InsuranceController } from './controllers/insurance.controller';
+import { FhirController } from './controllers/fhir.controller';
 
 import { CorrelationIdInterceptor } from './common/interceptors/correlation-id.interceptor';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
@@ -151,6 +154,9 @@ import configuration from './config/configuration';
     SearchController,
     AuditController,
     SlotController,
+    PaymentController,
+    InsuranceController,
+    FhirController,
   ],
   providers: [
     // Global Guards (execution order: Throttler → JWT → Roles)
