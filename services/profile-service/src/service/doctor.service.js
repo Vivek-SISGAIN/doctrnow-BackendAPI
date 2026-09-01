@@ -302,7 +302,9 @@ class DoctorService {
             break;
 
           case 'maxFee':
-            where.videoConsultationFee = { lte: parseFloat(value) };
+            if (parseFloat(value) > 0) {
+              where.videoConsultationFee = { lte: parseFloat(value) };
+            }
             break;
 
           case 'workingDay':
