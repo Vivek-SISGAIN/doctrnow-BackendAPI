@@ -11,6 +11,25 @@ const formatHospital = (h) => {
   };
 };
 
+const populateHospitalListingUrls = async (h) => {
+  if (!h) return h;
+
+  try {
+    const [logoPresignedUrl, bannerPresignedUrl] = await Promise.all([
+      (h.logoKey || h.logoUrl || h.logo) ? s3Handler.getPresignedS3Url(h.logoKey || h.logoUrl || h.logo) : null,
+      (h.bannerKey || h.bannerUrl || h.banner) ? s3Handler.getPresignedS3Url(h.bannerKey || h.bannerUrl || h.banner) : null,
+    ]);
+
+    return {
+      ...formatHospital(h),
+      logoUrl: logoPresignedUrl || h.logoUrl || h.logo,
+      bannerUrl: bannerPresignedUrl || h.bannerUrl || h.banner,
+    };
+  } catch (err) {
+    return formatHospital(h);
+  }
+};
+
 const populateHospitalPresignedUrls = async (h) => {
   if (!h) return h;
 
@@ -534,7 +553,8 @@ class HospitalService {
 
     const specialtyList = parseList(specialties);
     if (specialtyList.length > 0) {
-      where.specializationsAvailable = { hasSome: specialtyList };
+      const searchTerms = expandSpecialtyTerms(specialtyList);
+      where.specializationsAvailable = { hasSome: searchTerms };
     }
 
     const statusList = parseList(status);
@@ -555,11 +575,18 @@ class HospitalService {
 
     const enriched = await Promise.all(
       hospitals.map(async (hospital) => {
-        const [totalConsultations, doctors] = await Promise.all([
+        const [totalConsultations, docMetrics] = await Promise.all([
           fetchConsultationCount(hospital.id),
-          fetchDoctorCount(hospital.id),
+          fetchHospitalDoctorMetrics(hospital.id),
         ]);
-        return formatHospital({ ...hospital, totalConsultations, doctors });
+        return await populateHospitalListingUrls({
+          ...hospital,
+          totalConsultations,
+          doctors: docMetrics.doctors,
+          rating: docMetrics.rating,
+          totalReviews: docMetrics.totalReviews,
+          nextAvailableSlot: docMetrics.nextAvailableSlot,
+        });
       }),
     );
 
@@ -765,7 +792,95 @@ async function fetchConsultationCount(hospitalId) {
   }
 }
 
-async function fetchDoctorCount(hospitalId) {
+function formatTime12h(time24) {
+  if (!time24) return "";
+  const parts = time24.split(":");
+  const h = parseInt(parts[0], 10);
+  const m = parseInt(parts[1] || 0, 10);
+  if (isNaN(h)) return time24;
+  const ampm = h >= 12 ? "PM" : "AM";
+  const h12 = h % 12 || 12;
+  return `${h12}:${m.toString().padStart(2, "0")} ${ampm}`;
+}
+
+function getNextSlotFromDoctorSchedule(schedule) {
+  if (!schedule || typeof schedule !== "object" || Object.keys(schedule).length === 0) {
+    return null;
+  }
+
+  const normalized = {};
+  for (const [day, config] of Object.entries(schedule)) {
+    if (config && typeof config === "object") {
+      const dayUpper = day.toUpperCase();
+      if (Array.isArray(config.slots) && config.enabled && config.slots.length > 0) {
+        normalized[dayUpper] = config.slots.map((sl) => ({ from: sl.startTime, to: sl.endTime }));
+      } else if (config.from && config.to) {
+        normalized[dayUpper] = [{ from: config.from, to: config.to }];
+      }
+    }
+  }
+
+  const now = new Date();
+  const dubaiNowStr = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Dubai",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(now);
+
+  const [datePart, timePart] = dubaiNowStr.split(", ");
+  const [y, m, d] = datePart.split("-").map(Number);
+  const [currH, currM] = timePart.split(":").map(Number);
+  const dubaiNowMinutes = currH * 60 + currM;
+
+  const dayNames = ["SUNDAY", "MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY"];
+  const currentDubaiWeekday = new Intl.DateTimeFormat("en-US", {
+    weekday: "long",
+    timeZone: "Asia/Dubai",
+  }).format(now).toUpperCase();
+
+  const startDayIdx = dayNames.indexOf(currentDubaiWeekday);
+
+  for (let i = 0; i < 14; i++) {
+    const currentIdx = (startDayIdx + i) % 7;
+    const dayName = dayNames[currentIdx];
+    const slots = normalized[dayName];
+
+    if (!slots || slots.length === 0) continue;
+
+    for (const slot of slots) {
+      const [fromH, fromM] = slot.from.split(":").map(Number);
+      const [toH, toM] = slot.to.split(":").map(Number);
+      const endMinutes = toH * 60 + toM;
+
+      if (i === 0 && dubaiNowMinutes >= endMinutes) {
+        continue;
+      }
+
+      const targetDate = new Date(y, m - 1, d + i, fromH, fromM);
+      const dayStr = targetDate.toLocaleDateString("en-US", { weekday: "short", day: "2-digit", month: "short" });
+      let label = `Next Available ${dayStr}`;
+      if (i === 0) {
+        label = "Next Available Today";
+      } else if (i === 1) {
+        label = "Next Available Tomorrow";
+      }
+
+      return {
+        timestamp: targetDate.getTime(),
+        time: formatTime12h(slot.from),
+        label,
+      };
+    }
+  }
+
+  return null;
+}
+
+async function fetchHospitalDoctorMetrics(hospitalId) {
   try {
     const { data } = await axios.get(
       `${process.env.API_GATEWAY}/profiles/doctors/hospital/${hospitalId}?status=ACTIVE`,
@@ -773,15 +888,104 @@ async function fetchDoctorCount(hospitalId) {
         headers: {
           "x-internal-service-key": process.env.INTERNAL_SERVICE_SECRET || "super_secret_internal_key_123",
         },
-        timeout: 3000,
-      },
+        timeout: 4000,
+      }
     );
-    if (Array.isArray(data)) return data.length;
-    if (typeof data?.total === "number") return data.total;
-    if (Array.isArray(data?.data)) return data.data.length;
-    return 0;
+
+    const doctors = Array.isArray(data) ? data : data?.data || [];
+    const doctorCount = doctors.length;
+
+    if (doctorCount === 0) {
+      return {
+        doctors: 0,
+        rating: 0,
+        totalReviews: 0,
+        nextAvailableSlot: {
+          status: "NO_DOCTORS",
+          label: "No doctors available",
+          time: "",
+        },
+      };
+    }
+
+    let totalWeightedRating = 0;
+    let totalReviews = 0;
+    let docsWithRating = 0;
+    let sumRating = 0;
+
+    let earliestTimestamp = Infinity;
+    let earliestSlot = null;
+    const now = new Date();
+
+    for (const doc of doctors) {
+      const avg = doc.rating?.averageRating;
+      const rev = doc.rating?.totalReviews;
+
+      if (typeof avg === "number" && avg > 0) {
+        docsWithRating++;
+        sumRating += avg;
+        if (typeof rev === "number" && rev > 0) {
+          totalWeightedRating += avg * rev;
+          totalReviews += rev;
+        }
+      }
+
+      if (doc.nextAvailableSlot && doc.nextAvailableSlot.startTime) {
+        const slotDate = new Date(doc.nextAvailableSlot.startTime);
+        const t = slotDate.getTime();
+        if (!isNaN(t) && t >= now.getTime() && t < earliestTimestamp) {
+          earliestTimestamp = t;
+          const isToday = slotDate.toDateString() === now.toDateString();
+          const tomorrow = new Date(now);
+          tomorrow.setDate(tomorrow.getDate() + 1);
+          const isTomorrow = slotDate.toDateString() === tomorrow.toDateString();
+
+          let label = `Next Available ${slotDate.toLocaleDateString("en-US", { weekday: "short", day: "2-digit", month: "short" })}`;
+          if (isToday) label = "Next Available Today";
+          else if (isTomorrow) label = "Next Available Tomorrow";
+
+          const timeStr = slotDate.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true });
+          earliestSlot = { status: "AVAILABLE", label, time: timeStr };
+        }
+      }
+
+      if (doc.schedule) {
+        const schedSlot = getNextSlotFromDoctorSchedule(doc.schedule);
+        if (schedSlot && schedSlot.timestamp >= now.getTime() && schedSlot.timestamp < earliestTimestamp) {
+          earliestTimestamp = schedSlot.timestamp;
+          earliestSlot = { status: "AVAILABLE", label: schedSlot.label, time: schedSlot.time };
+        }
+      }
+    }
+
+    let finalRating = 0;
+    if (totalReviews > 0) {
+      finalRating = parseFloat((totalWeightedRating / totalReviews).toFixed(1));
+    } else if (docsWithRating > 0) {
+      finalRating = parseFloat((sumRating / docsWithRating).toFixed(1));
+    }
+
+    return {
+      doctors: doctorCount,
+      rating: finalRating,
+      totalReviews,
+      nextAvailableSlot: earliestSlot || {
+        status: "NO_SLOTS",
+        label: "No slots available",
+        time: "",
+      },
+    };
   } catch (err) {
-    return 0;
+    return {
+      doctors: 0,
+      rating: 0,
+      totalReviews: 0,
+      nextAvailableSlot: {
+        status: "NO_DOCTORS",
+        label: "No doctors available",
+        time: "",
+      },
+    };
   }
 }
 
@@ -792,6 +996,64 @@ function parseList(value) {
     .split(",")
     .map((v) => v.trim())
     .filter(Boolean);
+}
+
+function expandSpecialtyTerms(specialtyList) {
+  const variations = [];
+  for (const spec of specialtyList) {
+    if (!spec) continue;
+    variations.push(spec);
+    const clean = spec.replace(/\s+/g, "");
+    variations.push(clean);
+
+    if (/general\s*(physician|medicine|practitioner|practice)/i.test(spec)) {
+      variations.push(
+        "General Physician",
+        "GeneralPhysician",
+        "General Medicine",
+        "GeneralMedicine",
+        "General Practitioner",
+        "GeneralPractitioner",
+        "Internal Medicine",
+        "InternalMedicine",
+        "General Practice"
+      );
+    }
+    if (/cardio/i.test(spec)) {
+      variations.push("Cardiology", "Cardiologist", "Cardiovascular", "Cardio");
+    }
+    if (/derma/i.test(spec)) {
+      variations.push("Dermatology", "Dermatologist", "Derma");
+    }
+    if (/ortho/i.test(spec)) {
+      variations.push("Orthopedics", "Orthopaedics", "Orthopedic", "Orthopaedic", "Ortho");
+    }
+    if (/pedia/i.test(spec)) {
+      variations.push("Pediatrics", "Paediatrics", "Pediatrician", "Paediatrician", "Pedia");
+    }
+    if (/neuro/i.test(spec)) {
+      variations.push("Neurology", "Neurologist", "Neurosurgery", "Neuro");
+    }
+    if (/ent|ear\s*nose/i.test(spec)) {
+      variations.push("ENT", "Otolaryngology", "Ear Nose Throat");
+    }
+    if (/ophthal|eye/i.test(spec)) {
+      variations.push("Ophthalmology", "Ophthalmologist", "Eye");
+    }
+    if (/psych/i.test(spec)) {
+      variations.push("Psychiatry", "Psychology", "Psychiatrist");
+    }
+    if (/gyn|obs/i.test(spec)) {
+      variations.push("Gynecology", "Gynaecology", "Obstetrics");
+    }
+    if (/nephro/i.test(spec)) {
+      variations.push("Nephrology", "Nephrologist");
+    }
+    if (/onco/i.test(spec)) {
+      variations.push("Oncology", "Oncologist");
+    }
+  }
+  return [...new Set(variations)];
 }
 
 export default new HospitalService();
