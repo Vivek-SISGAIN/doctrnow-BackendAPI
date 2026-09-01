@@ -22,28 +22,106 @@ class HospitalController {
     const {
       search,
       location,
+      emirate,
+      emirates,
+      area,
+      hospitalType,
+      type,
+      hospitalTypes,
+      specializationFocus,
       specialties,
+      specialization,
+      specializations,
+      specializationsAvailable,
+      services,
+      servicesOffered,
+      service,
       status,
+      state,
+      statuses,
+      isBranch,
+      parentHospitalId,
+      branchId,
+      operations,
+      is24x7,
+      include24x7,
       doctorMin,
       doctorMax,
       consultationMin,
       consultationMax,
+      startDate,
+      endDate,
+      fromDate,
+      toDate,
+      from,
+      to,
+      dateFrom,
+      dateTo,
+      dateField,
       page = 1,
       limit = 20,
-    } = req.query;
+      sortBy = "createdAt",
+      sortOrder = "desc",
+      order,
+      filters: dynamicFilters,
+    } = { ...req.query, ...req.body };
 
-    const filters = {
-      search,
-      location,
-      specialties,
-      status,
-      doctorMin,
-      doctorMax,
-      consultationMin,
-      consultationMax,
+    let filters = {};
+
+    if (dynamicFilters) {
+      try {
+        filters =
+          typeof dynamicFilters === "string"
+            ? JSON.parse(dynamicFilters)
+            : dynamicFilters;
+      } catch {
+        throw new Error("Invalid filters format");
+      }
+    } else {
+      filters = {
+        search,
+        location,
+        emirate: emirate || emirates,
+        area,
+        hospitalType: hospitalType || type || hospitalTypes,
+        specializationFocus,
+        specialties:
+          specialties ||
+          specialization ||
+          specializations ||
+          specializationsAvailable,
+        services: services || servicesOffered || service,
+        status: status || state || statuses,
+        isBranch,
+        parentHospitalId,
+        branchId,
+        operations,
+        is24x7:
+          is24x7 !== undefined
+            ? is24x7
+            : operations &&
+              ["24x7", "24/7"].includes(String(operations).trim().toLowerCase())
+            ? true
+            : undefined,
+        include24x7,
+        doctorMin,
+        doctorMax,
+        consultationMin,
+        consultationMax,
+        startDate: startDate || fromDate || from || dateFrom,
+        endDate: endDate || toDate || to || dateTo,
+        dateField,
+      };
+    }
+
+    const pagination = {
+      page: parseInt(page, 10) || 1,
+      limit: parseInt(limit, 10) || 20,
+      sortBy: sortBy || "createdAt",
+      sortOrder: sortOrder || order || "desc",
     };
 
-    const result = await hospitalService.getHospitals(filters, { page, limit });
+    const result = await hospitalService.getHospitals(filters, pagination);
 
     res.status(200).json({
       success: true,

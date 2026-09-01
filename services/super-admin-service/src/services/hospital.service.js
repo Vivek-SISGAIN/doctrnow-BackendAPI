@@ -5,9 +5,35 @@ import { publishAuditEvent, computeDiff } from "../utils/auditPublisher.js";
 
 const formatHospital = (h) => {
   if (!h) return h;
+
+  let is24x7 = false;
+  let operatingHours = null;
+
+  if (typeof h.operations === "string") {
+    const trimmed = h.operations.trim().toLowerCase();
+    if (
+      trimmed === "24x7" ||
+      trimmed === "24/7" ||
+      trimmed === "24*7" ||
+      trimmed === "24hours"
+    ) {
+      is24x7 = true;
+    } else {
+      try {
+        operatingHours = JSON.parse(h.operations);
+      } catch {
+        operatingHours = h.operations;
+      }
+    }
+  } else if (h.operations && typeof h.operations === "object") {
+    operatingHours = h.operations;
+  }
+
   return {
     ...h,
     status: h.state || h.status || "PENDING",
+    is24x7,
+    operatingHours,
   };
 };
 
@@ -496,59 +522,299 @@ class HospitalService {
     const {
       search,
       location,
+      emirate,
+      emirates,
+      area,
+      hospitalType,
+      type,
+      hospitalTypes,
+      specializationFocus,
       specialties,
+      specialization,
+      specializations,
+      specializationsAvailable,
+      services,
+      servicesOffered,
+      service,
       status,
+      state,
+      statuses,
+      isBranch,
+      parentHospitalId,
+      branchId,
+      operations,
+      is24x7,
+      include24x7,
       doctorMin,
       doctorMax,
       consultationMin,
       consultationMax,
+      startDate,
+      endDate,
+      fromDate,
+      toDate,
+      from,
+      to,
+      dateFrom,
+      dateTo,
+      dateField,
     } = filters;
 
-    const { page = 1, limit = 20 } = pagination;
+    const page = parseInt(pagination.page, 10) || 1;
+    const limit = parseInt(pagination.limit, 10) || 20;
     const skip = (page - 1) * limit;
 
     const where = {};
 
-    if (search) {
-      where.OR = [
-        { officialName: { contains: search, mode: "insensitive" } },
-        { shortName: { contains: search, mode: "insensitive" } },
-        { registrationNumber: { contains: search, mode: "insensitive" } },
-      ];
+    // 1. Search filter across text fields
+    if (search && String(search).trim()) {
+      const s = String(search).trim();
+      addOrCondition(where, [
+        { officialName: { contains: s, mode: "insensitive" } },
+        { shortName: { contains: s, mode: "insensitive" } },
+        { registrationNumber: { contains: s, mode: "insensitive" } },
+        { dhaLicenseNumber: { contains: s, mode: "insensitive" } },
+        { officialEmail: { contains: s, mode: "insensitive" } },
+        { mobile: { contains: s, mode: "insensitive" } },
+      ]);
     }
 
-    if (location) {
-      const locConditions = [
-        { emirate: { contains: location, mode: "insensitive" } },
-        { area: { contains: location, mode: "insensitive" } },
-        { fullAddress: { contains: location, mode: "insensitive" } },
-        { branchId: { contains: location, mode: "insensitive" } },
-      ];
-      if (where.OR) {
-        where.AND = [{ OR: where.OR }, { OR: locConditions }];
-        delete where.OR;
+    // 2. Location / Emirate / Area
+    const effectiveEmirates = emirate || emirates;
+    const emirateList = parseList(effectiveEmirates);
+    if (emirateList.length > 0) {
+      if (emirateList.length === 1) {
+        where.emirate = { equals: emirateList[0], mode: "insensitive" };
       } else {
-        where.OR = locConditions;
+        addOrCondition(
+          where,
+          emirateList.map((em) => ({
+            emirate: { equals: em, mode: "insensitive" },
+          }))
+        );
       }
     }
 
-    const specialtyList = parseList(specialties);
-    if (specialtyList.length > 0) {
-      where.specializationsAvailable = { hasSome: specialtyList };
+    if (area && String(area).trim()) {
+      where.area = { contains: String(area).trim(), mode: "insensitive" };
     }
 
-    const statusList = parseList(status);
+    if (location && String(location).trim()) {
+      const loc = String(location).trim();
+      addOrCondition(where, [
+        { emirate: { contains: loc, mode: "insensitive" } },
+        { area: { contains: loc, mode: "insensitive" } },
+        { fullAddress: { contains: loc, mode: "insensitive" } },
+        { branchId: { contains: loc, mode: "insensitive" } },
+      ]);
+    }
+
+    // 3. Hospital Type / Types
+    const effectiveTypes = hospitalType || type || hospitalTypes;
+    const typeList = parseList(effectiveTypes);
+    if (typeList.length > 0) {
+      if (typeList.length === 1) {
+        where.hospitalType = { equals: typeList[0], mode: "insensitive" };
+      } else {
+        where.hospitalType = { in: typeList };
+      }
+    }
+
+    // 4. Specialization Focus
+    if (specializationFocus && String(specializationFocus).trim()) {
+      where.specializationFocus = {
+        contains: String(specializationFocus).trim(),
+        mode: "insensitive",
+      };
+    }
+
+    // 5. Specialties / Specializations Available (with case variants)
+    const effectiveSpecialties =
+      specialties ||
+      specialization ||
+      specializations ||
+      specializationsAvailable;
+    const specialtyList = parseList(effectiveSpecialties);
+    if (specialtyList.length > 0) {
+      const specialtyVariants = [];
+      specialtyList.forEach((s) => {
+        const trimmed = s.trim();
+        if (trimmed) {
+          specialtyVariants.push(trimmed);
+          specialtyVariants.push(trimmed.toLowerCase());
+          specialtyVariants.push(trimmed.toUpperCase());
+          specialtyVariants.push(
+            trimmed.charAt(0).toUpperCase() + trimmed.slice(1).toLowerCase()
+          );
+        }
+      });
+      where.specializationsAvailable = {
+        hasSome: [...new Set(specialtyVariants)],
+      };
+    }
+
+    // 6. Services Offered (with case variants)
+    const effectiveServices = services || servicesOffered || service;
+    const servicesList = parseList(effectiveServices);
+    if (servicesList.length > 0) {
+      const serviceVariants = [];
+      servicesList.forEach((s) => {
+        const trimmed = s.trim();
+        if (trimmed) {
+          serviceVariants.push(trimmed);
+          serviceVariants.push(trimmed.toLowerCase());
+          serviceVariants.push(trimmed.toUpperCase());
+          serviceVariants.push(
+            trimmed.charAt(0).toUpperCase() + trimmed.slice(1).toLowerCase()
+          );
+        }
+      });
+      where.servicesOffered = { hasSome: [...new Set(serviceVariants)] };
+    }
+
+    // 7. Status / State
+    const effectiveStatus = status || state || statuses;
+    const statusList = parseList(effectiveStatus);
     if (statusList.length > 0) {
       where.state = { in: statusList.map((s) => s.toUpperCase()) };
     }
+
+    // 8. Branch relationship
+    if (isBranch !== undefined && isBranch !== null && isBranch !== "") {
+      const isBranchBool = String(isBranch).toLowerCase() === "true";
+      if (isBranchBool) {
+        where.parentHospitalId = { not: null };
+      } else {
+        where.parentHospitalId = null;
+      }
+    }
+    if (parentHospitalId) {
+      where.parentHospitalId = parentHospitalId;
+    }
+    if (branchId && String(branchId).trim()) {
+      where.branchId = {
+        contains: String(branchId).trim(),
+        mode: "insensitive",
+      };
+    }
+
+    // 9. Operations / 24x7
+    const effective24x7 =
+      is24x7 !== undefined && is24x7 !== null && is24x7 !== ""
+        ? String(is24x7).toLowerCase() === "true"
+        : operations &&
+          ["24x7", "24/7"].includes(String(operations).trim().toLowerCase())
+        ? true
+        : null;
+
+    if (effective24x7 === true) {
+      addOrCondition(where, [
+        { operations: { equals: "24x7", mode: "insensitive" } },
+        { operations: { equals: "24/7", mode: "insensitive" } },
+        { operations: { contains: "24x7", mode: "insensitive" } },
+      ]);
+    } else if (effective24x7 === false) {
+      where.NOT = (where.NOT || []).concat([
+        { operations: { equals: "24x7", mode: "insensitive" } },
+        { operations: { equals: "24/7", mode: "insensitive" } },
+      ]);
+    } else if (operations && String(operations).trim()) {
+      where.operations = {
+        contains: String(operations).trim(),
+        mode: "insensitive",
+      };
+    }
+
+    // 10. Date Range Filtering (Explicit DB Date field vs Operational / Availability Date)
+    const effectiveStartDate =
+      startDate || fromDate || from || dateFrom;
+    const effectiveEndDate = endDate || toDate || to || dateTo;
+    const isExplicitDbDateField =
+      dateField && ["createdAt", "updatedAt"].includes(dateField);
+
+    if (effectiveStartDate || effectiveEndDate) {
+      if (isExplicitDbDateField) {
+        const dateCondition = {};
+
+        if (effectiveStartDate) {
+          const start = new Date(effectiveStartDate);
+          if (!isNaN(start.getTime())) {
+            dateCondition.gte = start;
+          }
+        }
+
+        if (effectiveEndDate) {
+          let end = new Date(effectiveEndDate);
+          if (!isNaN(end.getTime())) {
+            if (
+              typeof effectiveEndDate === "string" &&
+              /^\d{4}-\d{2}-\d{2}$/.test(effectiveEndDate.trim())
+            ) {
+              end = new Date(`${effectiveEndDate.trim()}T23:59:59.999Z`);
+            }
+            dateCondition.lte = end;
+          }
+        }
+
+        if (
+          include24x7 === true ||
+          String(include24x7).toLowerCase() === "true"
+        ) {
+          addOrCondition(where, [
+            { [dateField]: dateCondition },
+            { operations: { equals: "24x7", mode: "insensitive" } },
+            { operations: { equals: "24/7", mode: "insensitive" } },
+          ]);
+        } else {
+          where[dateField] = dateCondition;
+        }
+      } else {
+        // Operational Date Range Filter:
+        // 24x7 hospitals ALWAYS operate across any date range.
+        // Also match hospitals with operating schedules on the days of the week in this date range.
+        const days = getDaysInRange(effectiveStartDate, effectiveEndDate);
+        const opConditions = [
+          { operations: { equals: "24x7", mode: "insensitive" } },
+          { operations: { equals: "24/7", mode: "insensitive" } },
+          { operations: { contains: "24x7", mode: "insensitive" } },
+          ...days.map((d) => ({
+            operations: { contains: `"${d}"`, mode: "insensitive" },
+          })),
+        ];
+
+        addOrCondition(where, opConditions);
+      }
+    }
+
+    // 11. Sorting
+    const sortFieldMap = {
+      name: "officialName",
+      officialName: "officialName",
+      shortName: "shortName",
+      createdAt: "createdAt",
+      updatedAt: "updatedAt",
+      emirate: "emirate",
+      hospitalType: "hospitalType",
+      state: "state",
+      status: "state",
+    };
+    const rawSortBy = (pagination.sortBy || "createdAt").trim();
+    const sortField = sortFieldMap[rawSortBy] || "createdAt";
+    const rawSortOrder = (
+      pagination.sortOrder ||
+      pagination.order ||
+      "desc"
+    ).toLowerCase();
+    const sortOrder = rawSortOrder === "asc" ? "asc" : "desc";
+    const orderBy = { [sortField]: sortOrder };
 
     const [hospitals, total] = await Promise.all([
       prisma.hospital.findMany({
         where,
         include: { finance: true },
-        orderBy: { createdAt: "desc" },
+        orderBy,
         skip,
-        take: parseInt(limit, 10),
+        take: limit,
       }),
       prisma.hospital.count({ where }),
     ]);
@@ -563,12 +829,26 @@ class HospitalService {
       }),
     );
 
-    const dMin = doctorMin !== undefined ? parseInt(doctorMin, 10) : null;
-    const dMax = doctorMax !== undefined ? parseInt(doctorMax, 10) : null;
+    const dMin =
+      doctorMin !== undefined && doctorMin !== "" && !isNaN(Number(doctorMin))
+        ? parseInt(doctorMin, 10)
+        : null;
+    const dMax =
+      doctorMax !== undefined && doctorMax !== "" && !isNaN(Number(doctorMax))
+        ? parseInt(doctorMax, 10)
+        : null;
     const cMin =
-      consultationMin !== undefined ? parseInt(consultationMin, 10) : null;
+      consultationMin !== undefined &&
+      consultationMin !== "" &&
+      !isNaN(Number(consultationMin))
+        ? parseInt(consultationMin, 10)
+        : null;
     const cMax =
-      consultationMax !== undefined ? parseInt(consultationMax, 10) : null;
+      consultationMax !== undefined &&
+      consultationMax !== "" &&
+      !isNaN(Number(consultationMax))
+        ? parseInt(consultationMax, 10)
+        : null;
 
     const filtered = enriched.filter((h) => {
       if (dMin !== null && (h.doctors ?? 0) < dMin) return false;
@@ -582,8 +862,8 @@ class HospitalService {
       hospitals: filtered,
       pagination: {
         total,
-        page: parseInt(page, 10),
-        limit: parseInt(limit, 10),
+        page,
+        limit,
         totalPages: Math.ceil(total / limit),
       },
     };
@@ -598,89 +878,85 @@ class HospitalService {
     const patch = {};
 
     const singleFields = [
-      { field: "tradeLicenseDocument", keyCol: "tradeLicenseDocumentKey" },
-      { field: "dhaLicenseDocument", keyCol: "dhaLicenseDocumentKey" },
-      { field: "establishmentCard", keyCol: "establishmentCardKey" },
+      "tradeLicenseDocument",
+      "dhaLicenseDocument",
+      "establishmentCard",
     ];
+    for (const field of singleFields) {
+      if (files[field] && files[field][0]) {
+        const file = files[field][0];
+        const uploaded = await s3Handler.uploadFile(file, `hospitals/${hospitalId}/documents`);
+        patch[field] = uploaded.url;
+        patch[`${field}Key`] = uploaded.key;
+      }
+    }
 
-    await Promise.all(
-      singleFields.map(async ({ field, keyCol }) => {
-        if (files[field] && files[field].length > 0) {
-          const file = files[field][0];
-          const { key, url } = await s3Handler.uploadToS3(file);
-          patch[field] = url;
-          patch[keyCol] = key;
-        }
-      })
-    );
-
-    const arrayFields = [
-      { field: "insuranceDocuments", keyCol: "insuranceDocumentKeys" },
-      {
-        field: "accreditationCertificates",
-        keyCol: "accreditationCertificateKeys",
-      },
-    ];
-
-    await Promise.all(
-      arrayFields.map(async ({ field, keyCol }) => {
-        if (files[field] && files[field].length > 0) {
-          const uploadResults = await Promise.all(
-            files[field].map((file) => s3Handler.uploadToS3(file))
-          );
-          patch[field] = { push: uploadResults.map((r) => r.url) };
-          patch[keyCol] = { push: uploadResults.map((r) => r.key) };
-        }
-      })
-    );
+    const arrayFields = ["insuranceDocuments", "accreditationCertificates"];
+    for (const field of arrayFields) {
+      if (files[field] && files[field].length > 0) {
+        const uploadedArr = await Promise.all(
+          files[field].map((file) =>
+            s3Handler.uploadFile(file, `hospitals/${hospitalId}/documents`)
+          )
+        );
+        patch[field] = uploadedArr.map((u) => u.url);
+        patch[`${field}Key`] = uploadedArr.map((u) => u.key);
+      }
+    }
 
     if (Object.keys(patch).length === 0) {
-      throw new Error("No valid files were provided for upload.");
+      return formatHospital(hospital);
     }
 
-    const result = await prisma.hospital.update({
-      where: { id: hospitalId },
-      data: patch,
-      include: {
-        finance: true,
-      },
-    });
-
-    return await populateHospitalPresignedUrls(result);
-  }
-
-  async uploadBranding(hospitalId, files = {}, primaryColor, secondaryColor) {
-    const hospital = await prisma.hospital.findUnique({ where: { id: hospitalId } });
-    if (!hospital) throw new Error("Hospital not found");
-
-    const patch = {};
-
-    if (files.logo && files.logo.length > 0) {
-      const { key, url } = await s3Handler.uploadToS3(files.logo[0], "branding/logos");
-      patch.logoKey = key;
-      patch.logoUrl = url;
-    }
-
-    if (files.banner && files.banner.length > 0) {
-      const { key, url } = await s3Handler.uploadToS3(files.banner[0], "branding/banners");
-      patch.bannerKey = key;
-      patch.bannerUrl = url;
-    }
-
-    if (primaryColor) patch.primaryColor = primaryColor;
-    if (secondaryColor) patch.secondaryColor = secondaryColor;
-
-    if (Object.keys(patch).length === 0) {
-      throw new Error("No branding files or colors provided.");
-    }
-
-    const result = await prisma.hospital.update({
+    const updated = await prisma.hospital.update({
       where: { id: hospitalId },
       data: patch,
       include: { finance: true },
     });
 
-    return await populateHospitalPresignedUrls(result);
+    return await populateHospitalPresignedUrls(updated);
+  }
+
+  async uploadBranding(hospitalId, files, primaryColor, secondaryColor) {
+    const hospital = await prisma.hospital.findUnique({
+      where: { id: hospitalId },
+    });
+    if (!hospital) throw new Error("Hospital not found");
+
+    const patch = {};
+
+    if (files.logo && files.logo[0]) {
+      const uploaded = await s3Handler.uploadFile(
+        files.logo[0],
+        `hospitals/${hospitalId}/branding`
+      );
+      patch.logoUrl = uploaded.url;
+      patch.logoKey = uploaded.key;
+    }
+
+    if (files.banner && files.banner[0]) {
+      const uploaded = await s3Handler.uploadFile(
+        files.banner[0],
+        `hospitals/${hospitalId}/branding`
+      );
+      patch.bannerUrl = uploaded.url;
+      patch.bannerKey = uploaded.key;
+    }
+
+    if (primaryColor !== undefined) patch.primaryColor = primaryColor;
+    if (secondaryColor !== undefined) patch.secondaryColor = secondaryColor;
+
+    if (Object.keys(patch).length === 0) {
+      return formatHospital(hospital);
+    }
+
+    const updated = await prisma.hospital.update({
+      where: { id: hospitalId },
+      data: patch,
+      include: { finance: true },
+    });
+
+    return await populateHospitalPresignedUrls(updated);
   }
 
   async getHospitalIds(query) {
@@ -792,6 +1068,51 @@ function parseList(value) {
     .split(",")
     .map((v) => v.trim())
     .filter(Boolean);
+}
+
+function getDaysInRange(startStr, endStr) {
+  const dayNames = [
+    "sunday",
+    "monday",
+    "tuesday",
+    "wednesday",
+    "thursday",
+    "friday",
+    "saturday",
+  ];
+  if (!startStr && !endStr) return dayNames;
+
+  const start = new Date(startStr || endStr);
+  const end = new Date(endStr || startStr);
+  if (isNaN(start.getTime()) || isNaN(end.getTime())) return dayNames;
+
+  const diffDays = Math.ceil(Math.abs(end - start) / (1000 * 60 * 60 * 24));
+  if (diffDays >= 6) {
+    return dayNames;
+  }
+
+  const days = [];
+  const curr = new Date(start);
+  while (curr <= end) {
+    const dayName = dayNames[curr.getUTCDay()];
+    if (!days.includes(dayName)) days.push(dayName);
+    curr.setUTCDate(curr.getUTCDate() + 1);
+  }
+  return days;
+}
+
+function addOrCondition(whereObj, conditions) {
+  if (!conditions || conditions.length === 0) return;
+  if (!whereObj.OR && !whereObj.AND) {
+    whereObj.OR = conditions;
+  } else {
+    whereObj.AND = whereObj.AND || [];
+    if (whereObj.OR) {
+      whereObj.AND.push({ OR: whereObj.OR });
+      delete whereObj.OR;
+    }
+    whereObj.AND.push({ OR: conditions });
+  }
 }
 
 export default new HospitalService();
