@@ -143,7 +143,7 @@ export class SuperAdminController {
 
   private extractHeaders(req: Request): Record<string, string> {
     const headers: Record<string, string> = {};
-    const allowedHeaders = ['content-type', 'accept', 'x-tenant-id', 'authorization'];
+    const allowedHeaders = ['content-type', 'content-length', 'accept', 'x-tenant-id', 'x-hospital-id', 'authorization'];
 
     for (const [key, value] of Object.entries(req.headers)) {
       if (allowedHeaders.includes(key.toLowerCase())) {
