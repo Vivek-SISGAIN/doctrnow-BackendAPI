@@ -24,6 +24,28 @@ enum STATE {
   INACTIVE
 }
 
+// ─── Stripe Connect enums ──────────────────────────────────────────────────────
+
+enum StripeOnboardingStatus {
+  NOT_STARTED
+  PENDING
+  COMPLETE
+  RESTRICTED
+}
+
+enum PayoutCadence {
+  DAILY
+  WEEKLY
+  EVERY_3_DAYS
+  MANUAL
+}
+
+enum CommissionInvoiceCycle {
+  WEEKLY
+  BIWEEKLY
+  MONTHLY
+}
+
 model Hospital {
   id                String   @id @default(uuid())
 
@@ -90,6 +112,19 @@ model Hospital {
   bannerUrl             String?  @map("banner_url")
   primaryColor          String?  @map("primary_color")
   secondaryColor        String?  @map("secondary_color")
+
+  // ─── Stripe Connect ────────────────────────────────────────────────────────
+  // stripeAccountId is set once the hospital completes Stripe Express onboarding.
+  stripeAccountId          String?                @unique @map("stripe_account_id")
+  stripeOnboardingStatus   StripeOnboardingStatus @default(NOT_STARTED) @map("stripe_onboarding_status")
+  stripeChargesEnabled     Boolean                @default(false)       @map("stripe_charges_enabled")
+  stripePayoutsEnabled     Boolean                @default(false)       @map("stripe_payouts_enabled")
+  // payoutCadence mirrors the interval set on the Stripe connected account.
+  payoutCadence            PayoutCadence?         @map("payout_cadence")
+  commissionInvoiceCycle   CommissionInvoiceCycle @default(MONTHLY)     @map("commission_invoice_cycle")
+  // NOTE: The Finance model's bankName/accountNumber/iban/swiftCode/accountHolderName
+  // fields below are LEGACY — they pre-date Stripe Connect and are deprecated for
+  // any hospital onboarded through Stripe. Do not populate them for new hospitals.
 
   // Relations
   finance                        Finance?

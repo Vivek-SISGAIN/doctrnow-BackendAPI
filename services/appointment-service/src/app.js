@@ -142,6 +142,10 @@ app.use((err, req, res, next) => {
     message: err.message || "Something went wrong!",
   };
 
+  if (err.code) {
+    response.code = err.code;
+  }
+
   if (err.errors) {
     response.errors = err.errors;
   }

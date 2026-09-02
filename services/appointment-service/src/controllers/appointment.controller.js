@@ -833,6 +833,16 @@ const getDoctorAppointmentStats = asyncHandler(async (req, res) => {
   });
 });
 
+const applyPaymentOutcome = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const { outcome } = req.body;
+  if (!["PAID", "FAILED"].includes(outcome)) {
+    throw ApiError.badRequest('outcome must be "PAID" or "FAILED"');
+  }
+  const appointment = await appointmentService.applyPaymentOutcome(id, outcome);
+  res.status(200).json({ success: true, data: appointment });
+});
+
 module.exports = {
   getAllAppointments,
   getAppointmentById,
@@ -848,4 +858,5 @@ module.exports = {
   markNoShow,
   extendAppointment,
   getHospitalPatients,
+  applyPaymentOutcome,
 };

@@ -1,0 +1,189 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ────────────────────────────────────────────────────────────────────
+
+enum TransactionType {
+  CONSULTATION_PAYMENT
+  NO_SHOW_PENALTY
+  LATE_CANCELLATION_PENALTY
+}
+
+enum TransactionStatus {
+  PENDING
+  SUCCESS
+  FAILED
+  REFUNDED
+  PARTIALLY_REFUNDED
+  DISPUTED
+}
+
+enum RefundReasonCategory {
+  CANCELLATION_ON_TIME
+  CANCELLATION_LATE
+  DOCTOR_CANCELLED
+  DOCTOR_NO_SHOW
+  TECHNICAL_FAILURE
+  QUALITY_COMPLAINT
+  CHARGEBACK
+  ADMIN_MANUAL
+}
+
+enum RefundStatus {
+  PENDING
+  PROCESSED
+  FAILED
+}
+
+enum DisputeStatus {
+  NEEDS_RESPONSE
+  UNDER_REVIEW
+  WON
+  LOST
+}
+
+enum InvoiceStatus {
+  UNPAID
+  PAID
+  OVERDUE
+}
+
+// ─── Models ───────────────────────────────────────────────────────────────────
+
+model Transaction {
+  id                       String            @id @default(uuid())
+  appointmentId            String            @map("appointment_id")
+  patientId                String            @map("patient_id")
+  hospitalId               String            @map("hospital_id")
+  doctorId                 String?           @map("doctor_id")
+  type                     TransactionType   @default(CONSULTATION_PAYMENT)
+  grossAmount              Decimal           @db.Decimal(10, 2) @map("gross_amount")
+  commissionAmount         Decimal           @db.Decimal(10, 2) @map("commission_amount")
+  hospitalNetAmount        Decimal           @db.Decimal(10, 2) @map("hospital_net_amount")
+  currency                 String            @default("aed")
+  status                   TransactionStatus @default(PENDING)
+  stripeCheckoutSessionId  String?           @map("stripe_checkout_session_id")
+  stripePaymentIntentId    String?           @unique @map("stripe_payment_intent_id")
+  stripeConnectedAccountId String?           @map("stripe_connected_account_id")
+
+  // commissionInvoiceId is NULL until this transaction is included in a
+  // generated invoice — prevents double-billing across invoice cycles.
+  commissionInvoiceId      String?           @map("commission_invoice_id")
+  commissionInvoice        CommissionInvoice? @relation(fields: [commissionInvoiceId], references: [id])
+
+  createdAt                DateTime          @default(now()) @map("created_at")
+  updatedAt                DateTime          @updatedAt      @map("updated_at")
+
+  refunds                  Refund[]
+  disputes                 Dispute[]
+
+  @@index([hospitalId])
+  @@index([appointmentId])
+  @@index([patientId])
+  @@map("transactions")
+}
+
+model Refund {
+  id               String               @id @default(uuid())
+  transactionId    String               @map("transaction_id")
+  transaction      Transaction          @relation(fields: [transactionId], references: [id])
+  amount           Decimal              @db.Decimal(10, 2)
+  reason           String
+  reasonCategory   RefundReasonCategory
+  status           RefundStatus         @default(PENDING)
+  stripeRefundId   String?              @map("stripe_refund_id")
+  initiatedBy      String?              @map("initiated_by")       // userId, or "SYSTEM" for automatic
+  initiatedByRole          String?              @map("initiated_by_role")
+  // How much of the underlying transaction's commissionAmount this refund
+  // reversed — proportional to (amount / transaction.grossAmount) when
+  // refundCommission was true, else 0. Needed so invoice generation (1.6)
+  // never bills commission that was already given back.
+  commissionAmountRefunded Decimal              @default(0) @db.Decimal(10, 2) @map("commission_amount_refunded")
+  processedAt              DateTime?            @map("processed_at")
+  createdAt        DateTime             @default(now()) @map("created_at")
+  updatedAt        DateTime             @updatedAt      @map("updated_at")
+
+  @@index([transactionId])
+  @@map("refunds")
+}
+
+model Dispute {
+  id               String        @id @default(uuid())
+  transactionId    String        @map("transaction_id")
+  transaction      Transaction   @relation(fields: [transactionId], references: [id])
+  stripeDisputeId  String        @unique @map("stripe_dispute_id")
+  amount           Decimal       @db.Decimal(10, 2)
+  disputeFee       Decimal       @db.Decimal(10, 2) @default(0) @map("dispute_fee")
+  reason           String?
+  status           DisputeStatus @default(NEEDS_RESPONSE)
+  evidenceDueBy    DateTime?     @map("evidence_due_by")
+  outcome          String?
+  createdAt        DateTime      @default(now()) @map("created_at")
+  updatedAt        DateTime      @updatedAt      @map("updated_at")
+
+  @@index([transactionId])
+  @@map("disputes")
+}
+
+model CommissionInvoice {
+  id              String        @id @default(uuid())
+  hospitalId      String        @map("hospital_id")
+  periodStart     DateTime      @map("period_start")
+  periodEnd       DateTime      @map("period_end")
+  totalCommission Decimal       @db.Decimal(10, 2) @map("total_commission")
+  vatAmount       Decimal       @db.Decimal(10, 2) @default(0) @map("vat_amount")
+  totalDue        Decimal       @db.Decimal(10, 2) @map("total_due")
+  status          InvoiceStatus @default(UNPAID)
+  paidAt          DateTime?     @map("paid_at")
+  createdAt       DateTime      @default(now()) @map("created_at")
+
+  lineItems       Transaction[]
+
+  @@index([hospitalId])
+  @@map("commission_invoices")
+}
+
+model Payout {
+  id             String    @id @default(uuid())
+  hospitalId     String    @map("hospital_id")
+  stripePayoutId String    @unique @map("stripe_payout_id")
+  amount         Decimal   @db.Decimal(10, 2)
+  currency       String    @default("aed")
+  arrivalDate    DateTime? @map("arrival_date")
+  status         String
+  createdAt      DateTime  @default(now()) @map("created_at")
+
+  @@index([hospitalId])
+  @@map("payouts")
+}
+
+model PatientPaymentProfile {
+  id                     String    @id @default(uuid())
+  patientId              String    @unique @map("patient_id")
+  stripeCustomerId       String?   @map("stripe_customer_id")
+  defaultPaymentMethodId String?   @map("default_payment_method_id")
+  cardSavedAt            DateTime? @map("card_saved_at")
+  createdAt              DateTime  @default(now()) @map("created_at")
+  updatedAt              DateTime  @updatedAt      @map("updated_at")
+
+  @@map("patient_payment_profiles")
+}
+
+// ProcessedWebhookEvent enables idempotent webhook handling — Stripe retries
+// delivery and does not guarantee ordering. Every webhook handler must check
+// this table before applying any change, and insert the event id after.
+// Logic is not built yet; this table is created now so the column is ready.
+model ProcessedWebhookEvent {
+  id          String   @id // Stripe event id — NOT a generated uuid
+  type        String
+  payload     Json?
+  processedAt DateTime @default(now()) @map("processed_at")
+
+  @@map("processed_webhook_events")
+}

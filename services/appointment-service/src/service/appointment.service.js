@@ -1076,6 +1076,83 @@ class AppointmentService {
 
     return stats;
   }
+
+  /**
+   * Called only by payment-insurance-service's Stripe webhook handler, once a
+   * checkout's outcome is known. Atomically confirms-and-marks-paid, or
+   * cancels-and-frees-the-slot — bypassing the 5-minute cancel-cutoff guard in
+   * cancel(), because this isn't a patient-initiated cancellation, it's cleanup
+   * for a payment that never completed. Idempotent: safe to call more than once
+   * with the same outcome (e.g. on a webhook retry).
+   */
+  async applyPaymentOutcome(id, outcome) {
+    const appointment = await this.findById(id);
+    if (!appointment) {
+      const err = new Error("Appointment not found");
+      err.statusCode = 404;
+      throw err;
+    }
+
+    if (outcome === "PAID") {
+      if (appointment.status === "CONFIRMED" && appointment.paymentStatus === "PAID") {
+        return appointment; // already applied — idempotent no-op
+      }
+      if (appointment.status === "CANCELLED") {
+        const err = new Error("Cannot mark a cancelled appointment as paid — it was already cancelled before payment confirmation arrived.");
+        err.statusCode = 409;
+        err.code = "APPOINTMENT_ALREADY_CANCELLED";
+        throw err;
+      }
+
+      const updated = await prisma.appointment.update({
+        where: { id },
+        data: { status: "CONFIRMED", paymentStatus: "PAID" },
+        include: { slot: true },
+      });
+
+      schedulerService.scheduleAppointmentEvents(updated).catch((err) => {
+        console.error("[AppointmentService] Failed to schedule events:", err.message);
+      });
+      schedulerService.fetchAppointmentContext(updated).then((context) => {
+        schedulerService.notifyAppointmentParty(
+          updated, "PATIENT", "Payment Received",
+          `Payment is complete for your appointment with Dr. ${context.doctorName} at ${context.appointmentTime}.`,
+          { type: "PAYMENT_DONE", status: "CONFIRMED", doctorName: context.doctorName, patientName: context.patientName }
+        );
+      }).catch(() => {});
+
+      return updated;
+    }
+
+    if (outcome === "FAILED") {
+      if (appointment.status === "CANCELLED") {
+        return appointment; // already applied — idempotent no-op
+      }
+      if (appointment.status === "CONFIRMED" || appointment.status === "COMPLETED") {
+        // Payment already succeeded and was confirmed by an earlier event —
+        // a late/out-of-order "failed" event must never undo a completed booking.
+        return appointment;
+      }
+
+      return prisma.$transaction(async (tx) => {
+        const updated = await tx.appointment.update({
+          where: { id },
+          data: { status: "CANCELLED", paymentStatus: "FAILED" },
+          include: { slot: true },
+        });
+        await tx.slot.update({
+          where: { id: appointment.slotId },
+          data: { status: "AVAILABLE" },
+        });
+        await slotService.unlockSlot(appointment.slotId);
+        return updated;
+      });
+    }
+
+    const err = new Error(`Unknown payment outcome: ${outcome}`);
+    err.statusCode = 400;
+    throw err;
+  }
 }
 
 module.exports = new AppointmentService();

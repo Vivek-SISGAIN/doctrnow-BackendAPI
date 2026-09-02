@@ -16,6 +16,7 @@ const {
   getAllAppointmentsV1,
   getHospitalPatients,
   getPreviouslyConsultedDoctors,
+  applyPaymentOutcome,
 } = require("../controllers/appointment.controller");
 const {
   createAppointmentSchema,
@@ -24,6 +25,13 @@ const {
   cancelAppointmentSchema,
 } = require("../validations/appointment.validation");
 const validate = require("../middleware/validation");
+const { internalAuth } = require("../middleware/internalAuth");
+
+/**
+ * Internal route for payment-insurance-service's Stripe webhook handler.
+ * Must be registered before /:id to avoid router shadowing.
+ */
+router.patch("/internal/:id/payment-outcome", internalAuth, applyPaymentOutcome);
 
 /**
  * @swagger

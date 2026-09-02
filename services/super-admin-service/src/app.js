@@ -126,9 +126,11 @@ app.get("/", (req, res) => {
  */
 import superAdminRoutes from "./routes/hospital.routes.js";
 import internalSearchRoutes from "./routes/internalSearch.route.js";
+import internalStripeStatusRoutes from "./routes/internalStripeStatus.route.js";
 import ticketRoutes from "./routes/ticket.routes.js";
 
 app.use("/internal/search", internalSearchRoutes);
+app.use("/internal", internalStripeStatusRoutes);
 
 app.use("/api/super-admins", superAdminRoutes);
 app.use("/api/super-admins/tickets", ticketRoutes);

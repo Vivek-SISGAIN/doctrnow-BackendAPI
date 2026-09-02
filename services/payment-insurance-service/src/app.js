@@ -13,6 +13,8 @@ const swaggerSpec = require('./config/swagger');
 const fhirRoutes = require('./routes/fhir.routes');
 const paymentRoutes = require('./routes/payment.routes');
 const insuranceRoutes = require('./routes/insurance.routes');
+const stripeRoutes = require('./routes/stripe.routes');
+const internalRoutes = require('./routes/internal.routes');
 
 const app = express();
 
@@ -46,6 +48,25 @@ const corsOptions = {
   ],
 };
 app.use(cors(corsOptions));
+
+/**
+ * CRITICAL: Mount the Stripe webhook route BEFORE global express.json().
+ *
+ * The webhook handler uses express.raw({type:'application/json'}) inline on
+ * POST /api/payments/stripe/webhook. If global express.json() runs first, it
+ * consumes the request body stream and req.body becomes a parsed object —
+ * Stripe's constructEvent() then receives stringified JSON instead of the
+ * original byte sequence, which breaks HMAC signature verification.
+ *
+ * By mounting this router here (before express.json()), Express applies the
+ * inline express.raw() middleware first for the webhook path, keeping req.body
+ * as a raw Buffer for signature verification.
+ *
+ * POST /accounts reads req.body, so it carries its own inline express.json()
+ * in stripe.routes.js. POST /accounts/:hospitalId/onboarding-link only reads
+ * req.params and needs no body parser.
+ */
+app.use('/api/payments/stripe', stripeRoutes);
 
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
@@ -116,11 +137,18 @@ app.use(
 
 // Mount main service routes
 app.use('/api/fhir', fhirRoutes);
-app.use('/api/payments', paymentRoutes);
+app.use('/api/payments', paymentRoutes);        // Legacy mock routes (Phase-0)
+// Note: /api/payments/stripe/* is already mounted early (before express.json)
+// for correct raw-body handling on the webhook endpoint.
 app.use('/api/insurance', insuranceRoutes);
+app.use('/internal', internalRoutes);
 
 // Direct top-level FHIR routes (matches user requested aliases like /Patient, /Observation, etc.)
 app.use('/', fhirRoutes);
+
+if (process.env.NODE_ENV !== 'test') {
+  require('./cron/commissionInvoice.cron');
+}
 
 // Error handling middleware
 app.use((err, req, res, next) => {
