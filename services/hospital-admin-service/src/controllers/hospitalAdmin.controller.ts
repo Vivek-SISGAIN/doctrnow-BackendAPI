@@ -90,10 +90,15 @@ export class HospitalAdminController {
         } catch (error: any) {
             console.error('[HospitalAdminController] createHospitalAdmin error:', error?.response?.data || error.message);
             const status = error?.response?.status || 500;
-            const message = error?.response?.data?.message || error.message || 'Failed to create hospital admin';
+            const message =
+                error?.response?.data?.message ||
+                error?.response?.data?.error?.message ||
+                error?.response?.data?.errors ||
+                error.message ||
+                'Failed to create hospital admin';
             return res.status(status).json({
                 success: false,
-                message: message
+                message: Array.isArray(message) ? message.join(', ') : message
             });
         }
     }

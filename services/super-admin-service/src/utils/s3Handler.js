@@ -19,9 +19,10 @@ const s3 = new S3Client({
 const BUCKET = process.env.AWS_S3_BUCKET;
 
 // ✅ Upload File
-const uploadToS3 = async (file) => {
+const uploadFile = async (file, folder = "documents/hospitals") => {
   try {
-    const fileKey = `documents/hospitals/${uuid()}-${file.originalname}`;
+    const cleanFolder = folder.replace(/\/+$/, "");
+    const fileKey = `${cleanFolder}/${uuid()}-${file.originalname}`;
 
     const command = new PutObjectCommand({
       Bucket: BUCKET,
@@ -41,6 +42,8 @@ const uploadToS3 = async (file) => {
     throw error;
   }
 };
+
+const uploadToS3 = uploadFile;
 
 // ✅ Delete File
 const deleteFromS3 = async (key) => {
@@ -86,7 +89,15 @@ const getPresignedS3Url = async (keyOrUrl) => {
   }
 };
 
+export {
+  uploadFile,
+  uploadToS3,
+  deleteFromS3,
+  getPresignedS3Url,
+};
+
 export default {
+  uploadFile,
   uploadToS3,
   deleteFromS3,
   getPresignedS3Url,

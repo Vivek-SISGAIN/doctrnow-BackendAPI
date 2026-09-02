@@ -12,9 +12,12 @@ export async function searchHospitals(query, limit = 5) {
     SELECT id, official_name as "officialName",short_name as "shortName", emirate
     FROM hospitals
     WHERE 
-    official_name ILIKE ${'%' + query + '%'}
-    or
-    short_name ILIKE ${'%' + query + '%'}
+    (
+      official_name ILIKE ${'%' + query + '%'}
+      or
+      short_name ILIKE ${'%' + query + '%'}
+    )
+    AND state = 'ACTIVE'
     ORDER BY
       CASE 
         WHEN official_name ILIKE ${query + '%'} THEN 1

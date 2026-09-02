@@ -67,11 +67,11 @@ const populateHospitalPresignedUrls = async (h) => {
       logoPresignedUrl,
       bannerPresignedUrl,
     ] = await Promise.all([
-      s3Handler.getPresignedS3Url(h.tradeLicenseDocumentKey || h.tradeLicenseDocument),
-      s3Handler.getPresignedS3Url(h.dhaLicenseDocumentKey || h.dhaLicenseDocument),
-      s3Handler.getPresignedS3Url(h.establishmentCardKey || h.establishmentCard),
-      s3Handler.getPresignedS3Url(h.logoKey || h.logoUrl || h.logo),
-      s3Handler.getPresignedS3Url(h.bannerKey || h.bannerUrl || h.banner),
+      (h.tradeLicenseDocumentKey || h.tradeLicenseDocument) ? s3Handler.getPresignedS3Url(h.tradeLicenseDocumentKey || h.tradeLicenseDocument) : null,
+      (h.dhaLicenseDocumentKey || h.dhaLicenseDocument) ? s3Handler.getPresignedS3Url(h.dhaLicenseDocumentKey || h.dhaLicenseDocument) : null,
+      (h.establishmentCardKey || h.establishmentCard) ? s3Handler.getPresignedS3Url(h.establishmentCardKey || h.establishmentCard) : null,
+      (h.logoKey || h.logoUrl || h.logo) ? s3Handler.getPresignedS3Url(h.logoKey || h.logoUrl || h.logo) : null,
+      (h.bannerKey || h.bannerUrl || h.banner) ? s3Handler.getPresignedS3Url(h.bannerKey || h.bannerUrl || h.banner) : null,
     ]);
 
     // Insurance documents
@@ -82,7 +82,7 @@ const populateHospitalPresignedUrls = async (h) => {
       Array.from({ length: maxInsuranceLen }).map(async (_, idx) => {
         const keyOrUrl = insuranceKeys[idx] || insuranceDocs[idx];
         const origUrl = insuranceDocs[idx] || keyOrUrl;
-        const downloadUrl = await s3Handler.getPresignedS3Url(keyOrUrl);
+        const downloadUrl = keyOrUrl ? await s3Handler.getPresignedS3Url(keyOrUrl) : null;
         return { url: origUrl, downloadUrl: downloadUrl || origUrl };
       })
     );
@@ -95,7 +95,7 @@ const populateHospitalPresignedUrls = async (h) => {
       Array.from({ length: maxAccreditationLen }).map(async (_, idx) => {
         const keyOrUrl = accreditationKeys[idx] || accreditationDocs[idx];
         const origUrl = accreditationDocs[idx] || keyOrUrl;
-        const downloadUrl = await s3Handler.getPresignedS3Url(keyOrUrl);
+        const downloadUrl = keyOrUrl ? await s3Handler.getPresignedS3Url(keyOrUrl) : null;
         return { url: origUrl, downloadUrl: downloadUrl || origUrl };
       })
     );
@@ -891,6 +891,7 @@ class HospitalService {
     if (!hospital) throw new Error("Hospital not found");
 
     const patch = {};
+    const uploadTasks = [];
 
     const singleFields = [
       "tradeLicenseDocument",
@@ -900,23 +901,41 @@ class HospitalService {
     for (const field of singleFields) {
       if (files[field] && files[field][0]) {
         const file = files[field][0];
-        const uploaded = await s3Handler.uploadFile(file, `hospitals/${hospitalId}/documents`);
-        patch[field] = uploaded.url;
-        patch[`${field}Key`] = uploaded.key;
+        uploadTasks.push(
+          (async () => {
+            const uploaded = await s3Handler.uploadFile(
+              file,
+              `hospitals/${hospitalId}/documents`
+            );
+            patch[field] = uploaded.url;
+            patch[`${field}Key`] = uploaded.key;
+          })()
+        );
       }
     }
 
-    const arrayFields = ["insuranceDocuments", "accreditationCertificates"];
-    for (const field of arrayFields) {
+    const arrayFields = [
+      { field: "insuranceDocuments", keyField: "insuranceDocumentKeys" },
+      { field: "accreditationCertificates", keyField: "accreditationCertificateKeys" },
+    ];
+    for (const { field, keyField } of arrayFields) {
       if (files[field] && files[field].length > 0) {
-        const uploadedArr = await Promise.all(
-          files[field].map((file) =>
-            s3Handler.uploadFile(file, `hospitals/${hospitalId}/documents`)
-          )
+        uploadTasks.push(
+          (async () => {
+            const uploadedArr = await Promise.all(
+              files[field].map((file) =>
+                s3Handler.uploadFile(file, `hospitals/${hospitalId}/documents`)
+              )
+            );
+            patch[field] = uploadedArr.map((u) => u.url);
+            patch[keyField] = uploadedArr.map((u) => u.key);
+          })()
         );
-        patch[field] = uploadedArr.map((u) => u.url);
-        patch[`${field}Key`] = uploadedArr.map((u) => u.key);
       }
+    }
+
+    if (uploadTasks.length > 0) {
+      await Promise.all(uploadTasks);
     }
 
     if (Object.keys(patch).length === 0) {
@@ -939,23 +958,36 @@ class HospitalService {
     if (!hospital) throw new Error("Hospital not found");
 
     const patch = {};
+    const uploadTasks = [];
 
     if (files.logo && files.logo[0]) {
-      const uploaded = await s3Handler.uploadFile(
-        files.logo[0],
-        `hospitals/${hospitalId}/branding`
+      uploadTasks.push(
+        (async () => {
+          const uploaded = await s3Handler.uploadFile(
+            files.logo[0],
+            `hospitals/${hospitalId}/branding`
+          );
+          patch.logoUrl = uploaded.url;
+          patch.logoKey = uploaded.key;
+        })()
       );
-      patch.logoUrl = uploaded.url;
-      patch.logoKey = uploaded.key;
     }
 
     if (files.banner && files.banner[0]) {
-      const uploaded = await s3Handler.uploadFile(
-        files.banner[0],
-        `hospitals/${hospitalId}/branding`
+      uploadTasks.push(
+        (async () => {
+          const uploaded = await s3Handler.uploadFile(
+            files.banner[0],
+            `hospitals/${hospitalId}/branding`
+          );
+          patch.bannerUrl = uploaded.url;
+          patch.bannerKey = uploaded.key;
+        })()
       );
-      patch.bannerUrl = uploaded.url;
-      patch.bannerKey = uploaded.key;
+    }
+
+    if (uploadTasks.length > 0) {
+      await Promise.all(uploadTasks);
     }
 
     if (primaryColor !== undefined) patch.primaryColor = primaryColor;
@@ -975,9 +1007,19 @@ class HospitalService {
   }
 
   async getHospitalIds(query) {
-    const { lat, lng, distanceRange, emirate, emirates, facility } = query;
+    const { lat, lng, distanceRange, emirate, emirates, facility, status, state } = query;
 
     const where = {};
+
+    const effectiveStatus = status || state || "ACTIVE";
+    if (effectiveStatus && effectiveStatus !== "ALL") {
+      const statusList = parseList(effectiveStatus);
+      if (statusList.length === 1) {
+        where.state = statusList[0].toUpperCase();
+      } else if (statusList.length > 1) {
+        where.state = { in: statusList.map((s) => s.toUpperCase()) };
+      }
+    }
 
     const effectiveEmirates = emirate || emirates;
     if (effectiveEmirates) {

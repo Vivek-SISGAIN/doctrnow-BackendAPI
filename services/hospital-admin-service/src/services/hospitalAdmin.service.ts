@@ -51,7 +51,10 @@ export class HospitalAdminService {
             }
         );
 
-        createdUserId = authResponse.data.userId;
+        createdUserId =
+            authResponse.data?.data?.userId ||
+            authResponse.data?.userId ||
+            authResponse.data?.id;
 
         // 2️⃣ Create hospital admin profile
         const hospitalAdminResponse = await axios.post(
@@ -68,9 +71,11 @@ export class HospitalAdminService {
                 }
             }
         );
-        createdProfileId = hospitalAdminResponse.data.id;
+        createdProfileId =
+            hospitalAdminResponse.data?.data?.id ||
+            hospitalAdminResponse.data?.id;
 
-        return hospitalAdminResponse.data;
+        return hospitalAdminResponse.data?.data || hospitalAdminResponse.data;
 
     } catch (error) {
         if (createdUserId) {
