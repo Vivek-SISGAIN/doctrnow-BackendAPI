@@ -60,6 +60,7 @@ export class FhirController {
         role: user?.role,
         tenantId: user?.tenantId,
         hospitalId: user?.hospitalId,
+        timeout: 45000,
       });
 
       res.status(response.status).json(response.data);

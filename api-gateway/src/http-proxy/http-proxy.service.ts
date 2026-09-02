@@ -14,6 +14,7 @@ export interface ProxyRequest {
   role?: string;
   tenantId?: string;
   hospitalId?: string;
+  timeout?: number;
 }
 
 @Injectable()
@@ -58,7 +59,7 @@ export class HttpProxyService {
       },
       params: request.query,
       data: request.body,
-      timeout: this.configService.get<number>('HTTP_TIMEOUT', 5000),
+      timeout: request.timeout || this.configService.get<number>('HTTP_TIMEOUT', 30000),
       maxRedirects: this.configService.get<number>('HTTP_MAX_REDIRECTS', 5),
       validateStatus: (status) => status < 500, // Don't throw on 4xx
     };
