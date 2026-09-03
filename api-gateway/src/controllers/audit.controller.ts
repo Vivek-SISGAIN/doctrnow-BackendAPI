@@ -124,6 +124,13 @@ export class AuditController {
         { remarks: searchRegex },
         { path: searchRegex },
         { action: searchRegex },
+        { 'metadata.doctorName': searchRegex },
+        { 'metadata.patientName': searchRegex },
+        { 'metadata.email': searchRegex },
+        { 'metadata.doctorId': searchRegex },
+        { 'metadata.patientId': searchRegex },
+        { 'metadata.appointmentId': searchRegex },
+        { entityType: searchRegex },
       ];
     }
 

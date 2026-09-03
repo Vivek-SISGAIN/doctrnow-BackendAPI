@@ -257,9 +257,10 @@ const updateDoctor = asyncHandler(async (req, res) => {
 
   const statusChanged = req.body.status && req.body.status !== doctor.status;
   const targetHospitalId =
-    (doctor.assignedHospitalIds && doctor.assignedHospitalIds[0]) ||
-    doctor.hospitalId ||
+    actor.hospitalId ||
     req.body.hospitalId ||
+    doctor.hospitalId ||
+    (doctor.assignedHospitalIds && doctor.assignedHospitalIds[0]) ||
     null;
 
   publishAuditEvent({
@@ -308,7 +309,10 @@ const deleteDoctor = asyncHandler(async (req, res) => {
   const actor = extractActor(req);
 
   const targetHospitalId =
-    (doctor.assignedHospitalIds && doctor.assignedHospitalIds[0]) || doctor.hospitalId || null;
+    actor.hospitalId ||
+    (doctor.assignedHospitalIds && doctor.assignedHospitalIds[0]) ||
+    doctor.hospitalId ||
+    null;
 
   publishAuditEvent({
     hospitalId: targetHospitalId,
@@ -376,10 +380,14 @@ const setAvailability = asyncHandler(async (req, res) => {
     throw ApiError.notFound('Doctor not found');
   }
   const actor = extractActor(req);
+  const targetHospitalId =
+    actor.hospitalId ||
+    (doctor.assignedHospitalIds && doctor.assignedHospitalIds[0]) ||
+    doctor.hospitalId ||
+    null;
 
   publishAuditEvent({
-    hospitalId:
-      (doctor.assignedHospitalIds && doctor.assignedHospitalIds[0]) || doctor.hospitalId || null,
+    hospitalId: targetHospitalId,
     entityType: 'DOCTOR',
     actionPerformed: 'Doctor Availability Changed',
     actionType: 'WORKFLOW',
@@ -504,9 +512,10 @@ const createDoctor = asyncHandler(async (req, res) => {
 
   const actor = extractActor(req);
   const targetHospitalId =
-    (doctor.assignedHospitalIds && doctor.assignedHospitalIds[0]) ||
-    doctor.hospitalId ||
+    actor.hospitalId ||
     hospitalId ||
+    doctor.hospitalId ||
+    (doctor.assignedHospitalIds && doctor.assignedHospitalIds[0]) ||
     null;
 
   publishAuditEvent({
@@ -690,6 +699,33 @@ const updateDoctorProfileImage = asyncHandler(async (req, res) => {
   try {
     const { key } = await uploadToS3(req.file, 'doctor-profiles');
     const updatedDoctor = await doctorService.update(doctor.id, { profileImage: key });
+    const actor = extractActor(req);
+    const targetHospitalId =
+      actor.hospitalId ||
+      doctor.hospitalId ||
+      (doctor.assignedHospitalIds && doctor.assignedHospitalIds[0]) ||
+      null;
+
+    publishAuditEvent({
+      hospitalId: targetHospitalId,
+      entityType: 'DOCTOR',
+      actionPerformed: 'Doctor Profile Image Updated',
+      actionType: 'DATA_CHANGE',
+      performedByUserId: actor.userId,
+      performedByRole: actor.userRole,
+      userId: actor.userId,
+      userRole: actor.userRole,
+      previousValue: { profileImage: doctor.profileImage },
+      newValue: { profileImage: key },
+      remarks: `Profile image updated for doctor ${doctor.fullName || id}`,
+      path: `/profiles/doctors/${id}/profile-image`,
+      method: 'PATCH',
+      metadata: {
+        doctorId: doctor.id,
+        doctorName: doctor.fullName,
+        email: doctor.email
+      }
+    });
 
     res.status(200).json({
       success: true,

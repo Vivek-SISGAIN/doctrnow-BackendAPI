@@ -11,9 +11,12 @@ const getAllPatients = asyncHandler(async (req, res) => {
     search,
     gender,
     bloodGroup,
+    maritalStatus,
     riskCategory,
     patientType,
     followUpStatus,
+    status,
+    nationality,
     page = 1,
     limit = 20,
     sortBy = 'recent',
@@ -53,7 +56,7 @@ const getAllPatients = asyncHandler(async (req, res) => {
   }
 
   const result = await patientService.findAll(
-    { search, gender, bloodGroup, riskCategory, patientType, followUpStatus, ids },
+    { search, gender, bloodGroup, maritalStatus, riskCategory, patientType, followUpStatus, status, nationality, ids },
     { page: parseInt(page, 10), limit: parseInt(limit, 10) },
     sortBy
   );

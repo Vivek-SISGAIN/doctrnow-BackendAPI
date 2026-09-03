@@ -35,6 +35,39 @@ class PatientService {
     });
   }
   /**
+   * Generate possible dashed variants for UAE Emirates ID (3-4-7-1 pattern)
+   * e.g., 784199012345671 -> 784-1990-1234567-1
+   *       7841990         -> 784-1990
+   *       19901234567     -> 1990-1234567
+   *       12345671        -> 1234567-1
+   */
+  getEmiratesIdVariants(digitsOnly) {
+    const variants = new Set();
+    const len = digitsOnly.length;
+    if (len < 2 || len > 15) return [];
+
+    const maxStart = 15 - len;
+    for (let start = 0; start <= maxStart; start++) {
+      let formatted = '';
+      let dashCount = 0;
+      for (let i = 0; i < len; i++) {
+        const digitIndex = start + i;
+        // In 784-YYYY-NNNNNNN-C:
+        // hyphens are before digit indices 3, 7, 14
+        if (i > 0 && (digitIndex === 3 || digitIndex === 7 || digitIndex === 14)) {
+          formatted += '-';
+          dashCount++;
+        }
+        formatted += digitsOnly[i];
+      }
+      if (dashCount > 0) {
+        variants.add(formatted);
+      }
+    }
+    return Array.from(variants);
+  }
+
+  /**
    * Build where clause for filtering
    */
   buildWhereClause({
@@ -45,6 +78,8 @@ class PatientService {
     riskCategory,
     patientType,
     followUpStatus,
+    status,
+    nationality,
     ids
   }) {
     const where = {};
@@ -53,25 +88,72 @@ class PatientService {
       where.id = { in: ids };
     }
 
-    if (search) {
-      where.OR = [
-        { firstName: { contains: search, mode: 'insensitive' } },
-        { lastName: { contains: search, mode: 'insensitive' } },
-        { email: { contains: search, mode: 'insensitive' } },
-        { mobileNumber: { contains: search } },
-        { mrn: { contains: search, mode: 'insensitive' } },
-        { insuranceId: { contains: search, mode: 'insensitive' } }
+    if (search && search.trim()) {
+      const trimmed = search.trim();
+      const orConditions = [
+        { firstName: { contains: trimmed, mode: 'insensitive' } },
+        { lastName: { contains: trimmed, mode: 'insensitive' } },
+        { email: { contains: trimmed, mode: 'insensitive' } },
+        { mobileNumber: { contains: trimmed } },
+        { mrn: { contains: trimmed, mode: 'insensitive' } },
+        { insuranceId: { contains: trimmed, mode: 'insensitive' } },
+        { emiratesId: { contains: trimmed, mode: 'insensitive' } }
       ];
+
+      // Multi-word name search (e.g. "Ahmed Patient", "John Doe")
+      const words = trimmed.split(/\s+/).filter(Boolean);
+      if (words.length >= 2) {
+        orConditions.push({
+          AND: words.map((word) => ({
+            OR: [
+              { firstName: { contains: word, mode: 'insensitive' } },
+              { lastName: { contains: word, mode: 'insensitive' } }
+            ]
+          }))
+        });
+      }
+
+      // Emirates ID & Phone search with or without hyphens / spaces
+      const digitsOnly = trimmed.replace(/\D/g, '');
+      if (digitsOnly.length >= 2) {
+        // Match raw digits against emiratesId (in case stored without hyphens) and mobileNumber
+        orConditions.push({ emiratesId: { contains: digitsOnly, mode: 'insensitive' } });
+        orConditions.push({ mobileNumber: { contains: digitsOnly } });
+
+        // Generate possible dashed variants for UAE Emirates ID (3-4-7-1 pattern)
+        const variants = this.getEmiratesIdVariants(digitsOnly);
+        for (const variant of variants) {
+          orConditions.push({ emiratesId: { contains: variant, mode: 'insensitive' } });
+        }
+      }
+
+      where.OR = orConditions;
     }
 
-    if (gender) {
-      where.gender = gender;
+    if (status && status !== 'ALL' && status !== 'all') {
+      where.status = { equals: status.toUpperCase() };
     }
-    if (bloodGroup) {
-      where.bloodGroup = bloodGroup;
+    if (gender && gender !== 'ALL' && gender !== 'all') {
+      where.gender = gender.toUpperCase();
     }
-    if (maritalStatus) {
-      where.maritalStatus = maritalStatus;
+    if (bloodGroup && bloodGroup !== 'ALL' && bloodGroup !== 'all') {
+      const bgMap = {
+        'A+': 'A_POS',
+        'A-': 'A_NEG',
+        'B+': 'B_POS',
+        'B-': 'B_NEG',
+        'AB+': 'AB_POS',
+        'AB-': 'AB_NEG',
+        'O+': 'O_POS',
+        'O-': 'O_NEG',
+      };
+      where.bloodGroup = bgMap[bloodGroup] || bloodGroup;
+    }
+    if (nationality && nationality !== 'ALL' && nationality !== 'all') {
+      where.nationality = { contains: nationality.trim(), mode: 'insensitive' };
+    }
+    if (maritalStatus && maritalStatus !== 'ALL' && maritalStatus !== 'all') {
+      where.maritalStatus = maritalStatus.toUpperCase();
     }
     if (riskCategory) {
       where.riskCategory = riskCategory;
