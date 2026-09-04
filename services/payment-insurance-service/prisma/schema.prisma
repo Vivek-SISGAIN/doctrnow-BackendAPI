@@ -48,6 +48,18 @@ enum DisputeStatus {
   LOST
 }
 
+enum TransferStatus {
+  NOT_TRANSFERRED
+  TRANSFERRED
+  FAILED
+}
+
+enum SettlementAdjustmentStatus {
+  OPEN
+  APPLIED
+  RECOVERED_VIA_REVERSAL
+}
+
 enum InvoiceStatus {
   UNPAID
   PAID
@@ -65,7 +77,15 @@ model Transaction {
   type                     TransactionType   @default(CONSULTATION_PAYMENT)
   grossAmount              Decimal           @db.Decimal(10, 2) @map("gross_amount")
   commissionAmount         Decimal           @db.Decimal(10, 2) @map("commission_amount")
-  hospitalNetAmount        Decimal           @db.Decimal(10, 2) @map("hospital_net_amount")
+  hospitalNetAmount        Decimal           @default(0) @db.Decimal(10, 2) @map("hospital_net_amount")
+  stripeFeeAmount          Decimal           @default(0) @db.Decimal(10, 2) @map("stripe_fee_amount")
+
+  transferStatus           TransferStatus    @default(NOT_TRANSFERRED) @map("transfer_status")
+  stripeTransferId         String?           @unique @map("stripe_transfer_id")
+  transferredAt            DateTime?         @map("transferred_at")
+
+  paidAt                   DateTime?         @map("paid_at")
+
   currency                 String            @default("aed")
   status                   TransactionStatus @default(PENDING)
   stripeCheckoutSessionId  String?           @map("stripe_checkout_session_id")
@@ -186,4 +206,19 @@ model ProcessedWebhookEvent {
   processedAt DateTime @default(now()) @map("processed_at")
 
   @@map("processed_webhook_events")
+}
+
+model SettlementAdjustment {
+  id                       String                      @id @default(uuid())
+  hospitalId               String                      @map("hospital_id")
+  transactionId            String                      @map("transaction_id")
+  amount                   Decimal                     @db.Decimal(10, 2)
+  reason                   String
+  status                   SettlementAdjustmentStatus  @default(OPEN)
+  stripeTransferReversalId String?                     @map("stripe_transfer_reversal_id")
+  createdAt                DateTime                    @default(now()) @map("created_at")
+  updatedAt                DateTime                    @updatedAt      @map("updated_at")
+
+  @@index([hospitalId])
+  @@map("settlement_adjustments")
 }

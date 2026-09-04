@@ -4,6 +4,7 @@ import {
   patchStripeStatusById,
   patchStripeStatusByStripeAccountId,
   getCommissionRateByHospitalId,
+  getStripeStatusByHospitalId,
 } from '../controllers/internalStripeStatus.controller.js';
 
 const router = express.Router();
@@ -16,6 +17,7 @@ router.use(internalAuth);
  * Returns only platformCommission and hospitalShare for the hospital.
  */
 router.get('/hospital/:hospitalId/commission-rate', getCommissionRateByHospitalId);
+router.get('/hospital/:hospitalId/stripe-status', getStripeStatusByHospitalId);
 
 /**
  * PATCH /internal/hospital/:id/stripe-status

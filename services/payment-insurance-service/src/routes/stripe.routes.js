@@ -14,7 +14,15 @@ const {
   getInvoiceById,
   updateInvoiceStatus,
   getPlatformSummary,
+  listRefunds,
+  listDisputes,
+  listAllInvoices,
 } = require('../controllers/ledger.controller');
+const {
+  listPendingSettlements,
+  executeSettlement,
+  listSettlementAdjustments,
+} = require('../controllers/settlement.controller');
 
 const router = express.Router();
 
@@ -71,9 +79,16 @@ router.post('/refunds', express.json(), asyncHandler(issueRefund));
 
 router.get('/hospitals/:hospitalId/ledger', express.json(), asyncHandler(getHospitalLedger));
 router.get('/hospitals/:hospitalId/invoices', express.json(), asyncHandler(getHospitalInvoices));
+router.get('/invoices', express.json(), asyncHandler(listAllInvoices));
 router.get('/invoices/:invoiceId', express.json(), asyncHandler(getInvoiceById));
 router.patch('/invoices/:invoiceId/status', express.json(), asyncHandler(updateInvoiceStatus));
 router.get('/ledger/summary', express.json(), asyncHandler(getPlatformSummary));
+router.get('/refunds', express.json(), asyncHandler(listRefunds));
+router.get('/disputes', express.json(), asyncHandler(listDisputes));
+
+router.get('/settlements/pending', express.json(), asyncHandler(listPendingSettlements));
+router.get('/settlements/adjustments', express.json(), asyncHandler(listSettlementAdjustments));
+router.post('/settlements/:hospitalId/execute', express.json(), asyncHandler(executeSettlement));
 
 // ─── Minimal inline asyncHandler (keeps this service dependency-free) ─────────
 function asyncHandler(fn) {

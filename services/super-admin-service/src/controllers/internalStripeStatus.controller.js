@@ -126,6 +126,23 @@ export async function getCommissionRateByHospitalId(req, res) {
   });
 }
 
+export async function getStripeStatusByHospitalId(req, res) {
+  const { hospitalId } = req.params;
+  const hospital = await prisma.hospital.findUnique({
+    where: { id: hospitalId },
+    select: {
+      stripeAccountId: true,
+      stripeOnboardingStatus: true,
+      stripeChargesEnabled: true,
+      stripePayoutsEnabled: true,
+    },
+  });
+  if (!hospital) {
+    return res.status(404).json({ success: false, message: `Hospital ${hospitalId} not found.` });
+  }
+  return res.status(200).json({ success: true, data: hospital });
+}
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 /**

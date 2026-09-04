@@ -3,6 +3,7 @@ import healthServiceRoutes from './healthService.routes';
 import healthPackageRoutes from './healthPackage.routes';
 import doctorRoutes from './doctor.routes';
 import hospitalAdminRoutes from './hospitalAdmin.routes';
+import stripeStatusRoutes from './stripeStatus.routes';
 
 const router = Router();
 
@@ -88,5 +89,6 @@ router.use('/health-services', healthServiceRoutes);
 router.use('/doctors', doctorRoutes);
 router.use('/health-packages', healthPackageRoutes);
 router.use('/hospital-admins', hospitalAdminRoutes);
+router.use('/stripe-status', stripeStatusRoutes);
 
 export default router;

@@ -5,6 +5,7 @@ const stripe = require('../config/stripeClient');
 const prisma = require('../config/prismaClient');
 const { rejectIfNotSuperAdmin } = require('../utils/roleGuards');
 const { processRefund } = require('./refund.controller');
+const { recoverFromHospital } = require('./settlement.controller');
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -28,10 +29,10 @@ function superAdminBase() {
 // ─── POST /api/payments/stripe/accounts ───────────────────────────────────────
 
 /**
- * Creates a Stripe Express connected account for a hospital.
+ * Creates a Stripe Custom connected account for a hospital.
  *
  * 1. Validates caller is SUPER_ADMIN (via x-user-role header set by the gateway).
- * 2. Creates a Stripe Express account (country AE, card_payments + transfers).
+ * 2. Creates a Stripe Custom account (country AE, card_payments + transfers).
  * 3. Calls super-admin-service's internal PATCH endpoint to store the account id.
  * 4. Returns the Stripe account id to the caller.
  */
@@ -43,9 +44,36 @@ async function createConnectedAccount(req, res) {
     return res.status(400).json({ success: false, message: '`hospitalId` is required.' });
   }
 
-  // Create the Express connected account on Stripe
+  // Reject if this hospital already has a connected account — creating a
+  // second one would orphan the first and silently overwrite the reference
+  // to it. Re-onboarding an existing account goes through the
+  // onboarding-link endpoint instead, not this one.
+  let existingHospital;
+  try {
+    const r = await axios.get(`${superAdminBase()}/api/super-admins/hospital/${hospitalId}`, {
+      headers: superAdminHeaders(),
+    });
+    existingHospital = r.data?.data || r.data;
+  } catch (err) {
+    if (err?.response?.status === 404) {
+      return res.status(404).json({ success: false, message: `Hospital ${hospitalId} not found.` });
+    }
+    console.error('[stripe/createConnectedAccount] Failed to fetch hospital:', err?.response?.data || err.message);
+    return res.status(502).json({ success: false, message: 'Could not fetch hospital details.' });
+  }
+  if (existingHospital?.stripeAccountId) {
+    return res.status(409).json({
+      success: false,
+      message: `Hospital ${hospitalId} already has a connected Stripe account (${existingHospital.stripeAccountId}). Use POST /accounts/:hospitalId/onboarding-link to continue onboarding it instead of creating a new one.`,
+    });
+  }
+
+  // Create the Custom connected account on Stripe.
+  // UAE platforms can only use Custom accounts — Express and Standard are not
+  // supported configurations for a UAE-based platform (Stripe Connect docs,
+  // confirmed Sep 2026). See DoctorNow_Stripe_Architecture_Final.html §2.
   const account = await stripe.accounts.create({
-    type: 'express',
+    type: 'custom',
     country: 'AE',
     capabilities: {
       card_payments: { requested: true },
@@ -81,7 +109,7 @@ async function createConnectedAccount(req, res) {
 
   return res.status(201).json({
     success: true,
-    message: 'Stripe Express connected account created.',
+    message: 'Stripe Custom connected account created.',
     data: { stripeAccountId: account.id, hospitalId },
   });
 }
@@ -318,6 +346,37 @@ async function handleCheckoutCompleted(session) {
     },
   });
 
+  // Stripe's exact processing fee for this charge — not a fixed formula,
+  // pulled from the balance transaction so this is always exactly right,
+  // including any per-card-type variation. This is what "hospitalNetAmount"
+  // should have always meant: gross minus Stripe's fee, never minus
+  // commission — commission is invoiced separately and never netted out of
+  // what the hospital is paid.
+  try {
+    const paymentIntentId = typeof session.payment_intent === 'string' ? session.payment_intent : session.payment_intent?.id;
+    const pi = await stripe.paymentIntents.retrieve(paymentIntentId, {
+      expand: ['latest_charge.balance_transaction'],
+    });
+    const stripeFeeMinor = pi.latest_charge?.balance_transaction?.fee ?? 0;
+    const grossMinor = Math.round(Number((await prisma.transaction.findFirst({ where: { stripeCheckoutSessionId: session.id } }))?.grossAmount || 0) * 100);
+
+    await prisma.transaction.updateMany({
+      where: { stripeCheckoutSessionId: session.id, paidAt: null },
+      data: {
+        stripeFeeAmount: stripeFeeMinor / 100,
+        hospitalNetAmount: (grossMinor - stripeFeeMinor) / 100,
+        paidAt: new Date(),
+      },
+    });
+  } catch (err) {
+    // Don't let this fail the whole webhook handler — the appointment is
+    // already confirmed as paid above, which is the part that must not be
+    // rolled back. A missing hospitalNetAmount here just means this
+    // transaction won't show up as settlement-ready until it's backfilled;
+    // log loudly so it gets caught.
+    console.error(`[CRITICAL][webhook] Failed to compute hospitalNetAmount for session ${session.id}:`, err.message);
+  }
+
   try {
     await axios.patch(
       `${process.env.APPOINTMENT_SERVICE_URL}/api/appointments/internal/${appointmentId}/payment-outcome`,
@@ -395,15 +454,29 @@ async function handleChargeRefunded(charge) {
     return;
   }
 
-  // Resolve the most recent PENDING refund we created for this transaction.
-  // We only ever have one refund in flight at a time per transaction in this
-  // phase (the admin endpoint and the reconciliation path both check the
-  // remaining refundable amount before creating a new one), so matching the
-  // latest PENDING row is reliable without needing to parse charge.refunds.
   const pendingRefund = await prisma.refund.findFirst({
     where: { transactionId: transaction.id, status: 'PENDING' },
     orderBy: { createdAt: 'desc' },
   });
+
+  // How much did this refund actually take out of OUR balance? Read from
+  // Stripe's own balance transaction rather than assuming it equals the
+  // refund amount — Stripe doesn't always return its processing fee on a
+  // refund, and guessing gets the hospital's owed amount slightly wrong.
+  let reductionMinor = Math.round(Number(pendingRefund?.amount || 0) * 100);
+  if (pendingRefund?.stripeRefundId) {
+    try {
+      const refundObj = await stripe.refunds.retrieve(pendingRefund.stripeRefundId, {
+        expand: ['balance_transaction'],
+      });
+      if (refundObj.balance_transaction) {
+        reductionMinor = Math.abs(refundObj.balance_transaction.net);
+      }
+    } catch (err) {
+      console.error(`[webhook] charge.refunded: could not read balance transaction for refund ${pendingRefund.stripeRefundId}, using requested amount instead:`, err.message);
+    }
+  }
+
   if (pendingRefund) {
     await prisma.refund.update({
       where: { id: pendingRefund.id },
@@ -414,10 +487,22 @@ async function handleChargeRefunded(charge) {
   }
 
   const fullyRefunded = charge.amount_refunded >= charge.amount;
+  const newHospitalNetAmountMinor = Math.max(0, Math.round(Number(transaction.hospitalNetAmount) * 100) - reductionMinor);
+
   await prisma.transaction.update({
     where: { id: transaction.id },
-    data: { status: fullyRefunded ? 'REFUNDED' : 'PARTIALLY_REFUNDED' },
+    data: {
+      status: fullyRefunded ? 'REFUNDED' : 'PARTIALLY_REFUNDED',
+      hospitalNetAmount: newHospitalNetAmountMinor / 100,
+    },
   });
+
+  // If this transaction's money already left the platform balance, recover
+  // it from the hospital now — via transfer reversal, or an open adjustment
+  // netted off their next settlement if the funds are already paid out.
+  if (transaction.transferStatus === 'TRANSFERRED') {
+    await recoverFromHospital({ transaction, amountMinor: reductionMinor, reason: `Refund on transaction ${transaction.id}` });
+  }
 }
 
 // ─── charge.dispute.created handler ───────────────────────────────────────────
@@ -472,6 +557,12 @@ async function handleDisputeClosed(dispute) {
     // Money left the hospital's balance permanently via the chargeback —
     // functionally the same end state as a processed refund.
     await prisma.transaction.update({ where: { id: disputeRow.transactionId }, data: { status: 'REFUNDED' } });
+
+    const transaction = await prisma.transaction.findUnique({ where: { id: disputeRow.transactionId } });
+    if (transaction?.transferStatus === 'TRANSFERRED') {
+      const amountMinor = Math.round(Number(disputeRow.amount) * 100);
+      await recoverFromHospital({ transaction, amountMinor, reason: `Lost dispute on transaction ${transaction.id}` });
+    }
   } else if (mappedStatus === 'WON') {
     await prisma.transaction.update({ where: { id: disputeRow.transactionId }, data: { status: 'SUCCESS' } });
   }

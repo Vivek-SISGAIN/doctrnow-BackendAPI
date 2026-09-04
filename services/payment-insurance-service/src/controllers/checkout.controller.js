@@ -109,7 +109,6 @@ async function createCheckoutSession(req, res) {
 
   const grossAmountMinor = Math.round(Number(fee) * 100);
   const commissionAmountMinor = Math.round(grossAmountMinor * (Number(commission.platformCommission) / 100));
-  const hospitalNetAmountMinor = grossAmountMinor - commissionAmountMinor;
 
   // 5. Create the PENDING appointment. Reuses the existing public create
   //    endpoint on purpose — omitting status/paymentStatus from the body
@@ -127,8 +126,9 @@ async function createCheckoutSession(req, res) {
     return releaseLockAndFail(err?.response?.status === 409 ? 409 : 502, err?.response?.data?.message || 'Could not create the appointment.');
   }
 
-  // 6. Create the Stripe Checkout Session as a Direct Charge on the
-  //    hospital's own connected account.
+  // 6. Create the Stripe Checkout Session on the platform account
+  //    (Separate Charges & Transfers). The hospital's share will be moved
+  //    later via Transfer (1.9).
   let session;
   try {
     session = await stripe.checkout.sessions.create({
@@ -143,13 +143,24 @@ async function createCheckoutSession(req, res) {
         quantity: 1,
       }],
       payment_intent_data: {
-        application_fee_amount: commissionAmountMinor,
+        // Ties this PaymentIntent to the Transfer(s) that will move the
+        // hospital's share out of the platform balance later (1.9). Stripe's
+        // recommended pattern for Separate Charges & Transfers.
+        transfer_group: appointment.id,
       },
       metadata: { appointmentId: appointment.id, patientId, hospitalId, doctorId, slotId },
-      success_url: process.env.PATIENT_APP_CHECKOUT_SUCCESS_URL,
+      // Append appointmentId to the configured success URL per-session, so the
+      // patient frontend knows which appointment to poll for confirmation
+      // without needing a new "look up by session id" endpoint. Assumes
+      // PATIENT_APP_CHECKOUT_SUCCESS_URL already ends in a query string
+      // (it does — see .env) so this is a safe `&` append.
+      success_url: `${process.env.PATIENT_APP_CHECKOUT_SUCCESS_URL}&appointmentId=${appointment.id}`,
       cancel_url: process.env.PATIENT_APP_CHECKOUT_CANCEL_URL,
-      expires_at: Math.floor(Date.now() / 1000) + 35 * 60, // 35 min: 5-min buffer above Stripe's 30-min minimum
-    }, { stripeAccount: hospital.stripeAccountId });
+      expires_at: Math.floor(Date.now() / 1000) + 35 * 60,
+    });
+    // no { stripeAccount: hospital.stripeAccountId } — the charge is created on
+    // the platform account. The hospital is only reachable through Stripe now
+    // via its own Transfer, built in 1.9.
   } catch (err) {
     console.error('[checkout] Stripe session creation failed:', err.message);
     // The appointment already exists as PENDING — cancel it and free the slot
@@ -168,11 +179,14 @@ async function createCheckoutSession(req, res) {
       doctorId,
       grossAmount: fee,
       commissionAmount: commissionAmountMinor / 100,
-      hospitalNetAmount: hospitalNetAmountMinor / 100,
       currency: 'aed',
       status: 'PENDING',
       stripeCheckoutSessionId: session.id,
       stripePaymentIntentId: typeof session.payment_intent === 'string' ? session.payment_intent : session.payment_intent?.id,
+      // stripeConnectedAccountId is the hospital this transaction is destined
+      // for, NOT where the charge lives — the charge is on the platform account
+      // now (Separate Charges & Transfers). It's what 1.9's Transfer step will
+      // read to know which connected account to pay.
       stripeConnectedAccountId: hospital.stripeAccountId,
     },
   });

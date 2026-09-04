@@ -148,6 +148,7 @@ app.use('/', fhirRoutes);
 
 if (process.env.NODE_ENV !== 'test') {
   require('./cron/commissionInvoice.cron');
+  require('./cron/settlementTransfer.cron');
 }
 
 // Error handling middleware

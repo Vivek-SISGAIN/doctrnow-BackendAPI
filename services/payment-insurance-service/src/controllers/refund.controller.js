@@ -51,16 +51,16 @@ async function processRefund({ transactionId, amount, reasonCategory, reason, re
 
   const amountMinor = Math.round(amount * 100);
 
-  const stripeRefund = await stripe.refunds.create(
-    {
-      payment_intent: transaction.stripePaymentIntentId,
-      amount: amountMinor,
-      refund_application_fee: !!refundCommission,
-      reason: 'requested_by_customer',
-      metadata: { transactionId, reasonCategory },
-    },
-    { stripeAccount: transaction.stripeConnectedAccountId }
-  );
+  const stripeRefund = await stripe.refunds.create({
+    payment_intent: transaction.stripePaymentIntentId,
+    amount: amountMinor,
+    reason: 'requested_by_customer',
+    metadata: { transactionId, reasonCategory },
+  });
+  // No { stripeAccount } — this PaymentIntent lives on the platform account.
+  // No refund_application_fee — there was never an application fee to reverse;
+  // refundCommission below is purely our own ledger flag now, not a Stripe
+  // API parameter.
 
   const commissionAmountRefunded = refundCommission
     ? Math.round((Number(transaction.commissionAmount) * (amount / Number(transaction.grossAmount))) * 100) / 100
@@ -98,6 +98,7 @@ async function processRefund({ transactionId, amount, reasonCategory, reason, re
  * question 9), so don't hardcode an assumption here.
  */
 async function issueRefund(req, res) {
+  // X-Hospital-ID exists at the gateway (see api-gateway/src/http-proxy/http-proxy.service.ts) but its reliability for HOSPITAL_ADMIN accounts is unverified — do not scope access by it until that's confirmed. See 1.7 audit notes.
   if (rejectIfNotSuperAdmin(req, res)) return;
 
   const { transactionId, amount, reasonCategory, reason, refundCommission } = req.body;
@@ -106,6 +107,9 @@ async function issueRefund(req, res) {
       success: false,
       message: 'transactionId, amount, reasonCategory, and refundCommission (boolean) are all required.',
     });
+  }
+  if (Number(amount) <= 0) {
+    return res.status(400).json({ success: false, message: 'amount must be greater than 0.' });
   }
 
   const { refund } = await processRefund({
