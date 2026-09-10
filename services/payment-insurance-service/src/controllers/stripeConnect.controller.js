@@ -6,6 +6,7 @@ const prisma = require('../config/prismaClient');
 const { rejectIfNotSuperAdmin } = require('../utils/roleGuards');
 const { processRefund } = require('./refund.controller');
 const { recoverFromHospital } = require('./settlement.controller');
+const { reconcileCheckoutSession } = require('../services/reconciliation.service');
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -26,13 +27,103 @@ function superAdminBase() {
   return base;
 }
 
+/**
+ * Creates a connected account on Stripe using Accounts v2 (POST /v2/core/accounts)
+ * configured with Merchant capabilities for UAE direct charges, with v1 fallback.
+ */
+async function provisionStripeConnectedAccount({ hospitalId, name, email }) {
+  // Full required parameter set for Accounts v2 merchant config (verified against live Stripe API).
+  // dashboard, defaults.responsibilities, and contact_email are ALL required when
+  // configuration.merchant is set.
+  if (!email) {
+    throw new Error('Hospital contact email is required to create a Stripe connected account.');
+  }
+  const account = await stripe.v2.core.accounts.create({
+    display_name: name || 'Hospital',
+    contact_email: email,
+    identity: { country: 'AE' },
+    dashboard: 'full',
+    defaults: {
+      responsibilities: {
+        losses_collector: 'stripe',
+        fees_collector: 'stripe',
+      },
+    },
+    configuration: {
+      merchant: {
+        card_payments: {},
+      },
+    },
+  });
+  console.log(`[stripeConnect] Created Stripe Accounts v2 merchant account ${account.id} for hospital ${hospitalId}`);
+  return account;
+}
+
+/**
+ * Creates an onboarding link for a connected account using Accounts v2.
+ *
+ * Handles legacy accounts (created before v2 migration) that have no applied
+ * configurations by auto-upgrading them to the merchant config before link creation.
+ * For new accounts this is a no-op since they are created with the merchant config.
+ */
+async function provisionStripeOnboardingLink({ stripeAccountId, email, refreshUrl, returnUrl }) {
+  // 1. Fetch the account to read its actual applied_configurations
+  const existingAccount = await stripe.v2.core.accounts.retrieve(stripeAccountId);
+  let configs = existingAccount.applied_configurations || [];
+
+  // 2. If this is a legacy account with no configurations, upgrade it to merchant
+  if (configs.length === 0) {
+    console.log(`[stripeConnect] Account ${stripeAccountId} has no configurations — upgrading to merchant config.`);
+    if (!existingAccount.contact_email && !email) {
+      throw new Error('A contact email is required to upgrade this Stripe account to merchant configuration.');
+    }
+    const updatePayload = {
+      dashboard: 'full',
+      defaults: {
+        responsibilities: {
+          losses_collector: 'stripe',
+          fees_collector: 'stripe',
+        },
+      },
+      configuration: {
+        merchant: { card_payments: {} },
+      },
+    };
+    if (!existingAccount.contact_email && email) {
+      updatePayload.contact_email = email;
+    }
+    const updated = await stripe.v2.core.accounts.update(stripeAccountId, updatePayload);
+    configs = updated.applied_configurations || ['merchant'];
+    console.log(`[stripeConnect] Upgraded account ${stripeAccountId} to configs: ${configs}`);
+  }
+
+  // 3. Create the onboarding link using the account's actual configurations
+  const v2Link = await stripe.v2.core.accountLinks.create({
+    account: stripeAccountId,
+    use_case: {
+      type: 'account_onboarding',
+      account_onboarding: {
+        configurations: configs, // Always matches applied_configurations on the account
+        refresh_url: refreshUrl,
+        return_url: returnUrl,
+      },
+    },
+  });
+  return {
+    url: v2Link.url,
+    expiresAt: v2Link.expires_at
+      ? Math.floor(new Date(v2Link.expires_at).getTime() / 1000)
+      : null,
+  };
+}
+
 // ─── POST /api/payments/stripe/accounts ───────────────────────────────────────
 
 /**
- * Creates a Stripe Custom connected account for a hospital.
+ * Creates a Stripe connected account for a hospital.
  *
  * 1. Validates caller is SUPER_ADMIN (via x-user-role header set by the gateway).
- * 2. Creates a Stripe Custom account (country AE, card_payments + transfers).
+ * 2. Creates a Stripe account (country AE, merchant direct charges).
  * 3. Calls super-admin-service's internal PATCH endpoint to store the account id.
  * 4. Returns the Stripe account id to the caller.
  */
@@ -68,19 +159,21 @@ async function createConnectedAccount(req, res) {
     });
   }
 
-  // Create the Custom connected account on Stripe.
-  // UAE platforms can only use Custom accounts — Express and Standard are not
-  // supported configurations for a UAE-based platform (Stripe Connect docs,
-  // confirmed Sep 2026). See DoctorNow_Stripe_Architecture_Final.html §2.
-  const account = await stripe.accounts.create({
-    type: 'custom',
-    country: 'AE',
-    capabilities: {
-      card_payments: { requested: true },
-      transfers: { requested: true },
-    },
-    metadata: { hospitalId },
-  });
+  // Create the connected account on Stripe using Accounts v2 (or v1 fallback)
+  let account;
+  try {
+    account = await provisionStripeConnectedAccount({
+      hospitalId,
+      name: existingHospital.officialName || existingHospital.name,
+      email: existingHospital.officialEmail || existingHospital.contactEmail || existingHospital.email,
+    });
+  } catch (createErr) {
+    console.error(`[stripe/createConnectedAccount] Failed to create Stripe account for hospital ${hospitalId}:`, createErr.message);
+    return res.status(502).json({
+      success: false,
+      message: `Failed to initialize Stripe account: ${createErr.message}`,
+    });
+  }
 
   // Persist the account id and set status to PENDING in super-admin-service
   try {
@@ -90,9 +183,6 @@ async function createConnectedAccount(req, res) {
       { headers: superAdminHeaders() }
     );
   } catch (superAdminErr) {
-    // The Stripe account was created but we couldn't store it — log and surface
-    // the error so the caller knows the DB write failed. The account can be
-    // re-linked manually if needed.
     console.error(
       `[stripe/createConnectedAccount] Failed to update super-admin-service for ` +
       `hospitalId=${hospitalId}, stripeAccountId=${account.id}:`,
@@ -109,28 +199,18 @@ async function createConnectedAccount(req, res) {
 
   return res.status(201).json({
     success: true,
-    message: 'Stripe Custom connected account created.',
+    message: 'Stripe connected account created.',
     data: { stripeAccountId: account.id, hospitalId },
   });
 }
 
 // ─── POST /api/payments/stripe/accounts/:hospitalId/onboarding-link ───────────
 
-/**
- * Generates a Stripe Account Link for onboarding / re-onboarding.
- *
- * 1. Validates caller is SUPER_ADMIN.
- * 2. Fetches the hospital from super-admin-service to get its stripeAccountId.
- * 3. Creates a Stripe Account Link and returns the URL.
- *
- * The frontend redirects the hospital admin to this URL; Stripe handles the rest.
- */
-async function createOnboardingLink(req, res) {
-  if (rejectIfNotSuperAdmin(req, res)) return;
-
-  const { hospitalId } = req.params;
-
-  // Fetch hospital record to get stripeAccountId
+// Shared by both entry points below. Takes an already-resolved hospitalId —
+// callers are responsible for deciding *how* that id was resolved (from a
+// trusted path param for SUPER_ADMIN, or from x-tenant-id for HOSPITAL_ADMIN)
+// before calling this.
+async function generateOnboardingLinkForHospital(hospitalId, res) {
   let hospital;
   try {
     const response = await axios.get(
@@ -142,18 +222,50 @@ async function createOnboardingLink(req, res) {
     if (err?.response?.status === 404) {
       return res.status(404).json({ success: false, message: `Hospital ${hospitalId} not found.` });
     }
-    console.error('[stripe/createOnboardingLink] Failed to fetch hospital:', err?.response?.data || err.message);
+    console.error('[stripe/onboardingLink] Failed to fetch hospital:', err?.response?.data || err.message);
     return res.status(502).json({ success: false, message: 'Could not fetch hospital from super-admin-service.' });
   }
 
-  const stripeAccountId = hospital?.stripeAccountId;
-  if (!stripeAccountId) {
-    return res.status(422).json({
-      success: false,
-      message:
-        `Hospital ${hospitalId} does not have a Stripe account yet. ` +
-        'Call POST /api/payments/stripe/accounts first.',
+  let stripeAccountId = hospital?.stripeAccountId;
+
+  // Helper: returns true when a Stripe error means the account no longer exists
+  // (deleted from the Stripe Dashboard or test-mode cleanup).
+  function isAccountGone(err) {
+    return (
+      err?.statusCode === 404 ||
+      err?.code === 'account_invalid' ||
+      /no such account/i.test(err?.message || '')
+    );
+  }
+
+  // Helper: creates a fresh Stripe connected account and saves its ID to the DB.
+  async function provisionFreshAccount() {
+    console.log(`[stripe/onboardingLink] Provisioning fresh Stripe account for hospital ${hospitalId}...`);
+    const account = await provisionStripeConnectedAccount({
+      hospitalId,
+      name: hospital.officialName || hospital.name,
+      email: hospital.officialEmail || hospital.contactEmail || hospital.email,
     });
+    await axios.patch(
+      `${superAdminBase()}/internal/hospital/${hospitalId}/stripe-status`,
+      { stripeAccountId: account.id, stripeOnboardingStatus: 'PENDING' },
+      { headers: superAdminHeaders() }
+    );
+    console.log(`[stripe/onboardingLink] Fresh Stripe account created: ${account.id}`);
+    return account.id;
+  }
+
+  if (!stripeAccountId) {
+    // Case 1 — hospital has never been onboarded: create from scratch.
+    try {
+      stripeAccountId = await provisionFreshAccount();
+    } catch (createErr) {
+      console.error(`[stripe/onboardingLink] Failed to create Stripe account for hospital ${hospitalId}:`, createErr.message);
+      return res.status(502).json({
+        success: false,
+        message: `Failed to initialize Stripe account: ${createErr.message}`,
+      });
+    }
   }
 
   const refreshUrl = process.env.STRIPE_CONNECT_ONBOARDING_REFRESH_URL;
@@ -165,56 +277,125 @@ async function createOnboardingLink(req, res) {
     });
   }
 
-  const accountLink = await stripe.accountLinks.create({
-    account: stripeAccountId,
-    refresh_url: refreshUrl,
-    return_url: returnUrl,
-    type: 'account_onboarding',
-  });
+  try {
+    const linkData = await provisionStripeOnboardingLink({
+      stripeAccountId,
+      email: hospital?.officialEmail || hospital?.contactEmail || hospital?.email,
+      refreshUrl,
+      returnUrl,
+    });
 
-  return res.status(200).json({
-    success: true,
-    data: { url: accountLink.url, expiresAt: accountLink.expires_at },
-  });
+    return res.status(200).json({
+      success: true,
+      data: linkData,
+    });
+  } catch (linkErr) {
+    // Case 2 — the stripeAccountId in our DB points to a Stripe account that was
+    // deleted (e.g. manually removed from the Stripe Dashboard). Detect this,
+    // clear the stale ID, create a fresh account, and retry once.
+    if (isAccountGone(linkErr)) {
+      console.warn(
+        `[stripe/onboardingLink] Stripe account ${stripeAccountId} no longer exists. ` +
+        `Resetting hospital record and creating a fresh account...`
+      );
+      try {
+        stripeAccountId = await provisionFreshAccount();
+        const linkData = await provisionStripeOnboardingLink({
+          stripeAccountId,
+          email: hospital?.officialEmail || hospital?.contactEmail || hospital?.email,
+          refreshUrl,
+          returnUrl,
+        });
+        return res.status(200).json({ success: true, data: linkData });
+      } catch (retryErr) {
+        console.error(`[stripe/onboardingLink] Retry after reset also failed:`, retryErr.message);
+        return res.status(502).json({
+          success: false,
+          message: `Failed to re-initialize Stripe account: ${retryErr.message}`,
+        });
+      }
+    }
+
+    console.error(`[stripe/onboardingLink] Failed to create onboarding link for account ${stripeAccountId}:`, linkErr.message);
+    return res.status(502).json({
+      success: false,
+      message: `Failed to create Stripe onboarding link: ${linkErr.message}`,
+    });
+  }
 }
 
-// ─── POST /api/payments/stripe/webhook ────────────────────────────────────────
+// ─── POST /api/payments/stripe/accounts/:hospitalId/onboarding-link ───────────
+// SUPER_ADMIN only — DoctorNow staff generating a link for any hospital by
+// ID. Behavior unchanged from before this refactor.
+async function createOnboardingLink(req, res) {
+  if (rejectIfNotSuperAdmin(req, res)) return;
+  const { hospitalId } = req.params;
+  return generateOnboardingLinkForHospital(hospitalId, res);
+}
+
+// ─── POST /api/payments/stripe/accounts/onboarding-link ───────────────────────
+// HOSPITAL_ADMIN only — a hospital generating a link for its own onboarding.
+// hospitalId is deliberately never taken from the request body, params, or
+// query — only from x-tenant-id, the header the gateway sets from the
+// caller's own JWT (the same pattern resolveReadScope in roleGuards.js
+// already uses elsewhere in this service) — so a HOSPITAL_ADMIN can never
+// request a link for a different hospital by passing a different id
+// anywhere in the request.
+async function createOwnOnboardingLink(req, res) {
+  const role = req.headers['x-user-role'];
+  if (role !== 'HOSPITAL_ADMIN') {
+    return res.status(403).json({
+      success: false,
+      message: `Forbidden: role '${role || '(none)'}' is not authorised for this endpoint. Requires HOSPITAL_ADMIN.`,
+    });
+  }
+  const hospitalId = req.headers['x-tenant-id'];
+  if (!hospitalId) {
+    return res.status(403).json({ success: false, message: 'Forbidden: HOSPITAL_ADMIN request is missing X-Tenant-ID.' });
+  }
+  return generateOnboardingLinkForHospital(hospitalId, res);
+}
+
+// ─── POST /api/payments/stripe/webhook & /connect-webhook ──────────────────────
 
 /**
- * Stripe webhook endpoint.
- *
- * IMPORTANT: This handler receives a raw (Buffer) body, not JSON-parsed.
- * The route MUST be registered with express.raw({type:'application/json'})
- * BEFORE any global express.json() middleware reaches it.
- * See app.js for how this is wired.
- *
- * Flow:
- *   1. Verify Stripe signature → 400 on failure.
- *   2. Idempotency check → 200 immediately if already processed.
- *   3. Switch on event type.
- *   4. Insert into ProcessedWebhookEvent.
- *
- * NOTE on downstream failures: if the internal call to super-admin-service
- * fails after Stripe's signature was valid, we log the error but still return
- * 200. Returning non-200 would cause Stripe to retry indefinitely, which is
- * wrong when the problem is on our side. These failures need human review —
- * a retry/dead-letter queue can be added in a later phase.
+ * Verifies a Stripe signature attempting primarySecret first, then fallbackSecret.
+ * This guarantees zero dropped events whether Stripe sends platform events
+ * or connected account events to /webhook, /connect-webhook, or a combined URL.
  */
-async function handleWebhook(req, res) {
-  const sig = req.headers['stripe-signature'];
-  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+function verifyStripeEvent(rawBody, sig, primarySecret, fallbackSecret) {
+  const secrets = Array.from(new Set([primarySecret, fallbackSecret].filter(Boolean)));
+  if (secrets.length === 0) {
+    throw new Error('No webhook secrets configured for verification.');
+  }
 
-  if (!webhookSecret) {
-    console.error('[stripe/webhook] STRIPE_WEBHOOK_SECRET is not set');
-    return res.status(500).send('Webhook secret not configured');
+  let lastError = null;
+  for (const secret of secrets) {
+    try {
+      return stripe.webhooks.constructEvent(rawBody, sig, secret);
+    } catch (err) {
+      lastError = err;
+    }
+  }
+
+  throw lastError;
+}
+
+/**
+ * Shared webhook processing pipeline for both Platform and Connect endpoints.
+ */
+async function processIncomingWebhook(req, res, primarySecret, fallbackSecret, endpointName = 'webhook') {
+  const sig = req.headers['stripe-signature'];
+  if (!sig) {
+    console.warn(`[stripe/${endpointName}] Missing stripe-signature header.`);
+    return res.status(400).send('Webhook Error: Missing stripe-signature header');
   }
 
   let event;
   try {
-    // req.body is a raw Buffer here — do not call JSON.parse on it.
-    event = stripe.webhooks.constructEvent(req.body, sig, webhookSecret);
+    event = verifyStripeEvent(req.body, sig, primarySecret, fallbackSecret);
   } catch (err) {
-    console.warn('[stripe/webhook] Signature verification failed:', err.message);
+    console.warn(`[stripe/${endpointName}] Signature verification failed:`, err.message);
     return res.status(400).send(`Webhook Error: ${err.message}`);
   }
 
@@ -223,46 +404,44 @@ async function handleWebhook(req, res) {
     where: { id: event.id },
   });
   if (existing) {
-    console.log(`[stripe/webhook] Duplicate event ignored: ${event.id} (${event.type})`);
+    console.log(`[stripe/${endpointName}] Duplicate event ignored: ${event.id} (${event.type})`);
     return res.status(200).json({ received: true, duplicate: true });
   }
 
   // ── Dispatch ──
+  const connectedAccountId = event.account || null;
+
   switch (event.type) {
     case 'account.updated':
       await handleAccountUpdated(event);
       break;
 
     case 'checkout.session.completed':
-      await handleCheckoutCompleted(event.data.object);
+      await handleCheckoutCompleted(event.data.object, connectedAccountId);
       break;
 
     case 'checkout.session.expired':
-      await handleCheckoutExpired(event.data.object);
+      await handleCheckoutExpired(event.data.object, connectedAccountId);
       break;
 
     case 'payment_intent.payment_failed':
-      // Note: With hosted Checkout in mode: 'payment', a declined card does not end the session.
-      // The customer can retry with a different card in the same session.
-      // checkout.session.expired is the authoritative failure signal.
-      console.log(`[stripe/webhook] payment_intent.payment_failed logged: id=${event.id}`);
+      console.log(`[stripe/${endpointName}] payment_intent.payment_failed logged: id=${event.id} account=${connectedAccountId || 'platform'}`);
       break;
 
     case 'charge.refunded':
-      await handleChargeRefunded(event.data.object);
+      await handleChargeRefunded(event.data.object, connectedAccountId);
       break;
 
     case 'charge.dispute.created':
-      await handleDisputeCreated(event.data.object);
+      await handleDisputeCreated(event.data.object, connectedAccountId);
       break;
 
     case 'charge.dispute.closed':
-      await handleDisputeClosed(event.data.object);
+      await handleDisputeClosed(event.data.object, connectedAccountId);
       break;
 
     default:
-      // Unknown event — acknowledge and move on.
-      console.log(`[stripe/webhook] Unhandled event type '${event.type}' (id=${event.id}) — acknowledged.`);
+      console.log(`[stripe/${endpointName}] Unhandled event type '${event.type}' (id=${event.id}) — acknowledged.`);
       break;
   }
 
@@ -276,6 +455,28 @@ async function handleWebhook(req, res) {
   });
 
   return res.status(200).json({ received: true });
+}
+
+/**
+ * Platform Account Webhook Handler.
+ * Primary: STRIPE_WEBHOOK_SECRET
+ * Fallback: STRIPE_CONNECT_WEBHOOK_SECRET
+ */
+async function handleWebhook(req, res) {
+  const primarySecret = process.env.STRIPE_WEBHOOK_SECRET;
+  const fallbackSecret = process.env.STRIPE_CONNECT_WEBHOOK_SECRET || process.env.STRIPE_WEBHOOK_SECRET;
+  return processIncomingWebhook(req, res, primarySecret, fallbackSecret, 'account-webhook');
+}
+
+/**
+ * Connected Accounts Webhook Handler (Direct Charges on Standard accounts).
+ * Primary: STRIPE_CONNECT_WEBHOOK_SECRET
+ * Fallback: STRIPE_WEBHOOK_SECRET
+ */
+async function handleConnectWebhook(req, res) {
+  const primarySecret = process.env.STRIPE_CONNECT_WEBHOOK_SECRET || process.env.STRIPE_WEBHOOK_SECRET;
+  const fallbackSecret = process.env.STRIPE_WEBHOOK_SECRET;
+  return processIncomingWebhook(req, res, primarySecret, fallbackSecret, 'connect-webhook');
 }
 
 // ─── account.updated handler ──────────────────────────────────────────────────
@@ -317,10 +518,6 @@ async function handleAccountUpdated(event) {
       { headers: superAdminHeaders() }
     );
   } catch (err) {
-    // Log and return — do NOT re-throw. Throwing here would cause the webhook
-    // handler to surface a 500 → Stripe would retry the event. The problem is
-    // a downstream failure on super-admin-service; retrying won't help and
-    // would flood logs. This needs a human to investigate.
     console.error(
       `[stripe/webhook] account.updated (event.id=${event.id}): ` +
       `Failed to update super-admin-service for stripeAccountId=${stripeAccountId}:`,
@@ -331,97 +528,34 @@ async function handleAccountUpdated(event) {
 
 // ─── checkout.session.completed handler ──────────────────────────────────────
 
-async function handleCheckoutCompleted(session) {
+async function handleCheckoutCompleted(session, eventAccount = null) {
   const appointmentId = session.metadata?.appointmentId;
   if (!appointmentId) {
-    console.error('[webhook] checkout.session.completed with no appointmentId in metadata:', session.id);
-    return;
+    console.warn('[webhook] checkout.session.completed with no appointmentId in metadata:', session.id);
   }
 
-  await prisma.transaction.updateMany({
-    where: { stripeCheckoutSessionId: session.id, status: 'PENDING' },
-    data: {
-      status: 'SUCCESS',
-      stripePaymentIntentId: typeof session.payment_intent === 'string' ? session.payment_intent : session.payment_intent?.id,
-    },
-  });
-
-  // Stripe's exact processing fee for this charge — not a fixed formula,
-  // pulled from the balance transaction so this is always exactly right,
-  // including any per-card-type variation. This is what "hospitalNetAmount"
-  // should have always meant: gross minus Stripe's fee, never minus
-  // commission — commission is invoiced separately and never netted out of
-  // what the hospital is paid.
+  // Idempotently reconcile the checkout session with Stripe
   try {
-    const paymentIntentId = typeof session.payment_intent === 'string' ? session.payment_intent : session.payment_intent?.id;
-    const pi = await stripe.paymentIntents.retrieve(paymentIntentId, {
-      expand: ['latest_charge.balance_transaction'],
+    const res = await reconcileCheckoutSession({
+      sessionId: session.id,
+      appointmentId,
     });
-    const stripeFeeMinor = pi.latest_charge?.balance_transaction?.fee ?? 0;
-    const grossMinor = Math.round(Number((await prisma.transaction.findFirst({ where: { stripeCheckoutSessionId: session.id } }))?.grossAmount || 0) * 100);
 
-    await prisma.transaction.updateMany({
-      where: { stripeCheckoutSessionId: session.id, paidAt: null },
-      data: {
-        stripeFeeAmount: stripeFeeMinor / 100,
-        hospitalNetAmount: (grossMinor - stripeFeeMinor) / 100,
-        paidAt: new Date(),
-      },
-    });
-  } catch (err) {
-    // Don't let this fail the whole webhook handler — the appointment is
-    // already confirmed as paid above, which is the part that must not be
-    // rolled back. A missing hospitalNetAmount here just means this
-    // transaction won't show up as settlement-ready until it's backfilled;
-    // log loudly so it gets caught.
-    console.error(`[CRITICAL][webhook] Failed to compute hospitalNetAmount for session ${session.id}:`, err.message);
-  }
-
-  try {
-    await axios.patch(
-      `${process.env.APPOINTMENT_SERVICE_URL}/api/appointments/internal/${appointmentId}/payment-outcome`,
-      { outcome: 'PAID' },
-      { headers: { 'x-internal-sig': process.env.INTERNAL_SERVICE_SECRET } }
-    );
-  } catch (err) {
-    if (err?.response?.data?.code === 'APPOINTMENT_ALREADY_CANCELLED') {
-      // The appointment was cancelled through some other path before this
-      // payment could be confirmed — but Stripe has already charged the
-      // hospital's account and taken our commission for a booking that no
-      // longer exists. Refund it automatically and log loudly for a human
-      // to see, rather than leaving the patient charged for nothing.
-      console.error(`[CRITICAL][webhook] Appointment ${appointmentId} was already cancelled when payment confirmed — issuing automatic full refund.`);
-      const transaction = await prisma.transaction.findFirst({ where: { stripeCheckoutSessionId: session.id } });
-      if (transaction) {
-        try {
-          await processRefund({
-            transactionId: transaction.id,
-            amount: Number(transaction.grossAmount),
-            reasonCategory: 'ADMIN_MANUAL',
-            reason: 'Automatic refund: appointment was cancelled before payment confirmation could be applied.',
-            refundCommission: true,
-            initiatedBy: 'SYSTEM',
-            initiatedByRole: 'SYSTEM_RECONCILIATION',
-          });
-        } catch (refundErr) {
-          console.error(`[CRITICAL][webhook] Automatic refund for orphaned payment on appointment ${appointmentId} FAILED — needs manual handling:`, refundErr.message);
-        }
-      } else {
-        console.error(`[CRITICAL][webhook] No transaction found for orphaned-payment appointment ${appointmentId} — cannot auto-refund, needs manual handling.`);
-      }
-      return;
+    if (res.alreadyReconciled) {
+      console.log(`[webhook] Session ${session.id} was already reconciled. Acknowledged.`);
+    } else if (res.success) {
+      console.log(`[webhook] Session ${session.id} reconciled successfully as ${res.status}`);
+    } else {
+      console.warn(`[webhook] Session ${session.id} reconciliation returned:`, res.message);
     }
-    // Do not throw — this would make Stripe retry the whole webhook, including
-    // the already-successful Transaction update above. Log loudly; the
-    // reconciliation cron will catch a stuck PENDING
-    // appointment with a SUCCESS transaction and retry the confirmation.
-    console.error(`[webhook] Failed to confirm appointment ${appointmentId} as paid:`, err?.response?.data || err.message);
+  } catch (err) {
+    console.error(`[webhook] Failed to reconcile checkout session ${session.id}:`, err.message);
   }
 }
 
 // ─── checkout.session.expired handler ────────────────────────────────────────
 
-async function handleCheckoutExpired(session) {
+async function handleCheckoutExpired(session, eventAccount = null) {
   const appointmentId = session.metadata?.appointmentId;
   if (!appointmentId) return;
 
@@ -466,9 +600,10 @@ async function handleChargeRefunded(charge) {
   let reductionMinor = Math.round(Number(pendingRefund?.amount || 0) * 100);
   if (pendingRefund?.stripeRefundId) {
     try {
+      const retrieveOpts = transaction.stripeConnectedAccountId ? { stripeAccount: transaction.stripeConnectedAccountId } : {};
       const refundObj = await stripe.refunds.retrieve(pendingRefund.stripeRefundId, {
         expand: ['balance_transaction'],
-      });
+      }, retrieveOpts);
       if (refundObj.balance_transaction) {
         reductionMinor = Math.abs(refundObj.balance_transaction.net);
       }
@@ -568,11 +703,119 @@ async function handleDisputeClosed(dispute) {
   }
 }
 
+// ─── GET /api/payments/stripe/sync-status ─────────────────────────────────────
+
+/**
+ * HOSPITAL_ADMIN — Fetches live Stripe account status directly from the Stripe
+ * API and syncs it to the DB. This is the fallback when webhooks are not delivered
+ * (e.g. local dev without Stripe CLI, or any missed webhook event).
+ *
+ * Returns the same shape as GET /hospital/stripe-status so the frontend can use
+ * either endpoint interchangeably.
+ */
+async function syncStripeStatus(req, res) {
+  const role = req.headers['x-user-role'];
+  if (role !== 'HOSPITAL_ADMIN' && role !== 'SUPER_ADMIN') {
+    return res.status(403).json({ success: false, message: 'Forbidden.' });
+  }
+
+  // For HOSPITAL_ADMIN, hospitalId comes from x-tenant-id (set by JWT in gateway).
+  // For SUPER_ADMIN, allow passing hospitalId via query param.
+  const hospitalId = role === 'SUPER_ADMIN'
+    ? (req.query.hospitalId || req.headers['x-tenant-id'])
+    : req.headers['x-tenant-id'];
+
+  if (!hospitalId) {
+    return res.status(400).json({ success: false, message: 'Missing hospital ID.' });
+  }
+
+  // 1. Get current DB record from super-admin-service
+  let hospital;
+  try {
+    const r = await axios.get(
+      `${superAdminBase()}/internal/hospital/${hospitalId}/stripe-status`,
+      { headers: superAdminHeaders() }
+    );
+    hospital = r.data?.data;
+  } catch (err) {
+    if (err?.response?.status === 404) {
+      return res.status(200).json({
+        success: true,
+        data: { stripeAccountId: null, stripeOnboardingStatus: 'NOT_STARTED', stripeChargesEnabled: false, stripePayoutsEnabled: false },
+      });
+    }
+    return res.status(502).json({ success: false, message: 'Could not reach super-admin-service.' });
+  }
+
+  const stripeAccountId = hospital?.stripeAccountId;
+  if (!stripeAccountId) {
+    return res.status(200).json({
+      success: true,
+      data: { stripeAccountId: null, stripeOnboardingStatus: 'NOT_STARTED', stripeChargesEnabled: false, stripePayoutsEnabled: false },
+    });
+  }
+
+  // 2. Fetch live data directly from Stripe
+  let liveAccount;
+  try {
+    liveAccount = await stripe.accounts.retrieve(stripeAccountId);
+  } catch (stripeErr) {
+    console.warn(`[stripe/syncStatus] Failed to retrieve ${stripeAccountId} from Stripe:`, stripeErr.message);
+    // Return whatever is in the DB — don't fail the whole request
+    return res.status(200).json({ success: true, data: hospital });
+  }
+
+  const chargesEnabled  = liveAccount.charges_enabled  ?? false;
+  const payoutsEnabled  = liveAccount.payouts_enabled  ?? false;
+  const disabledReason  = liveAccount.requirements?.disabled_reason;
+
+  let stripeOnboardingStatus;
+  if (chargesEnabled && payoutsEnabled) {
+    stripeOnboardingStatus = 'COMPLETE';
+  } else if (disabledReason) {
+    stripeOnboardingStatus = 'RESTRICTED';
+  } else {
+    stripeOnboardingStatus = 'PENDING';
+  }
+
+  // 3. Only write to DB if the status has changed (avoid unnecessary writes)
+  if (
+    stripeOnboardingStatus !== hospital.stripeOnboardingStatus ||
+    chargesEnabled          !== hospital.stripeChargesEnabled  ||
+    payoutsEnabled          !== hospital.stripePayoutsEnabled
+  ) {
+    try {
+      await axios.patch(
+        `${superAdminBase()}/internal/hospital/by-stripe-account/${stripeAccountId}/stripe-status`,
+        { stripeOnboardingStatus, stripeChargesEnabled: chargesEnabled, stripePayoutsEnabled: payoutsEnabled },
+        { headers: superAdminHeaders() }
+      );
+      console.log(`[stripe/syncStatus] Synced ${stripeAccountId}: ${hospital.stripeOnboardingStatus} → ${stripeOnboardingStatus}`);
+    } catch (patchErr) {
+      console.error('[stripe/syncStatus] DB patch failed:', patchErr?.response?.data || patchErr.message);
+    }
+  }
+
+  return res.status(200).json({
+    success: true,
+    data: {
+      stripeAccountId,
+      stripeOnboardingStatus,
+      stripeChargesEnabled: chargesEnabled,
+      stripePayoutsEnabled: payoutsEnabled,
+    },
+  });
+}
+
 // ─── Exports ──────────────────────────────────────────────────────────────────
 
 module.exports = {
   rejectIfNotSuperAdmin,
   createConnectedAccount,
   createOnboardingLink,
+  createOwnOnboardingLink,
+  syncStripeStatus,
   handleWebhook,
+  handleConnectWebhook,
 };
+

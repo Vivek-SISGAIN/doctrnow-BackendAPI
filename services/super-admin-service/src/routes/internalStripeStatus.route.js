@@ -5,6 +5,7 @@ import {
   patchStripeStatusByStripeAccountId,
   getCommissionRateByHospitalId,
   getStripeStatusByHospitalId,
+  getStripePendingHospitals,
 } from '../controllers/internalStripeStatus.controller.js';
 
 const router = express.Router();
@@ -18,6 +19,14 @@ router.use(internalAuth);
  */
 router.get('/hospital/:hospitalId/commission-rate', getCommissionRateByHospitalId);
 router.get('/hospital/:hospitalId/stripe-status', getStripeStatusByHospitalId);
+
+/**
+ * GET /internal/hospitals/stripe-pending
+ * Returns all hospitals whose stripeOnboardingStatus is PENDING or RESTRICTED
+ * AND have a stripeAccountId set. Used by the Stripe status reconciliation cron
+ * to independently verify account statuses against the live Stripe API.
+ */
+router.get('/hospitals/stripe-pending', getStripePendingHospitals);
 
 /**
  * PATCH /internal/hospital/:id/stripe-status

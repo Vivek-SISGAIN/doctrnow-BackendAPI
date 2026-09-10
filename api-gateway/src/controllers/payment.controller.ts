@@ -1,30 +1,51 @@
 import {
   Controller,
   All,
+  Post,
   Req,
   Res,
   HttpStatus,
-  UseGuards,
 } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { Request, Response } from 'express';
 import { HttpProxyService } from '../http-proxy/http-proxy.service';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { Public } from '../common/decorators/public.decorator';
 import { SkipThrottle } from '@nestjs/throttler';
 
 /**
  * Payment Controller
  * Routes: /api/v1/payments/*
  * Target: payment-insurance-service (/api/payments)
- * Access: Authenticated users only
+ * Access: Authenticated users by default; Stripe webhooks are @Public()
  */
 @ApiTags('payments')
 @ApiBearerAuth('JWT-auth')
 @Controller('payments')
 @SkipThrottle()
-@UseGuards(JwtAuthGuard)
 export class PaymentController {
   constructor(private readonly httpProxyService: HttpProxyService) {}
+
+  /**
+   * Public Stripe Webhook (Account / Platform events)
+   * POST /api/v1/payments/stripe/webhook
+   */
+  @Public()
+  @Post('stripe/webhook')
+  @ApiOperation({ summary: 'Proxy Stripe account webhook to payment-insurance-service' })
+  async proxyStripeWebhook(@Req() req: Request, @Res() res: Response): Promise<void> {
+    return this.proxyWebhookRequest('/api/payments/stripe/webhook', req, res);
+  }
+
+  /**
+   * Public Stripe Connect Webhook (Connected Accounts / Direct Charge events)
+   * POST /api/v1/payments/stripe/connect-webhook
+   */
+  @Public()
+  @Post('stripe/connect-webhook')
+  @ApiOperation({ summary: 'Proxy Stripe connect webhook to payment-insurance-service' })
+  async proxyStripeConnectWebhook(@Req() req: Request, @Res() res: Response): Promise<void> {
+    return this.proxyWebhookRequest('/api/payments/stripe/connect-webhook', req, res);
+  }
 
   /** Base path: POST /api/v1/payments, GET /api/v1/payments, etc. */
   @All()
@@ -53,7 +74,7 @@ export class PaymentController {
         method: req.method,
         url: path,
         headers: this.extractHeaders(req),
-        body: req.body,
+        body: (req as any).rawBody || req.body,
         query: req.query as Record<string, any>,
         correlationId,
         userId,
@@ -83,6 +104,42 @@ export class PaymentController {
     }
   }
 
+  private async proxyWebhookRequest(downstreamPath: string, req: Request, res: Response): Promise<void> {
+    const correlationId =
+      (req.headers['x-correlation-id'] as string) ||
+      ((req as any).id as string) ||
+      `webhook-${Date.now()}`;
+
+    try {
+      const response = await this.httpProxyService.proxyRequest('PAYMENT', {
+        method: 'POST',
+        url: downstreamPath,
+        headers: this.extractHeaders(req),
+        body: (req as any).rawBody || req.body,
+        correlationId,
+      });
+
+      res.status(response.status).json(response.data);
+    } catch (error: any) {
+      const status = error.status || HttpStatus.INTERNAL_SERVER_ERROR;
+      const downstream = error?.data || error?.response?.data;
+      const message =
+        downstream?.message ??
+        downstream?.error?.message ??
+        error.message ??
+        'Internal server error';
+
+      res.status(status).json({
+        error: {
+          code: downstream?.error?.code ?? 'WEBHOOK_PROXY_ERROR',
+          message,
+          correlationId,
+          ...(downstream && { details: downstream }),
+        },
+      });
+    }
+  }
+
   private extractHeaders(req: Request): Record<string, string> {
     const headers: Record<string, string> = {};
     const allowedHeaders = [
@@ -94,6 +151,7 @@ export class PaymentController {
       'x-client',
       'x-internal-secret',
       'x-internal-service-key',
+      'stripe-signature',
     ];
 
     for (const [key, value] of Object.entries(req.headers)) {

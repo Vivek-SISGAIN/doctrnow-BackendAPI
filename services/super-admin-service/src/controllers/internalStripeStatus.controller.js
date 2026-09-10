@@ -138,9 +138,34 @@ export async function getStripeStatusByHospitalId(req, res) {
     },
   });
   if (!hospital) {
-    return res.status(404).json({ success: false, message: `Hospital ${hospitalId} not found.` });
+    return res.status(200).json({
+      success: true,
+      data: {
+        stripeAccountId: null,
+        stripeOnboardingStatus: 'NOT_STARTED',
+        stripeChargesEnabled: false,
+        stripePayoutsEnabled: false,
+      },
+    });
   }
   return res.status(200).json({ success: true, data: hospital });
+}
+
+export async function getStripePendingHospitals(req, res) {
+  const hospitals = await prisma.hospital.findMany({
+    where: {
+      stripeAccountId: { not: null },
+      stripeOnboardingStatus: { in: ['PENDING', 'RESTRICTED', 'NOT_STARTED'] },
+    },
+    select: {
+      id: true,
+      stripeAccountId: true,
+      stripeOnboardingStatus: true,
+      stripeChargesEnabled: true,
+      stripePayoutsEnabled: true,
+    },
+  });
+  return res.status(200).json({ success: true, data: hospitals });
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -158,3 +183,4 @@ function buildStripeUpdatePayload(body) {
   }
   return data;
 }
+

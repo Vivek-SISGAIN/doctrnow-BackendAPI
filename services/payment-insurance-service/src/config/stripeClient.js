@@ -20,8 +20,10 @@ if (!key) {
  *   const account = await stripe.accounts.create({ ... });
  */
 const stripe = Stripe(key || '', {
-  apiVersion: '2024-06-20', // Pin to a stable API version
-  maxNetworkRetries: 2,      // Stripe SDK-level retries for transient network errors
+  // Do NOT pin apiVersion here — the old value (2024-06-20) was too old
+  // to support the Accounts v2 SDK methods (stripe.v2.core.accounts).
+  // The SDK's embedded default version is used instead, which is v2-compatible.
+  maxNetworkRetries: 2, // Stripe SDK-level retries for transient network errors
 });
 
 module.exports = stripe;

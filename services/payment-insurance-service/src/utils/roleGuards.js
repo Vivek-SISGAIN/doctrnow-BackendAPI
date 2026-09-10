@@ -16,24 +16,8 @@ function rejectIfNotSuperAdmin(req, res) {
   return false;
 }
 
-module.exports = {
-  rejectIfNotSuperAdmin,
-  resolveReadScope,
-};
-
 /**
- * Resolves the caller's data scope for read endpoints that both SUPER_ADMIN
- * and HOSPITAL_ADMIN may call. SUPER_ADMIN sees everything — hospitalId:
- * null means "no filter, platform-wide." HOSPITAL_ADMIN is always scoped to
- * their own hospital, taken from X-Tenant-ID — the same header
- * hospital-admin-service already uses to scope this role everywhere else in
- * the app (see doctor.controller.ts, healthService.controller.ts). This is
- * deliberately never taken from a query param or path segment the caller
- * controls — a HOSPITAL_ADMIN cannot widen their own scope by passing a
- * different hospitalId anywhere in the request.
- *
- * Returns { hospitalId } on success (hospitalId is null for SUPER_ADMIN, or
- * a string for HOSPITAL_ADMIN), or null if rejected (response already sent).
+ * Resolves caller data scope: SUPER_ADMIN -> { hospitalId: null }, HOSPITAL_ADMIN -> { hospitalId: tenantId }
  */
 function resolveReadScope(req, res) {
   const role = req.headers['x-user-role'];
@@ -60,3 +44,76 @@ function resolveReadScope(req, res) {
   });
   return null;
 }
+
+/**
+ * Require PATIENT role and extract patientId from x-user-id header.
+ * Returns { patientId } or null if rejected.
+ */
+function requirePatient(req, res) {
+  const role = req.headers['x-user-role'];
+  const patientId = req.headers['x-user-id'];
+
+  if (role !== 'PATIENT' || !patientId) {
+    res.status(403).json({
+      success: false,
+      message: `Forbidden: role '${role || '(none)'}' is not authorised for this endpoint. Requires authenticated PATIENT.`,
+    });
+    return null;
+  }
+  return { patientId };
+}
+
+/**
+ * Require HOSPITAL_ADMIN role and extract hospitalId from x-tenant-id.
+ * Returns { hospitalId } or null if rejected.
+ */
+function requireHospitalAdmin(req, res) {
+  const role = req.headers['x-user-role'];
+  const hospitalId = req.headers['x-tenant-id'];
+
+  if (role !== 'HOSPITAL_ADMIN' || !hospitalId) {
+    res.status(403).json({
+      success: false,
+      message: `Forbidden: role '${role || '(none)'}' is not authorised for this endpoint. Requires HOSPITAL_ADMIN with valid X-Tenant-ID.`,
+    });
+    return null;
+  }
+  return { hospitalId };
+}
+
+/**
+ * Require SUPER_ADMIN role.
+ * Returns true or null if rejected.
+ */
+function requireSuperAdmin(req, res) {
+  const role = req.headers['x-user-role'];
+  if (role !== 'SUPER_ADMIN') {
+    res.status(403).json({
+      success: false,
+      message: `Forbidden: role '${role || '(none)'}' is not authorised for this endpoint. Requires SUPER_ADMIN.`,
+    });
+    return null;
+  }
+  return true;
+}
+
+/**
+ * Standard pagination parameter extractor.
+ */
+function getPagination(req, defaultLimit = 20, maxLimit = 100) {
+  const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+  const requestedLimit = parseInt(req.query.limit, 10) || defaultLimit;
+  const limit = Math.min(Math.max(1, requestedLimit), maxLimit);
+  const skip = (page - 1) * limit;
+
+  return { page, limit, skip, take: limit };
+}
+
+module.exports = {
+  rejectIfNotSuperAdmin,
+  resolveReadScope,
+  requirePatient,
+  requireHospitalAdmin,
+  requireSuperAdmin,
+  getPagination,
+};

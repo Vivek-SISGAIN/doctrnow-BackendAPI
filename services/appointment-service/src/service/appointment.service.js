@@ -62,7 +62,13 @@ class AppointmentService {
     const where = {};
 
     if (patientId) {
-      where.patientId = patientId;
+      if (Array.isArray(patientId)) {
+        where.patientId = { in: patientId };
+      } else if (typeof patientId === 'object' && patientId !== null) {
+        where.patientId = patientId;
+      } else {
+        where.patientId = patientId;
+      }
     }
 
     if (doctorId) {

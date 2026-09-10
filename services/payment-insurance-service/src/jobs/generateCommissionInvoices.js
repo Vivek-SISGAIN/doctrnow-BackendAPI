@@ -26,6 +26,13 @@ function addCycleLength(date, cycle) {
   throw new Error(`Unknown commissionInvoiceCycle: ${cycle}`);
 }
 
+function generateInvoiceNumber() {
+  const d = new Date();
+  const yearMonth = `${d.getUTCFullYear()}${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
+  const randomSuffix = Math.random().toString(36).substring(2, 7).toUpperCase();
+  return `INV-${yearMonth}-${randomSuffix}`;
+}
+
 /**
  * Generates an invoice for one hospital IF its current billing cycle has
  * fully elapsed. Safe to call repeatedly (daily, by cron, or on demand) —
@@ -87,12 +94,19 @@ async function generateInvoiceForHospitalIfDue(hospitalId) {
   // Without this, a quiet hospital with no bookings in a given week would
   // never get a new invoice row, and the next real transaction would get
   // pulled into an ever-growing stale period.
+  const invoiceNumber = generateInvoiceNumber();
+  const hospitalName = lineItems[0]?.hospitalName || null;
+  const dueDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+
   const invoice = await prisma.$transaction(async (tx) => {
     const inv = await tx.commissionInvoice.create({
       data: {
+        invoiceNumber,
         hospitalId,
+        hospitalName,
         periodStart,
         periodEnd,
+        dueDate,
         totalCommission,
         vatAmount,
         totalDue,
@@ -110,6 +124,68 @@ async function generateInvoiceForHospitalIfDue(hospitalId) {
   });
 
   return invoice;
+}
+
+async function generateInvoiceManualForHospital(hospitalId, customStart, customEnd) {
+  const where = {
+    hospitalId,
+    commissionInvoiceId: null,
+    status: { in: BILLABLE_STATUSES },
+  };
+
+  const periodStart = customStart ? new Date(customStart) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+  const periodEnd = customEnd ? new Date(customEnd) : new Date();
+
+  where.createdAt = { gte: periodStart, lte: periodEnd };
+
+  const lineItems = await prisma.transaction.findMany({
+    where,
+    include: { refunds: { where: { status: 'PROCESSED' } } },
+  });
+
+  if (lineItems.length === 0) {
+    return { success: false, message: 'No unbilled transactions found for the specified period.' };
+  }
+
+  let totalCommission = 0;
+  for (const txn of lineItems) {
+    const refundedCommission = txn.refunds.reduce((sum, r) => sum + Number(r.commissionAmountRefunded || 0), 0);
+    totalCommission += Number(txn.commissionAmount) - refundedCommission;
+  }
+  totalCommission = Math.round(totalCommission * 100) / 100;
+  const vatAmount = 0;
+  const totalDue = totalCommission + vatAmount;
+
+  const invoiceNumber = generateInvoiceNumber();
+  const hospitalName = lineItems[0]?.hospitalName || null;
+  const dueDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+
+  const invoice = await prisma.$transaction(async (tx) => {
+    const inv = await tx.commissionInvoice.create({
+      data: {
+        invoiceNumber,
+        hospitalId,
+        hospitalName,
+        periodStart,
+        periodEnd,
+        dueDate,
+        totalCommission,
+        vatAmount,
+        totalDue,
+        status: totalDue === 0 ? 'PAID' : 'UNPAID',
+        paidAt: totalDue === 0 ? new Date() : null,
+      },
+    });
+
+    await tx.transaction.updateMany({
+      where: { id: { in: lineItems.map((t) => t.id) } },
+      data: { commissionInvoiceId: inv.id },
+    });
+
+    return inv;
+  });
+
+  return { success: true, invoice, lineItemsCount: lineItems.length };
 }
 
 async function generateDueCommissionInvoices() {
@@ -132,4 +208,4 @@ async function generateDueCommissionInvoices() {
   return { hospitalsChecked: distinctHospitals.length, invoicesGenerated: generated.length, invoices: generated };
 }
 
-module.exports = { generateDueCommissionInvoices, generateInvoiceForHospitalIfDue };
+module.exports = { generateDueCommissionInvoices, generateInvoiceForHospitalIfDue, generateInvoiceManualForHospital };

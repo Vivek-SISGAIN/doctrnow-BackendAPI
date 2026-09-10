@@ -62,6 +62,7 @@ enum SettlementAdjustmentStatus {
 
 enum InvoiceStatus {
   UNPAID
+  PAYMENT_SUBMITTED
   PAID
   OVERDUE
 }
@@ -92,6 +93,21 @@ model Transaction {
   stripePaymentIntentId    String?           @unique @map("stripe_payment_intent_id")
   stripeConnectedAccountId String?           @map("stripe_connected_account_id")
 
+  // Payment details & receipts
+  paymentMethodType        String?           @default("card") @map("payment_method_type")
+  cardBrand                String?           @map("card_brand")
+  cardLast4                String?           @map("card_last4")
+  receiptUrl               String?           @map("receipt_url")
+  customerEmail            String?           @map("customer_email")
+
+  // Decoupled context snapshots for fast querying & listing
+  doctorName               String?           @map("doctor_name")
+  doctorSpecialty          String?           @map("doctor_specialty")
+  hospitalName             String?           @map("hospital_name")
+  patientName              String?           @map("patient_name")
+  patientEmail             String?           @map("patient_email")
+  consultationType         String?           @map("consultation_type")
+
   // commissionInvoiceId is NULL until this transaction is included in a
   // generated invoice — prevents double-billing across invoice cycles.
   commissionInvoiceId      String?           @map("commission_invoice_id")
@@ -106,6 +122,10 @@ model Transaction {
   @@index([hospitalId])
   @@index([appointmentId])
   @@index([patientId])
+  @@index([doctorId])
+  @@index([status])
+  @@index([createdAt])
+  @@index([paidAt])
   @@map("transactions")
 }
 
@@ -118,8 +138,10 @@ model Refund {
   reasonCategory   RefundReasonCategory
   status           RefundStatus         @default(PENDING)
   stripeRefundId   String?              @map("stripe_refund_id")
+  receiptUrl       String?              @map("receipt_url")
+  failureReason    String?              @map("failure_reason")
   initiatedBy      String?              @map("initiated_by")       // userId, or "SYSTEM" for automatic
-  initiatedByRole          String?              @map("initiated_by_role")
+  initiatedByRole  String?              @map("initiated_by_role")
   // How much of the underlying transaction's commissionAmount this refund
   // reversed — proportional to (amount / transaction.grossAmount) when
   // refundCommission was true, else 0. Needed so invoice generation (1.6)
@@ -130,6 +152,8 @@ model Refund {
   updatedAt        DateTime             @updatedAt      @map("updated_at")
 
   @@index([transactionId])
+  @@index([status])
+  @@index([createdAt])
   @@map("refunds")
 }
 
@@ -152,20 +176,41 @@ model Dispute {
 }
 
 model CommissionInvoice {
-  id              String        @id @default(uuid())
-  hospitalId      String        @map("hospital_id")
-  periodStart     DateTime      @map("period_start")
-  periodEnd       DateTime      @map("period_end")
-  totalCommission Decimal       @db.Decimal(10, 2) @map("total_commission")
-  vatAmount       Decimal       @db.Decimal(10, 2) @default(0) @map("vat_amount")
-  totalDue        Decimal       @db.Decimal(10, 2) @map("total_due")
-  status          InvoiceStatus @default(UNPAID)
-  paidAt          DateTime?     @map("paid_at")
-  createdAt       DateTime      @default(now()) @map("created_at")
+  id                  String        @id @default(uuid())
+  invoiceNumber       String?       @unique @map("invoice_number")
+  hospitalId          String        @map("hospital_id")
+  hospitalName        String?       @map("hospital_name")
+  periodStart         DateTime      @map("period_start")
+  periodEnd           DateTime      @map("period_end")
+  dueDate             DateTime?     @map("due_date")
+  totalCommission     Decimal       @db.Decimal(10, 2) @map("total_commission")
+  vatAmount           Decimal       @db.Decimal(10, 2) @default(0) @map("vat_amount")
+  totalDue            Decimal       @db.Decimal(10, 2) @map("total_due")
+  status              InvoiceStatus @default(UNPAID)
+  paidAt              DateTime?     @map("paid_at")
 
-  lineItems       Transaction[]
+  // Payment submission by Hospital Admin
+  paymentMethod       String?       @map("payment_method")
+  paymentReference    String?       @map("payment_reference")
+  paymentReceiptUrl   String?       @map("payment_receipt_url")
+  paymentNotes        String?       @map("payment_notes")
+  paymentSubmittedAt  DateTime?     @map("payment_submitted_at")
+  paymentSubmittedBy  String?       @map("payment_submitted_by")
+
+  // Acknowledgment by Super Admin
+  acknowledgedBy      String?       @map("acknowledged_by")
+  acknowledgedAt      DateTime?     @map("acknowledged_at")
+  acknowledgmentNotes String?       @map("acknowledgment_notes")
+  rejectionReason     String?       @map("rejection_reason")
+
+  createdAt           DateTime      @default(now()) @map("created_at")
+  updatedAt           DateTime      @default(now()) @updatedAt @map("updated_at")
+
+  lineItems           Transaction[]
 
   @@index([hospitalId])
+  @@index([status])
+  @@index([invoiceNumber])
   @@map("commission_invoices")
 }
 

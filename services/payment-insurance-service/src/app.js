@@ -149,6 +149,8 @@ app.use('/', fhirRoutes);
 if (process.env.NODE_ENV !== 'test') {
   require('./cron/commissionInvoice.cron');
   require('./cron/settlementTransfer.cron');
+  require('./cron/paymentReconciliation.cron');
+  require('./cron/stripeStatusReconciliation.cron'); // Polls Stripe directly as webhook backup
 }
 
 // Error handling middleware

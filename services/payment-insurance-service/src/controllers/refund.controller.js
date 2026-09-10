@@ -51,16 +51,20 @@ async function processRefund({ transactionId, amount, reasonCategory, reason, re
 
   const amountMinor = Math.round(amount * 100);
 
-  const stripeRefund = await stripe.refunds.create({
-    payment_intent: transaction.stripePaymentIntentId,
-    amount: amountMinor,
-    reason: 'requested_by_customer',
-    metadata: { transactionId, reasonCategory },
-  });
-  // No { stripeAccount } — this PaymentIntent lives on the platform account.
-  // No refund_application_fee — there was never an application fee to reverse;
-  // refundCommission below is purely our own ledger flag now, not a Stripe
-  // API parameter.
+  const stripeRefund = await stripe.refunds.create(
+    {
+      payment_intent: transaction.stripePaymentIntentId,
+      amount: amountMinor,
+      reason: 'requested_by_customer',
+      metadata: { transactionId, reasonCategory },
+    },
+    {
+      stripeAccount: transaction.stripeConnectedAccountId,
+    }
+  );
+  // Direct charges live on the hospital's connected account, so the refund
+  // must specify the hospital's stripeAccount.
+  // Commission invoicing is tracked in our own ledger for monthly billing.
 
   const commissionAmountRefunded = refundCommission
     ? Math.round((Number(transaction.commissionAmount) * (amount / Number(transaction.grossAmount))) * 100) / 100

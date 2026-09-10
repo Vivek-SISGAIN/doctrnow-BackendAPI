@@ -27,6 +27,13 @@ const cron = require('node-cron');
 const { runAllPendingSettlements } = require('../controllers/settlement.controller');
 
 cron.schedule('0 21 * * *', async () => {
+  // In Direct Charges model (Standard Connected Accounts), patient payments land
+  // directly in the hospital's connected Stripe account. Stripe pays hospitals out
+  // directly to their bank. Platform transfers from DoctorNow's balance are not
+  // used in Direct Charges, so this cron is disabled by default.
+  if (process.env.ENABLE_LEGACY_SETTLEMENT_TRANSFER_CRON !== 'true') {
+    return;
+  }
   console.log('[cron] Running automatic hospital settlement...');
   try {
     const summary = await runAllPendingSettlements();

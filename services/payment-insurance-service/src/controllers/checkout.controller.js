@@ -29,9 +29,31 @@ async function createCheckoutSession(req, res) {
     return res.status(403).json({ success: false, message: 'Only an authenticated patient can start a checkout.' });
   }
 
-  const { doctorId, hospitalId, slotId, consultationType, familyMemberId, reason, notes } = req.body;
+  const { doctorId, hospitalId, slotId, consultationType, familyMemberId, reason, notes, patientId: clientPatientId } = req.body;
   if (!doctorId || !hospitalId || !slotId || !consultationType) {
     return res.status(400).json({ success: false, message: 'doctorId, hospitalId, slotId, and consultationType are required.' });
+  }
+
+  // Resolve the patient profile ID so appointment.patientId matches what the patient frontend queries (profile.id)
+  let resolvedPatientId = clientPatientId || patientId;
+  let resolvedPatientName = null;
+  let resolvedPatientEmail = null;
+  try {
+    const pRes = await axios.get(`${PROFILE_URL}/api/patients/me`, {
+      headers: {
+        'x-user-id': patientId,
+        'x-user-role': userRole,
+        Authorization: req.headers.authorization || '',
+      },
+      timeout: 5000,
+    });
+    if (pRes.data?.data) {
+      if (pRes.data.data.id) resolvedPatientId = pRes.data.data.id;
+      resolvedPatientName = [pRes.data.data.firstName, pRes.data.data.lastName].filter(Boolean).join(' ') || null;
+      resolvedPatientEmail = pRes.data.data.email || null;
+    }
+  } catch (err) {
+    console.warn('[checkout] Could not resolve patient profile:', err.message);
   }
 
   const feeField = FEE_FIELD_BY_TYPE[consultationType];
@@ -118,7 +140,7 @@ async function createCheckoutSession(req, res) {
   let appointment;
   try {
     const r = await axios.post(`${APPOINTMENT_URL}/api/appointments`, {
-      patientId, doctorId, hospitalId, slotId, consultationType, familyMemberId, reason, notes,
+      patientId: resolvedPatientId, doctorId, hospitalId, slotId, consultationType, familyMemberId, reason, notes,
     });
     appointment = r.data?.data || r.data;
   } catch (err) {
@@ -126,41 +148,37 @@ async function createCheckoutSession(req, res) {
     return releaseLockAndFail(err?.response?.status === 409 ? 409 : 502, err?.response?.data?.message || 'Could not create the appointment.');
   }
 
-  // 6. Create the Stripe Checkout Session on the platform account
-  //    (Separate Charges & Transfers). The hospital's share will be moved
-  //    later via Transfer (1.9).
+  // 6. Create the Stripe Checkout Session on the hospital's connected account
+  //    (Direct Charges with Standard Connected Accounts).
+  //    Stripe confirmed on Sept 10, 2026: Standard Connected Accounts + Direct Charges
+  //    is the officially supported model for UAE platforms and UAE hospitals/clinics.
+  //    Funds go directly to the hospital (Merchant of Record), bypassing DoctorNow's balance.
   let session;
   try {
-    session = await stripe.checkout.sessions.create({
-      mode: 'payment',
-      payment_method_types: ['card'],
-      line_items: [{
-        price_data: {
-          currency: 'aed',
-          unit_amount: grossAmountMinor,
-          product_data: { name: `Consultation — ${consultationType}` },
-        },
-        quantity: 1,
-      }],
-      payment_intent_data: {
-        // Ties this PaymentIntent to the Transfer(s) that will move the
-        // hospital's share out of the platform balance later (1.9). Stripe's
-        // recommended pattern for Separate Charges & Transfers.
-        transfer_group: appointment.id,
+    session = await stripe.checkout.sessions.create(
+      {
+        mode: 'payment',
+        payment_method_types: ['card'],
+        line_items: [{
+          price_data: {
+            currency: 'aed',
+            unit_amount: grossAmountMinor,
+            product_data: { name: `Consultation — ${consultationType}` },
+          },
+          quantity: 1,
+        }],
+        metadata: { appointmentId: appointment.id, patientId: resolvedPatientId, hospitalId, doctorId, slotId },
+        // Append appointmentId to the configured success URL per-session, so the
+        // patient frontend knows which appointment to poll for confirmation
+        // without needing a new "look up by session id" endpoint.
+        success_url: `${process.env.PATIENT_APP_CHECKOUT_SUCCESS_URL}&appointmentId=${appointment.id}`,
+        cancel_url: process.env.PATIENT_APP_CHECKOUT_CANCEL_URL,
+        expires_at: Math.floor(Date.now() / 1000) + 35 * 60,
       },
-      metadata: { appointmentId: appointment.id, patientId, hospitalId, doctorId, slotId },
-      // Append appointmentId to the configured success URL per-session, so the
-      // patient frontend knows which appointment to poll for confirmation
-      // without needing a new "look up by session id" endpoint. Assumes
-      // PATIENT_APP_CHECKOUT_SUCCESS_URL already ends in a query string
-      // (it does — see .env) so this is a safe `&` append.
-      success_url: `${process.env.PATIENT_APP_CHECKOUT_SUCCESS_URL}&appointmentId=${appointment.id}`,
-      cancel_url: process.env.PATIENT_APP_CHECKOUT_CANCEL_URL,
-      expires_at: Math.floor(Date.now() / 1000) + 35 * 60,
-    });
-    // no { stripeAccount: hospital.stripeAccountId } — the charge is created on
-    // the platform account. The hospital is only reachable through Stripe now
-    // via its own Transfer, built in 1.9.
+      {
+        stripeAccount: hospital.stripeAccountId,
+      }
+    );
   } catch (err) {
     console.error('[checkout] Stripe session creation failed:', err.message);
     // The appointment already exists as PENDING — cancel it and free the slot
@@ -170,23 +188,32 @@ async function createCheckoutSession(req, res) {
     return res.status(502).json({ success: false, message: 'Could not create the checkout session.' });
   }
 
-  // 7. Ledger row.
+  // 7. Ledger row with snapshot context for fast decoupled querying
+  const doctorName = [doctor?.user?.firstName, doctor?.user?.lastName].filter(Boolean).join(' ')
+    || doctor?.name
+    || (doctor?.firstName ? `${doctor.firstName} ${doctor.lastName || ''}`.trim() : null)
+    || null;
+  const doctorSpecialty = doctor?.specialization || doctor?.specialty || null;
+  const hospitalName = hospital?.officialName || hospital?.name || null;
+
   await prisma.transaction.create({
     data: {
       appointmentId: appointment.id,
-      patientId,
+      patientId: resolvedPatientId,
+      patientName: resolvedPatientName,
+      patientEmail: resolvedPatientEmail,
       hospitalId,
       doctorId,
+      doctorName,
+      doctorSpecialty,
+      hospitalName,
+      consultationType,
       grossAmount: fee,
       commissionAmount: commissionAmountMinor / 100,
       currency: 'aed',
       status: 'PENDING',
       stripeCheckoutSessionId: session.id,
       stripePaymentIntentId: typeof session.payment_intent === 'string' ? session.payment_intent : session.payment_intent?.id,
-      // stripeConnectedAccountId is the hospital this transaction is destined
-      // for, NOT where the charge lives — the charge is on the platform account
-      // now (Separate Charges & Transfers). It's what 1.9's Transfer step will
-      // read to know which connected account to pay.
       stripeConnectedAccountId: hospital.stripeAccountId,
     },
   });

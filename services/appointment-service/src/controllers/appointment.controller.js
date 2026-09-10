@@ -172,8 +172,26 @@ const getAllAppointments = asyncHandler(async (req, res) => {
     }
   }
 
+  let finalPatientId = patientId;
+  if (patientId && typeof patientId === "string") {
+    try {
+      const pRes = await axios.post(
+        `${baseUrl}profiles/patients/bulk`,
+        { ids: [patientId] },
+        { headers: { Authorization: authHeader } }
+      );
+      const patientObj = pRes.data?.data?.[patientId];
+      if (patientObj) {
+        const ids = [...new Set([patientObj.id, patientObj.userId].filter(Boolean))];
+        if (ids.length > 1) {
+          finalPatientId = ids;
+        }
+      }
+    } catch (_) {}
+  }
+
   const filters = {
-    patientId,
+    patientId: finalPatientId,
     doctorId: finalDoctorId,
     hospitalId,
     search,
