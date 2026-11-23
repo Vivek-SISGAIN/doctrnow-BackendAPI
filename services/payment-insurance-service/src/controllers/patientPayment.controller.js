@@ -1,7 +1,48 @@
 'use strict';
 
+const axios = require('axios');
 const prisma = require('../config/prismaClient');
 const { requirePatient, getPagination } = require('../utils/roleGuards');
+
+const PROFILE_URL = process.env.PROFILE_SERVICE_URL;
+
+/**
+ * Resolves all candidate patient IDs for the authenticated caller:
+ * 1. The Auth user ID (from x-user-id header).
+ * 2. Any explicit profileId or patientId query/header parameters.
+ * 3. The associated patient profile UUID from profile-service (/api/patients/me).
+ *
+ * This guarantees transactions are found regardless of whether the transaction
+ * recorded the Auth User ID or the Patient Profile ID at checkout.
+ */
+async function resolvePatientCandidateIds(req, authUserId) {
+  const ids = new Set();
+  if (authUserId) ids.add(authUserId);
+
+  if (req.query?.patientId) ids.add(req.query.patientId);
+  if (req.query?.profileId) ids.add(req.query.profileId);
+  if (req.headers['x-patient-id']) ids.add(req.headers['x-patient-id']);
+
+  if (PROFILE_URL && authUserId) {
+    try {
+      const pRes = await axios.get(`${PROFILE_URL}/api/patients/me`, {
+        headers: {
+          'x-user-id': authUserId,
+          'x-user-role': 'PATIENT',
+          Authorization: req.headers.authorization || '',
+        },
+        timeout: 4000,
+      });
+      if (pRes.data?.data?.id) ids.add(pRes.data.data.id);
+      if (pRes.data?.data?.userId) ids.add(pRes.data.data.userId);
+    } catch (err) {
+      // Non-fatal if profile service is down or returns 404
+      console.warn('[patientPayment] Profile resolution note:', err.message);
+    }
+  }
+
+  return Array.from(ids);
+}
 
 /**
  * GET /api/payments/stripe/patient/transactions
@@ -14,7 +55,10 @@ async function listPatientTransactions(req, res) {
   const { status, consultationType, startDate, endDate } = req.query;
   const { page, limit, skip, take } = getPagination(req, 10, 50);
 
-  const where = { patientId: patient.patientId };
+  const candidateIds = await resolvePatientCandidateIds(req, patient.patientId);
+  const where = {
+    patientId: candidateIds.length === 1 ? candidateIds[0] : { in: candidateIds },
+  };
 
   if (status) {
     where.status = (status === 'PAID' ? 'SUCCESS' : status);
@@ -106,6 +150,8 @@ async function getPatientTransactionById(req, res) {
 
   const { id } = req.params;
 
+  const candidateIds = await resolvePatientCandidateIds(req, patient.patientId);
+
   const transaction = await prisma.transaction.findUnique({
     where: { id },
     include: {
@@ -124,7 +170,7 @@ async function getPatientTransactionById(req, res) {
     },
   });
 
-  if (!transaction || transaction.patientId !== patient.patientId) {
+  if (!transaction || !candidateIds.includes(transaction.patientId)) {
     return res.status(404).json({
       success: false,
       message: `Transaction ${id} not found.`,
@@ -174,8 +220,11 @@ async function listPatientRefunds(req, res) {
 
   const { page, limit, skip, take } = getPagination(req, 10, 50);
 
+  const candidateIds = await resolvePatientCandidateIds(req, patient.patientId);
   const where = {
-    transaction: { patientId: patient.patientId },
+    transaction: {
+      patientId: candidateIds.length === 1 ? candidateIds[0] : { in: candidateIds },
+    },
   };
 
   const [refunds, totalCount] = await Promise.all([

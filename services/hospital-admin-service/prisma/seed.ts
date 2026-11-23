@@ -2,6 +2,7 @@ import 'dotenv/config';
 import { PrismaClient, ServiceType, ServiceStatus } from '@prisma/client';
 
 const prisma = new PrismaClient();
+const DEFAULT_HOSPITAL_ID = '7a8b9c0d-1e2f-4a3b-8c9d-0e1f2a3b4c5d';
 
 async function main() {
   console.log('🌱 Seeding database...');
@@ -17,7 +18,8 @@ async function main() {
         type: ServiceType.LAB_TEST,
         originalPrice: 15.99,
         finalPrice: 12.99,
-        status: ServiceStatus.ACTIVE
+        status: ServiceStatus.ACTIVE,
+        hospitalId: DEFAULT_HOSPITAL_ID
       }
     }),
     prisma.healthService.upsert({
@@ -29,7 +31,8 @@ async function main() {
         type: ServiceType.CONSULTATION,
         originalPrice: 50.0,
         finalPrice: 45.0,
-        status: ServiceStatus.ACTIVE
+        status: ServiceStatus.ACTIVE,
+        hospitalId: DEFAULT_HOSPITAL_ID
       }
     }),
     prisma.healthService.upsert({
@@ -41,7 +44,8 @@ async function main() {
         type: ServiceType.HOME_CARE,
         originalPrice: 80.0,
         finalPrice: 70.0,
-        status: ServiceStatus.ACTIVE
+        status: ServiceStatus.ACTIVE,
+        hospitalId: DEFAULT_HOSPITAL_ID
       }
     }),
     prisma.healthService.upsert({
@@ -53,7 +57,8 @@ async function main() {
         type: ServiceType.DIAGNOSTICS,
         originalPrice: 35.0,
         finalPrice: 29.99,
-        status: ServiceStatus.ACTIVE
+        status: ServiceStatus.ACTIVE,
+        hospitalId: DEFAULT_HOSPITAL_ID
       }
     }),
     prisma.healthService.upsert({
@@ -65,7 +70,8 @@ async function main() {
         type: ServiceType.LAB_TEST,
         originalPrice: 45.0,
         finalPrice: 38.0,
-        status: ServiceStatus.ACTIVE
+        status: ServiceStatus.ACTIVE,
+        hospitalId: DEFAULT_HOSPITAL_ID
       }
     }),
     prisma.healthService.upsert({
@@ -77,7 +83,8 @@ async function main() {
         type: ServiceType.DIAGNOSTICS,
         originalPrice: 25.0,
         finalPrice: 22.0,
-        status: ServiceStatus.ACTIVE
+        status: ServiceStatus.ACTIVE,
+        hospitalId: DEFAULT_HOSPITAL_ID
       }
     })
   ]);
@@ -96,7 +103,8 @@ async function main() {
       finalPrice: 99.0,
       discountPct: 18,
       active: true,
-      validityDays: 365
+      validityDays: 365,
+      hospitalId: DEFAULT_HOSPITAL_ID
     }
   });
 
@@ -111,7 +119,8 @@ async function main() {
       finalPrice: 199.0,
       discountPct: 20,
       active: true,
-      validityDays: 365
+      validityDays: 365,
+      hospitalId: DEFAULT_HOSPITAL_ID
     }
   });
 
@@ -126,7 +135,8 @@ async function main() {
       finalPrice: 169.0,
       discountPct: 15,
       active: true,
-      validityDays: 90
+      validityDays: 90,
+      hospitalId: DEFAULT_HOSPITAL_ID
     }
   });
 
