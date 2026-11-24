@@ -192,7 +192,9 @@ class HospitalService {
     });
 
     if (!hospital) {
-      throw new Error("Hospital not found");
+      const error = new Error("Hospital not found");
+      error.statusCode = 404;
+      throw error;
     }
 
     return await populateHospitalPresignedUrls(hospital);

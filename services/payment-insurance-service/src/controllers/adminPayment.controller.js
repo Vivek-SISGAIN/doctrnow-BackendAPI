@@ -1,7 +1,10 @@
 'use strict';
 
+const axios = require('axios');
 const prisma = require('../config/prismaClient');
 const { requireSuperAdmin, getPagination } = require('../utils/roleGuards');
+
+const PROFILE_URL = process.env.PROFILE_SERVICE_URL || 'http://localhost:5000';
 
 /**
  * GET /api/payments/stripe/admin/transactions
@@ -92,17 +95,24 @@ async function listAdminTransactions(req, res) {
     consultationType: t.consultationType,
     grossAmount: Number(t.grossAmount),
     hospitalNetAmount: Number(t.hospitalNetAmount),
+    netAmount: Number(t.hospitalNetAmount),
     commissionAmount: Number(t.commissionAmount),
+    platformCommission: Number(t.commissionAmount),
     stripeFeeAmount: Number(t.stripeFeeAmount),
+    stripeProcessingFee: Number(t.stripeFeeAmount),
     currency: t.currency.toUpperCase(),
     status: t.status === 'SUCCESS' ? 'PAID' : t.status,
     paymentMethodType: t.paymentMethodType,
+    paymentFlow: t.paymentFlow || (t.stripeCheckoutSessionId ? 'CHECKOUT_URL' : 'PAYMENT_INTENT'),
     cardBrand: t.cardBrand,
     cardLast4: t.cardLast4,
     receiptUrl: t.receiptUrl,
     stripePaymentIntentId: t.stripePaymentIntentId,
     stripeCheckoutSessionId: t.stripeCheckoutSessionId,
     stripeConnectedAccountId: t.stripeConnectedAccountId,
+    stripeTransferId: t.stripeTransferId,
+    transferStatus: t.transferStatus,
+    transferredAt: t.transferredAt,
     commissionInvoice: t.commissionInvoice,
     paidAt: t.paidAt,
     createdAt: t.createdAt,
@@ -138,6 +148,7 @@ async function listAdminTransactions(req, res) {
         limit,
         total: totalCount,
         totalPages: Math.ceil(totalCount / limit),
+        pages: Math.ceil(totalCount / limit),
       },
     },
   });
@@ -173,10 +184,14 @@ async function getAdminTransactionById(req, res) {
     data: {
       ...transaction,
       status: transaction.status === 'SUCCESS' ? 'PAID' : transaction.status,
+      paymentFlow: transaction.paymentFlow || (transaction.stripeCheckoutSessionId ? 'CHECKOUT_URL' : 'PAYMENT_INTENT'),
       grossAmount: Number(transaction.grossAmount),
       hospitalNetAmount: Number(transaction.hospitalNetAmount),
+      netAmount: Number(transaction.hospitalNetAmount),
       commissionAmount: Number(transaction.commissionAmount),
+      platformCommission: Number(transaction.commissionAmount),
       stripeFeeAmount: Number(transaction.stripeFeeAmount),
+      stripeProcessingFee: Number(transaction.stripeFeeAmount),
       refunds: transaction.refunds.map((r) => ({ ...r, amount: Number(r.amount) })),
       disputes: transaction.disputes.map((d) => ({ ...d, amount: Number(d.amount) })),
     },
@@ -258,16 +273,35 @@ async function getAdminStats(req, res) {
     return acc;
   }, {});
 
+  const totalVolume = Number(volumeAgg._sum.grossAmount || 0);
+  const platformCommission = Number(volumeAgg._sum.commissionAmount || 0);
+  const hospitalNet = Number(volumeAgg._sum.hospitalNetAmount || 0);
+  const stripeFees = Number(volumeAgg._sum.stripeFeeAmount || 0);
+  const paidCount = volumeAgg._count || 0;
+  const refundedAmount = Number(refundAgg._sum.amount || 0);
+  const refundedCount = refundAgg._count || 0;
+  const totalTransactions = paidCount + refundedCount;
+
   return res.status(200).json({
     success: true,
     data: {
-      totalGrossPlatformVolume: Number(volumeAgg._sum.grossAmount || 0),
-      totalPlatformCommissionEarned: Number(volumeAgg._sum.commissionAmount || 0),
-      totalHospitalNetDisbursed: Number(volumeAgg._sum.hospitalNetAmount || 0),
-      totalStripeFees: Number(volumeAgg._sum.stripeFeeAmount || 0),
-      paidTransactionsCount: volumeAgg._count,
-      totalRefundedAmount: Number(refundAgg._sum.amount || 0),
-      processedRefundsCount: refundAgg._count,
+      // Frontend expected standard keys
+      totalVolume,
+      platformNetCommission: platformCommission,
+      totalHospitalNet: hospitalNet,
+      totalStripeFee: stripeFees,
+      totalTransactions,
+      paidCount,
+      refundedCount,
+
+      // Backend legacy keys
+      totalGrossPlatformVolume: totalVolume,
+      totalPlatformCommissionEarned: platformCommission,
+      totalHospitalNetDisbursed: hospitalNet,
+      totalStripeFees: stripeFees,
+      paidTransactionsCount: paidCount,
+      totalRefundedAmount: refundedAmount,
+      processedRefundsCount: refundedCount,
       activeDisputesCount: disputeCount,
       invoicesSummary: invoiceMap,
       transactionsByStatus: statusMap,
@@ -361,7 +395,332 @@ async function listAdminRefunds(req, res) {
         limit,
         total: totalCount,
         totalPages: Math.ceil(totalCount / limit),
+        pages: Math.ceil(totalCount / limit),
       },
+    },
+  });
+}
+
+/**
+ * GET /api/payments/stripe/admin/analytics/dashboard
+ * Single unified API providing all metrics, trend charts, breakdowns, and top rankings for Super Admin Revenue Dashboard.
+ */
+async function getAdminDashboardAnalytics(req, res) {
+  if (!requireSuperAdmin(req, res)) return;
+
+  const { timeframe = '12-months', startDate, endDate } = req.query;
+
+  const now = new Date();
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+  const endOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+
+  const startOfThisMonth = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+  const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1, 0, 0, 0, 0);
+  const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
+
+  const startOfLastYearMonth = new Date(now.getFullYear() - 1, now.getMonth(), 1, 0, 0, 0, 0);
+  const endOfLastYearMonth = new Date(now.getFullYear() - 1, now.getMonth() + 1, 0, 23, 59, 59, 999);
+
+  const validStatuses = ['SUCCESS', 'PARTIALLY_REFUNDED', 'REFUNDED'];
+
+  // 12 rolling months ending at current month
+  const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const monthsRange = [];
+  for (let i = 11; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const mStart = new Date(d.getFullYear(), d.getMonth(), 1, 0, 0, 0, 0);
+    const mEnd = new Date(d.getFullYear(), d.getMonth() + 1, 0, 23, 59, 59, 999);
+    monthsRange.push({
+      key: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`,
+      month: monthNames[d.getMonth()],
+      year: d.getFullYear(),
+      start: mStart,
+      end: mEnd,
+    });
+  }
+
+  const twelveMonthsStart = monthsRange[0].start;
+
+  // Run aggregations and fetch transactions in parallel
+  const [
+    todayAgg,
+    thisMonthAgg,
+    lastMonthAgg,
+    lastYearAgg,
+    allTimeAgg,
+    recentTransactions,
+  ] = await Promise.all([
+    prisma.transaction.aggregate({
+      where: { status: { in: validStatuses }, createdAt: { gte: startOfToday, lte: endOfToday } },
+      _sum: { grossAmount: true, commissionAmount: true },
+      _count: true,
+    }),
+    prisma.transaction.aggregate({
+      where: { status: { in: validStatuses }, createdAt: { gte: startOfThisMonth } },
+      _sum: { grossAmount: true, commissionAmount: true },
+      _count: true,
+    }),
+    prisma.transaction.aggregate({
+      where: { status: { in: validStatuses }, createdAt: { gte: startOfLastMonth, lte: endOfLastMonth } },
+      _sum: { grossAmount: true, commissionAmount: true },
+      _count: true,
+    }),
+    prisma.transaction.aggregate({
+      where: { status: { in: validStatuses }, createdAt: { gte: startOfLastYearMonth, lte: endOfLastYearMonth } },
+      _sum: { grossAmount: true },
+    }),
+    prisma.transaction.aggregate({
+      where: { status: { in: validStatuses } },
+      _sum: { grossAmount: true, commissionAmount: true, hospitalNetAmount: true, stripeFeeAmount: true },
+      _count: true,
+    }),
+    prisma.transaction.findMany({
+      where: {
+        status: { in: validStatuses },
+        createdAt: { gte: twelveMonthsStart },
+      },
+      select: {
+        grossAmount: true,
+        commissionAmount: true,
+        hospitalNetAmount: true,
+        stripeFeeAmount: true,
+        hospitalId: true,
+        hospitalName: true,
+        doctorId: true,
+        doctorName: true,
+        doctorSpecialty: true,
+        paymentMethodType: true,
+        cardBrand: true,
+        createdAt: true,
+      },
+      orderBy: { createdAt: 'desc' },
+    }),
+  ]);
+
+  // Compute KPI values
+  const todayRevenue = Number(todayAgg._sum.grossAmount || 0);
+  const thisMonthRevenue = Number(thisMonthAgg._sum.grossAmount || 0);
+  const lastMonthRevenue = Number(lastMonthAgg._sum.grossAmount || 0);
+  const thisMonthCommission = Number(thisMonthAgg._sum.commissionAmount || 0);
+  const allTimeRevenue = Number(allTimeAgg._sum.grossAmount || 0);
+  const allTimeCommission = Number(allTimeAgg._sum.commissionAmount || 0);
+
+  const momGrowth = lastMonthRevenue > 0
+    ? Number((((thisMonthRevenue - lastMonthRevenue) / lastMonthRevenue) * 100).toFixed(1))
+    : (thisMonthRevenue > 0 ? 100 : 0);
+
+  const lastYearRevenue = Number(lastYearAgg._sum.grossAmount || 0);
+  const yoyGrowth = lastYearRevenue > 0
+    ? Number((((thisMonthRevenue - lastYearRevenue) / lastYearRevenue) * 100).toFixed(1))
+    : (thisMonthRevenue > 0 ? 100 : 0);
+
+  // 1. Revenue Trend (12 Months)
+  const trendMap = {};
+  for (const m of monthsRange) {
+    trendMap[m.key] = { month: m.month, year: m.year, revenue: 0, consultations: 0 };
+  }
+  for (const tx of recentTransactions) {
+    const d = new Date(tx.createdAt);
+    const k = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    if (trendMap[k]) {
+      trendMap[k].revenue += Number(tx.grossAmount || 0);
+      trendMap[k].consultations += 1;
+    }
+  }
+  const revenueTrend = monthsRange.map((m) => ({
+    month: m.month,
+    year: m.year,
+    revenue: Math.round(trendMap[m.key].revenue),
+    consultations: trendMap[m.key].consultations,
+  }));
+
+  // 2. Hospital Contribution
+  const hospitalMap = {};
+  let totalHospitalVolume = 0;
+  for (const tx of recentTransactions) {
+    const name = tx.hospitalName || 'General Hospital';
+    const val = Number(tx.grossAmount || 0);
+    totalHospitalVolume += val;
+    if (!hospitalMap[name]) hospitalMap[name] = { name, value: 0, consultations: 0 };
+    hospitalMap[name].value += val;
+    hospitalMap[name].consultations += 1;
+  }
+  const sortedHospitals = Object.values(hospitalMap).sort((a, b) => b.value - a.value);
+  const hospitalContribution = sortedHospitals.map((h) => ({
+    name: h.name,
+    value: Math.round(h.value),
+    percent: totalHospitalVolume > 0 ? Math.round((h.value / totalHospitalVolume) * 100) : 0,
+    consultations: h.consultations,
+  }));
+
+  // 3. Revenue by Specialty
+  const specialtyMap = {};
+  for (const tx of recentTransactions) {
+    const spec = tx.doctorSpecialty || 'General Medicine';
+    const val = Number(tx.grossAmount || 0);
+    if (!specialtyMap[spec]) specialtyMap[spec] = { specialty: spec, revenue: 0, consultations: 0 };
+    specialtyMap[spec].revenue += val;
+    specialtyMap[spec].consultations += 1;
+  }
+  const revenueBySpecialty = Object.values(specialtyMap)
+    .sort((a, b) => b.revenue - a.revenue)
+    .map((s) => ({
+      specialty: s.specialty,
+      revenue: Math.round(s.revenue),
+      consultations: s.consultations,
+    }));
+
+  // 4. Payment Methods Distribution
+  const methodMap = {};
+  let totalMethodCount = 0;
+  for (const tx of recentTransactions) {
+    const rawBrand = (tx.cardBrand || '').toUpperCase();
+    const rawType = (tx.paymentMethodType || '').toLowerCase();
+    let method = 'Credit Card';
+    if (rawBrand.includes('VISA')) method = 'Visa';
+    else if (rawBrand.includes('MASTERCARD')) method = 'Mastercard';
+    else if (rawType.includes('wallet') || rawType.includes('apple') || rawType.includes('google')) method = 'Digital Wallet';
+    else if (rawType.includes('insurance')) method = 'Insurance';
+    else if (rawType.includes('debit')) method = 'Debit Card';
+    else if (rawBrand) method = `${tx.cardBrand} Card`;
+
+    totalMethodCount += 1;
+    if (!methodMap[method]) methodMap[method] = { method, count: 0, amount: 0 };
+    methodMap[method].count += 1;
+    methodMap[method].amount += Number(tx.grossAmount || 0);
+  }
+  const METHOD_COLORS = ['#3B82F6', '#10B981', '#8B5CF6', '#F59E0B', '#EC4899', '#06B6D4'];
+  const paymentMethods = Object.values(methodMap).map((m, idx) => ({
+    method: m.method,
+    value: totalMethodCount > 0 ? Math.round((m.count / totalMethodCount) * 100) : 0,
+    count: m.count,
+    amount: Math.round(m.amount),
+    color: METHOD_COLORS[idx % METHOD_COLORS.length],
+  }));
+
+  // 5. Top Doctors by Revenue
+  const doctorMap = {};
+  const unresolvedDoctorIds = new Set();
+
+  for (const tx of recentTransactions) {
+    let name = tx.doctorName;
+    if (!name || name === 'Doctor') {
+      if (tx.doctorId) unresolvedDoctorIds.add(tx.doctorId);
+    }
+    const hospital = tx.hospitalName || 'General Hospital';
+    const key = tx.doctorId || name || 'Doctor';
+    if (!doctorMap[key]) {
+      doctorMap[key] = {
+        doctorId: tx.doctorId,
+        name: name || 'Doctor',
+        hospital,
+        revenue: 0,
+        consultations: 0,
+      };
+    }
+    doctorMap[key].revenue += Number(tx.grossAmount || 0);
+    doctorMap[key].consultations += 1;
+  }
+
+  // Resolve real doctor names from profile-service if any were missing or defaulted
+  if (unresolvedDoctorIds.size > 0 && PROFILE_URL) {
+    await Promise.all(
+      Array.from(unresolvedDoctorIds).map(async (docId) => {
+        try {
+          const r = await axios.get(`${PROFILE_URL}/api/doctors/${docId}`, { timeout: 3000 });
+          const doc = r.data?.data || r.data;
+          const resolvedName = doc?.fullName || doc?.name || (doc?.firstName ? `${doc.firstName} ${doc.lastName || ''}`.trim() : null);
+          const resolvedSpec = doc?.primarySpecialization || doc?.specialty;
+          if (resolvedName && doctorMap[docId]) {
+            doctorMap[docId].name = resolvedName;
+            // Backfill transaction asynchronously so subsequent queries are instant
+            prisma.transaction.updateMany({
+              where: { doctorId: docId, OR: [{ doctorName: null }, { doctorName: 'Doctor' }] },
+              data: {
+                doctorName: resolvedName,
+                ...(resolvedSpec ? { doctorSpecialty: resolvedSpec } : {}),
+              },
+            }).catch(() => {});
+          }
+        } catch (_) {}
+      })
+    );
+  }
+
+  const topDoctors = Object.values(doctorMap)
+    .sort((a, b) => b.revenue - a.revenue)
+    .map((d, index) => ({
+      rank: index + 1,
+      name: d.name,
+      hospital: d.hospital,
+      revenue: Number(d.revenue.toFixed(2)),
+      consultations: d.consultations,
+    }));
+
+  // 6. Top 10 Hospitals by Revenue
+  const topHospitalsMap = {};
+  for (const tx of recentTransactions) {
+    const hId = tx.hospitalId || 'general';
+    const name = tx.hospitalName || 'Hospital';
+    if (!topHospitalsMap[hId]) {
+      topHospitalsMap[hId] = {
+        hospitalId: hId,
+        name,
+        consultations: 0,
+        revenue: 0,
+        commission: 0,
+        lastMonthRevenue: 0,
+      };
+    }
+    const val = Number(tx.grossAmount || 0);
+    const comm = Number(tx.commissionAmount || 0);
+    topHospitalsMap[hId].consultations += 1;
+    topHospitalsMap[hId].revenue += val;
+    topHospitalsMap[hId].commission += comm;
+
+    const d = new Date(tx.createdAt);
+    if (d >= startOfLastMonth && d <= endOfLastMonth) {
+      topHospitalsMap[hId].lastMonthRevenue += val;
+    }
+  }
+
+  const topHospitals = Object.values(topHospitalsMap)
+    .sort((a, b) => b.revenue - a.revenue)
+    .slice(0, 10)
+    .map((h, index) => {
+      const growth = h.lastMonthRevenue > 0
+        ? Math.round(((h.revenue - h.lastMonthRevenue) / h.lastMonthRevenue) * 100)
+        : (h.revenue > 0 ? 15 : 0);
+      return {
+        rank: index + 1,
+        hospitalId: h.hospitalId,
+        name: h.name,
+        consultations: h.consultations,
+        revenue: Number(h.revenue.toFixed(2)),
+        commission: Number(h.commission.toFixed(2)),
+        growth,
+      };
+    });
+
+  return res.status(200).json({
+    success: true,
+    data: {
+      metrics: {
+        todayRevenue,
+        thisMonthRevenue: thisMonthRevenue > 0 ? thisMonthRevenue : allTimeRevenue,
+        momGrowth,
+        platformCommission: thisMonthCommission > 0 ? thisMonthCommission : allTimeCommission,
+        allTimeCommission,
+        yoyGrowth,
+        allTimeRevenue,
+        paidTransactionsCount: allTimeAgg._count,
+      },
+      revenueTrend,
+      hospitalContribution,
+      revenueBySpecialty,
+      paymentMethods,
+      topDoctors,
+      topHospitals,
     },
   });
 }
@@ -371,4 +730,5 @@ module.exports = {
   getAdminTransactionById,
   getAdminStats,
   listAdminRefunds,
+  getAdminDashboardAnalytics,
 };

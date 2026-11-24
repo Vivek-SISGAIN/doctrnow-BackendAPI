@@ -18,14 +18,15 @@ function internalHeaders() {
  * 2. On-demand verification API when patient returns to confirmation screen
  * 3. Background reconciliation cron for missed or delayed webhooks
  */
-async function reconcileCheckoutSession({ sessionId, appointmentId, transactionId }) {
+async function reconcileCheckoutSession({ sessionId, appointmentId, transactionId, paymentIntentId }) {
   // Find transaction by any provided identifier
   const where = {};
   if (sessionId) where.stripeCheckoutSessionId = sessionId;
+  else if (paymentIntentId) where.stripePaymentIntentId = paymentIntentId;
   else if (appointmentId) where.appointmentId = appointmentId;
   else if (transactionId) where.id = transactionId;
   else {
-    return { success: false, message: 'No sessionId, appointmentId, or transactionId provided.' };
+    return { success: false, message: 'No sessionId, paymentIntentId, appointmentId, or transactionId provided.' };
   }
 
   const transaction = await prisma.transaction.findFirst({
@@ -56,19 +57,121 @@ async function reconcileCheckoutSession({ sessionId, appointmentId, transactionI
     };
   }
 
-  const stripeSessionId = sessionId || transaction.stripeCheckoutSessionId;
-  if (!stripeSessionId) {
-    return {
-      success: false,
-      message: 'No Stripe checkout session ID associated with this transaction.',
-      transaction,
-    };
-  }
-
   // Direct Charge scoping: retrieve with connected account ID
   const retrieveOpts = transaction.stripeConnectedAccountId
     ? { stripeAccount: transaction.stripeConnectedAccountId }
     : {};
+
+  const stripeSessionId = sessionId || transaction.stripeCheckoutSessionId;
+  const targetPaymentIntentId = paymentIntentId || transaction.stripePaymentIntentId;
+
+  // ── Flow A: In-App PaymentIntent (Direct retrieval from Stripe) ───────────────
+  if (!stripeSessionId && targetPaymentIntentId) {
+    let pi;
+    try {
+      pi = await stripe.paymentIntents.retrieve(
+        targetPaymentIntentId,
+        { expand: ['latest_charge.balance_transaction', 'payment_method'] },
+        retrieveOpts
+      );
+    } catch (err) {
+      console.error(`[reconcile] Failed to retrieve PaymentIntent ${targetPaymentIntentId}:`, err.message);
+      return {
+        success: false,
+        message: `Failed to query Stripe for payment intent: ${err.message}`,
+        transaction,
+      };
+    }
+
+    if (pi.status === 'succeeded') {
+      const latestCharge = pi.latest_charge;
+      const paymentMethod = pi.payment_method;
+      const stripeFeeMinor = latestCharge?.balance_transaction?.fee ?? 0;
+      const grossMinor = pi.amount_received || pi.amount || Math.round(Number(transaction.grossAmount || 0) * 100);
+
+      const paymentMethodType =
+        latestCharge?.payment_method_details?.type ||
+        paymentMethod?.type ||
+        'card';
+      const cardBrand =
+        latestCharge?.payment_method_details?.card?.brand ||
+        paymentMethod?.card?.brand ||
+        null;
+      const cardLast4 =
+        latestCharge?.payment_method_details?.card?.last4 ||
+        paymentMethod?.card?.last4 ||
+        null;
+      const receiptUrl = latestCharge?.receipt_url || null;
+      const customerEmail =
+        latestCharge?.billing_details?.email ||
+        transaction.customerEmail ||
+        null;
+      const patientName =
+        latestCharge?.billing_details?.name ||
+        transaction.patientName ||
+        null;
+
+      const updated = await prisma.transaction.update({
+        where: { id: transaction.id },
+        data: {
+          status: 'SUCCESS',
+          stripePaymentIntentId: targetPaymentIntentId,
+          stripeFeeAmount: stripeFeeMinor / 100,
+          hospitalNetAmount: (grossMinor - stripeFeeMinor) / 100,
+          paidAt: transaction.paidAt || new Date(),
+          paymentMethodType,
+          cardBrand,
+          cardLast4,
+          receiptUrl,
+          customerEmail,
+          ...(patientName && { patientName }),
+        },
+      });
+
+      // Notify appointment service that payment is complete
+      try {
+        await axios.patch(
+          `${APPOINTMENT_URL}/api/appointments/internal/${transaction.appointmentId}/payment-outcome`,
+          { outcome: 'PAID' },
+          { headers: internalHeaders() }
+        );
+        console.log(`[reconcile] Successfully marked appointment ${transaction.appointmentId} as PAID via PaymentIntent`);
+      } catch (appErr) {
+        console.error(
+          `[reconcile] Failed to update appointment status to PAID for ${transaction.appointmentId}:`,
+          appErr?.response?.data || appErr.message
+        );
+      }
+
+      return {
+        success: true,
+        status: 'PAID',
+        transaction: updated,
+      };
+    } else if (pi.status === 'canceled') {
+      await prisma.transaction.update({
+        where: { id: transaction.id },
+        data: { status: 'FAILED' },
+      });
+      await axios.patch(
+        `${APPOINTMENT_URL}/api/appointments/internal/${transaction.appointmentId}/payment-outcome`,
+        { outcome: 'FAILED' },
+        { headers: internalHeaders() }
+      ).catch(() => {});
+      return { success: false, status: 'FAILED', message: 'PaymentIntent is canceled.', transaction };
+    } else {
+      return { success: false, status: 'PENDING', message: `PaymentIntent is in ${pi.status} state.`, transaction };
+    }
+  }
+
+  // ── Flow B: Hosted Checkout Session (URL) ────────────────────────────────────
+  if (!stripeSessionId) {
+    return {
+      success: false,
+      message: 'No Stripe checkout session or payment intent associated with this transaction.',
+      transaction,
+    };
+  }
 
   let session;
   try {

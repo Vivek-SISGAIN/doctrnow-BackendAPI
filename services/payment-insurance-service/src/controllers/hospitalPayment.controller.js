@@ -85,6 +85,7 @@ async function listHospitalTransactions(req, res) {
     commissionAmount: Number(t.commissionAmount),
     stripeFeeAmount: Number(t.stripeFeeAmount),
     currency: t.currency.toUpperCase(),
+    paymentFlow: t.paymentFlow || (t.stripeCheckoutSessionId ? 'CHECKOUT_URL' : 'PAYMENT_INTENT'),
     status: t.status === 'SUCCESS' ? 'PAID' : t.status,
     paymentMethodType: t.paymentMethodType,
     cardBrand: t.cardBrand,
@@ -238,6 +239,15 @@ async function getHospitalStats(req, res) {
       processedRefundsCount: refundAgg._count,
       activeDisputesCount: disputeCount,
       transactionsByStatus: statusMap,
+
+      // Aliases for frontend compatibility (HospitalPaymentStats)
+      totalVolume: Number(volumeAgg._sum.grossAmount || 0),
+      hospitalNet: Number(volumeAgg._sum.hospitalNetAmount || 0),
+      platformCommission: Number(volumeAgg._sum.commissionAmount || 0),
+      stripeProcessingFee: Number(volumeAgg._sum.stripeFeeAmount || 0),
+      totalTransactions: volumeAgg._count,
+      paidCount: volumeAgg._count,
+      refundedCount: refundAgg._count,
     },
   });
 }

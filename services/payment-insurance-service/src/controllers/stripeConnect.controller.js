@@ -424,8 +424,12 @@ async function processIncomingWebhook(req, res, primarySecret, fallbackSecret, e
       await handleCheckoutExpired(event.data.object, connectedAccountId);
       break;
 
+    case 'payment_intent.succeeded':
+      await handlePaymentIntentSucceeded(event.data.object, connectedAccountId);
+      break;
+
     case 'payment_intent.payment_failed':
-      console.log(`[stripe/${endpointName}] payment_intent.payment_failed logged: id=${event.id} account=${connectedAccountId || 'platform'}`);
+      await handlePaymentIntentFailed(event.data.object, connectedAccountId);
       break;
 
     case 'charge.refunded':
@@ -572,6 +576,55 @@ async function handleCheckoutExpired(session, eventAccount = null) {
     );
   } catch (err) {
     console.error(`[webhook] Failed to release appointment ${appointmentId} after expired checkout:`, err?.response?.data || err.message);
+  }
+}
+
+// ─── payment_intent.succeeded handler (In-App / Mobile App flow) ──────────────
+
+async function handlePaymentIntentSucceeded(paymentIntent, eventAccount = null) {
+  const appointmentId = paymentIntent.metadata?.appointmentId;
+  const paymentIntentId = paymentIntent.id;
+
+  try {
+    const res = await reconcileCheckoutSession({
+      paymentIntentId,
+      appointmentId,
+    });
+
+    if (res.alreadyReconciled) {
+      console.log(`[webhook] PaymentIntent ${paymentIntentId} was already reconciled. Acknowledged.`);
+    } else if (res.success) {
+      console.log(`[webhook] PaymentIntent ${paymentIntentId} reconciled successfully as ${res.status}`);
+    } else {
+      console.warn(`[webhook] PaymentIntent ${paymentIntentId} reconciliation returned:`, res.message);
+    }
+  } catch (err) {
+    console.error(`[webhook] Failed to reconcile PaymentIntent ${paymentIntentId}:`, err.message);
+  }
+}
+
+// ─── payment_intent.payment_failed handler ───────────────────────────────────
+
+async function handlePaymentIntentFailed(paymentIntent, eventAccount = null) {
+  const appointmentId = paymentIntent.metadata?.appointmentId;
+  const paymentIntentId = paymentIntent.id;
+
+  await prisma.transaction.updateMany({
+    where: { stripePaymentIntentId: paymentIntentId, status: 'PENDING' },
+    data: { status: 'FAILED' },
+  });
+
+  if (appointmentId) {
+    try {
+      await axios.patch(
+        `${process.env.APPOINTMENT_SERVICE_URL}/api/appointments/internal/${appointmentId}/payment-outcome`,
+        { outcome: 'FAILED' },
+        { headers: { 'x-internal-sig': process.env.INTERNAL_SERVICE_SECRET } }
+      );
+      console.log(`[webhook] Released appointment ${appointmentId} after failed PaymentIntent ${paymentIntentId}`);
+    } catch (err) {
+      console.error(`[webhook] Failed to release appointment ${appointmentId} after failed PaymentIntent:`, err?.response?.data || err.message);
+    }
   }
 }
 

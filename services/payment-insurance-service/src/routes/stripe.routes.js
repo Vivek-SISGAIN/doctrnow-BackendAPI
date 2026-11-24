@@ -9,7 +9,7 @@ const {
   handleWebhook,
   handleConnectWebhook,
 } = require('../controllers/stripeConnect.controller');
-const { createCheckoutSession } = require('../controllers/checkout.controller');
+const { createCheckoutSession, createPaymentIntent } = require('../controllers/checkout.controller');
 const { issueRefund } = require('../controllers/refund.controller');
 const {
   getHospitalLedger,
@@ -49,6 +49,7 @@ const {
   getAdminTransactionById,
   getAdminStats,
   listAdminRefunds,
+  getAdminDashboardAnalytics,
 } = require('../controllers/adminPayment.controller');
 
 const { reconcileCheckoutSession } = require('../services/reconciliation.service');
@@ -58,15 +59,18 @@ const router = express.Router();
 // ─── Fallback Session Verification APIs (Bypasses Webhook Latency / Failures) ─
 async function verifySessionHandler(req, res) {
   const sessionId = req.params.sessionId || req.body?.sessionId || req.query?.sessionId;
+  const paymentIntentId = req.params.paymentIntentId || req.body?.paymentIntentId || req.query?.paymentIntentId;
   const appointmentId = req.params.appointmentId || req.body?.appointmentId || req.query?.appointmentId;
   const transactionId = req.params.transactionId || req.body?.transactionId || req.query?.transactionId;
 
-  const result = await reconcileCheckoutSession({ sessionId, appointmentId, transactionId });
+  const result = await reconcileCheckoutSession({ sessionId, paymentIntentId, appointmentId, transactionId });
   const statusCode = result.success ? 200 : 404;
   return res.status(statusCode).json(result);
 }
 
 router.all('/checkout-sessions/:sessionId/verify', express.json(), asyncHandler(verifySessionHandler));
+router.all('/payment-intents/:paymentIntentId/verify', express.json(), asyncHandler(verifySessionHandler));
+router.all('/payment-intents/verify', express.json(), asyncHandler(verifySessionHandler));
 router.all('/verify-appointment/:appointmentId', express.json(), asyncHandler(verifySessionHandler));
 router.all('/verify-session', express.json(), asyncHandler(verifySessionHandler));
 
@@ -138,6 +142,14 @@ router.get('/sync-status', asyncHandler(syncStripeStatus));
 router.post('/checkout-sessions', express.json(), asyncHandler(createCheckoutSession));
 
 /**
+ * POST /api/payments/stripe/payment-intents
+ * Body: { doctorId, hospitalId, slotId, consultationType, familyMemberId, reason, notes }
+ * Requires x-user-id and x-user-role: PATIENT
+ * Creates PaymentIntent on hospital connected account for Mobile Native PaymentSheet
+ */
+router.post('/payment-intents', express.json(), asyncHandler(createPaymentIntent));
+
+/**
  * POST /api/payments/stripe/refunds
  * Body: { transactionId, amount, reasonCategory, reason, refundCommission }
  * Requires x-user-role: SUPER_ADMIN
@@ -173,6 +185,7 @@ router.get('/hospital/stats', express.json(), asyncHandler(getHospitalStats));
 router.get('/hospital/refunds', express.json(), asyncHandler(listHospitalRefunds));
 
 // ─── Super Admin Payment APIs ──────────────────────────────────────────────
+router.get('/admin/analytics/dashboard', express.json(), asyncHandler(getAdminDashboardAnalytics));
 router.get('/admin/transactions', express.json(), asyncHandler(listAdminTransactions));
 router.get('/admin/transactions/:id', express.json(), asyncHandler(getAdminTransactionById));
 router.get('/admin/stats', express.json(), asyncHandler(getAdminStats));
