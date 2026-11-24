@@ -455,6 +455,7 @@ const cancelAppointment = asyncHandler(async (req, res) => {
   const { id } = req.params;
   const { reason } = req.body;
   const actorRole = req.headers["x-user-role"] || req.body.cancelledBy || req.body.actorRole;
+  const actor = extractActor(req);
 
   const appointment = await appointmentService.findById(id);
 
@@ -462,8 +463,7 @@ const cancelAppointment = asyncHandler(async (req, res) => {
     throw ApiError.notFound("Appointment not found");
   }
 
-  const cancelledAppointment = await appointmentService.cancel(id, reason, actorRole);
-  const actor = extractActor(req);
+  const cancelledAppointment = await appointmentService.cancel(id, reason, actorRole, actor.userId);
 
   publishAuditEvent({
     hospitalId: appointment.hospitalId,
@@ -483,6 +483,8 @@ const cancelAppointment = asyncHandler(async (req, res) => {
     metadata: {
       appointmentId: id,
       reason,
+      cancelledBy: actorRole,
+      refundOutcome: cancelledAppointment?.refundOutcome,
     },
   });
 
@@ -490,6 +492,16 @@ const cancelAppointment = asyncHandler(async (req, res) => {
     success: true,
     message: "Appointment cancelled successfully",
     data: cancelledAppointment,
+  });
+});
+
+const previewCancellation = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const actorRole = req.headers["x-user-role"] || req.query.actorRole || "PATIENT";
+  const preview = await appointmentService.previewCancellation(id, actorRole);
+  res.status(200).json({
+    success: true,
+    data: preview,
   });
 });
 
@@ -869,6 +881,7 @@ module.exports = {
   createAppointment,
   updateAppointment,
   cancelAppointment,
+  previewCancellation,
   rescheduleAppointment,
   confirmAppointment,
   completeAppointment,

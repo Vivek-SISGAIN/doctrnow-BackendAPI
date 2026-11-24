@@ -25,6 +25,26 @@ enum TransactionStatus {
 }
 
 enum RefundReasonCategory {
+  // FOS Framework Reason Codes (20 Sep 2026)
+  PATIENT_CANCEL_FREE_WINDOW
+  PATIENT_LATE_CANCEL
+  PATIENT_NO_SHOW
+  PROVIDER_CANCEL
+  PROVIDER_NO_SHOW
+  PLATFORM_TECH_FAILURE
+  PROVIDER_TECH_FAILURE
+  PATIENT_TECH_FAILURE
+  CONSULT_STARTED_PROVIDER_FAILURE
+  CONSULT_COMPLETED
+  DUPLICATE_CHARGE
+  INCORRECT_AMOUNT
+  ORPHAN_PAYMENT_BOOKING_FAILED
+  INSURANCE_COPAY_REVERSAL
+  PACKAGE_PROMO_CANCEL
+  CHARGEBACK_OPEN
+  REFUND_FAILED
+
+  // Legacy compatibility codes
   CANCELLATION_ON_TIME
   CANCELLATION_LATE
   DOCTOR_CANCELLED
@@ -36,9 +56,20 @@ enum RefundReasonCategory {
 }
 
 enum RefundStatus {
+  // 9-Stage FOS Auditable State Machine
+  REQUESTED
+  UNDER_REVIEW
+  APPROVED
+  REJECTED
+  SUBMITTED_TO_PSP
+  PROCESSING
+  COMPLETED
+  FAILED
+  CANCELLED_REQUEST
+
+  // Legacy compatibility
   PENDING
   PROCESSED
-  FAILED
 }
 
 enum DisputeStatus {
@@ -93,6 +124,7 @@ model Transaction {
   stripePaymentIntentId    String?           @unique @map("stripe_payment_intent_id")
   stripeConnectedAccountId String?           @map("stripe_connected_account_id")
   paymentFlow              String?           @default("CHECKOUT_URL") @map("payment_flow")
+  policySnapshot           Json?             @map("policy_snapshot")
 
   // Payment details & receipts
   paymentMethodType        String?           @default("card") @map("payment_method_type")
@@ -143,6 +175,12 @@ model Refund {
   failureReason    String?              @map("failure_reason")
   initiatedBy      String?              @map("initiated_by")       // userId, or "SYSTEM" for automatic
   initiatedByRole  String?              @map("initiated_by_role")
+  slaDueAt         DateTime?            @map("sla_due_at")
+  decidedBy        String?              @map("decided_by")
+  decidedAt        DateTime?            @map("decided_at")
+  decisionReason   String?              @map("decision_reason")
+  policySnapshot   Json?                @map("policy_snapshot")
+  metadata         Json?                @map("metadata")
   // How much of the underlying transaction's commissionAmount this refund
   // reversed — proportional to (amount / transaction.grossAmount) when
   // refundCommission was true, else 0. Needed so invoice generation (1.6)

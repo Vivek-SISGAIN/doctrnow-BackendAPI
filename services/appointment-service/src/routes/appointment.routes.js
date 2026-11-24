@@ -7,6 +7,7 @@ const {
   createAppointment,
   updateAppointment,
   cancelAppointment,
+  previewCancellation,
   rescheduleAppointment,
   confirmAppointment,
   completeAppointment,
@@ -237,6 +238,7 @@ router.patch("/:id", validate(updateAppointmentSchema), updateAppointment);
  *       200:
  *         description: Appointment cancelled successfully
  */
+router.get("/:id/cancellation-preview", previewCancellation);
 router.post(
   "/:id/cancel",
   validate(cancelAppointmentSchema),

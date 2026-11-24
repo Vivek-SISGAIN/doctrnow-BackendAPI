@@ -132,6 +132,18 @@ async function createCheckoutSession(req, res) {
   const grossAmountMinor = Math.round(Number(fee) * 100);
   const commissionAmountMinor = Math.round(grossAmountMinor * (Number(commission.platformCommission) / 100));
 
+  // Extract immutable Bucket 2 policy snapshot for this booking
+  const policySnapshot = {
+    policyVersion: hospital.refundPolicyVersion || '1.0.0-DEFAULT',
+    freeCancellationHours: hospital.cancellationCutoffHours != null ? Number(hospital.cancellationCutoffHours) : 4,
+    lateCancellationFeePercent: hospital.lateCancellationFeePercent != null ? Number(hospital.lateCancellationFeePercent) : 50,
+    nearTimeNoShowHours: hospital.nearTimeNoShowHours != null ? Number(hospital.nearTimeNoShowHours) : 1,
+    patientGraceMinutes: hospital.patientGraceMinutes != null ? Number(hospital.patientGraceMinutes) : 10,
+    doctorGraceMinutes: hospital.doctorGraceMinutes != null ? Number(hospital.doctorGraceMinutes) : 10,
+    displayedSummary: `Free cancellation up to ${hospital.cancellationCutoffHours ?? 4} hours before appointment. Late cancellation fee of ${hospital.lateCancellationFeePercent ?? 50}% inside ${hospital.cancellationCutoffHours ?? 4} hours. Non-refundable within ${hospital.nearTimeNoShowHours ?? 1} hour.`,
+    capturedAt: new Date().toISOString(),
+  };
+
   // 5. Create the PENDING appointment. Reuses the existing public create
   //    endpoint on purpose — omitting status/paymentStatus from the body
   //    makes it default to PENDING/PENDING (see appointment.service.js
@@ -140,7 +152,7 @@ async function createCheckoutSession(req, res) {
   let appointment;
   try {
     const r = await axios.post(`${APPOINTMENT_URL}/api/appointments`, {
-      patientId: resolvedPatientId, doctorId, hospitalId, slotId, consultationType, familyMemberId, reason, notes,
+      patientId: resolvedPatientId, doctorId, hospitalId, slotId, consultationType, familyMemberId, reason, notes, policySnapshot,
     });
     appointment = r.data?.data || r.data;
   } catch (err) {
@@ -217,6 +229,7 @@ async function createCheckoutSession(req, res) {
       stripePaymentIntentId: typeof session.payment_intent === 'string' ? session.payment_intent : session.payment_intent?.id,
       stripeConnectedAccountId: hospital.stripeAccountId,
       paymentFlow: 'CHECKOUT_URL',
+      policySnapshot,
     },
   });
 
@@ -335,11 +348,23 @@ async function createPaymentIntent(req, res) {
   const grossAmountMinor = Math.round(Number(fee) * 100);
   const commissionAmountMinor = Math.round(grossAmountMinor * (Number(commission.platformCommission) / 100));
 
+  // Extract immutable Bucket 2 policy snapshot for this booking
+  const policySnapshot = {
+    policyVersion: hospital.refundPolicyVersion || '1.0.0-DEFAULT',
+    freeCancellationHours: hospital.cancellationCutoffHours != null ? Number(hospital.cancellationCutoffHours) : 4,
+    lateCancellationFeePercent: hospital.lateCancellationFeePercent != null ? Number(hospital.lateCancellationFeePercent) : 50,
+    nearTimeNoShowHours: hospital.nearTimeNoShowHours != null ? Number(hospital.nearTimeNoShowHours) : 1,
+    patientGraceMinutes: hospital.patientGraceMinutes != null ? Number(hospital.patientGraceMinutes) : 10,
+    doctorGraceMinutes: hospital.doctorGraceMinutes != null ? Number(hospital.doctorGraceMinutes) : 10,
+    displayedSummary: `Free cancellation up to ${hospital.cancellationCutoffHours ?? 4} hours before appointment. Late cancellation fee of ${hospital.lateCancellationFeePercent ?? 50}% inside ${hospital.cancellationCutoffHours ?? 4} hours. Non-refundable within ${hospital.nearTimeNoShowHours ?? 1} hour.`,
+    capturedAt: new Date().toISOString(),
+  };
+
   // 5. Create PENDING appointment
   let appointment;
   try {
     const r = await axios.post(`${APPOINTMENT_URL}/api/appointments`, {
-      patientId: resolvedPatientId, doctorId, hospitalId, slotId, consultationType, familyMemberId, reason, notes,
+      patientId: resolvedPatientId, doctorId, hospitalId, slotId, consultationType, familyMemberId, reason, notes, policySnapshot,
     });
     appointment = r.data?.data || r.data;
   } catch (err) {
@@ -404,6 +429,7 @@ async function createPaymentIntent(req, res) {
       currency: 'aed',
       status: 'PENDING',
       paymentFlow: 'PAYMENT_INTENT',
+      policySnapshot,
       stripePaymentIntentId: paymentIntent.id,
       stripeConnectedAccountId: hospital.stripeAccountId,
     },

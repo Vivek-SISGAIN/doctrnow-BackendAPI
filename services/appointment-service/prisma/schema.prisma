@@ -39,6 +39,13 @@ model Appointment {
   notes            String?
   familyMemberId   String?
   extend_used      Boolean           @default(false)
+  policySnapshot   Json?             @map("policy_snapshot")
+  cancellationReason String?         @map("cancellation_reason")
+  cancellationReasonCode String?     @map("cancellation_reason_code")
+  cancellationDeduction Decimal?     @db.Decimal(10,2) @map("cancellation_deduction")
+  refundedAmount   Decimal?          @db.Decimal(10,2) @map("refunded_amount")
+  cancelledAt      DateTime?         @map("cancelled_at")
+  cancelledBy      String?           @map("cancelled_by")
   createdAt        DateTime          @default(now())
   updatedAt        DateTime          @updatedAt
 
@@ -85,6 +92,7 @@ enum PaymentStatus {
   PAID
   FAILED
   REFUNDED
+  PARTIALLY_REFUNDED
 }
 
 enum ConsultationType {

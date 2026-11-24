@@ -3,6 +3,7 @@
 const axios = require('axios');
 const prisma = require('../config/prismaClient');
 const { requireSuperAdmin, getPagination } = require('../utils/roleGuards');
+const { syncRefundsForTransaction, verifyAndSyncRefund } = require('../services/reconciliation.service');
 
 const PROFILE_URL = process.env.PROFILE_SERVICE_URL || 'http://localhost:5000';
 
@@ -81,57 +82,68 @@ async function listAdminTransactions(req, res) {
     }),
   ]);
 
-  const formatted = transactions.map((t) => ({
-    id: t.id,
-    appointmentId: t.appointmentId,
-    hospitalId: t.hospitalId,
-    hospitalName: t.hospitalName,
-    doctorId: t.doctorId,
-    doctorName: t.doctorName,
-    doctorSpecialty: t.doctorSpecialty,
-    patientId: t.patientId,
-    patientName: t.patientName,
-    patientEmail: t.patientEmail,
-    consultationType: t.consultationType,
-    grossAmount: Number(t.grossAmount),
-    hospitalNetAmount: Number(t.hospitalNetAmount),
-    netAmount: Number(t.hospitalNetAmount),
-    commissionAmount: Number(t.commissionAmount),
-    platformCommission: Number(t.commissionAmount),
-    stripeFeeAmount: Number(t.stripeFeeAmount),
-    stripeProcessingFee: Number(t.stripeFeeAmount),
-    currency: t.currency.toUpperCase(),
-    status: t.status === 'SUCCESS' ? 'PAID' : t.status,
-    paymentMethodType: t.paymentMethodType,
-    paymentFlow: t.paymentFlow || (t.stripeCheckoutSessionId ? 'CHECKOUT_URL' : 'PAYMENT_INTENT'),
-    cardBrand: t.cardBrand,
-    cardLast4: t.cardLast4,
-    receiptUrl: t.receiptUrl,
-    stripePaymentIntentId: t.stripePaymentIntentId,
-    stripeCheckoutSessionId: t.stripeCheckoutSessionId,
-    stripeConnectedAccountId: t.stripeConnectedAccountId,
-    stripeTransferId: t.stripeTransferId,
-    transferStatus: t.transferStatus,
-    transferredAt: t.transferredAt,
-    commissionInvoice: t.commissionInvoice,
-    paidAt: t.paidAt,
-    createdAt: t.createdAt,
-    refunds: t.refunds.map((r) => ({
-      id: r.id,
-      amount: Number(r.amount),
-      reason: r.reason,
-      status: r.status,
-      receiptUrl: r.receiptUrl,
-      createdAt: r.createdAt,
-    })),
-    disputes: t.disputes.map((d) => ({
-      id: d.id,
-      amount: Number(d.amount),
-      status: d.status,
-      reason: d.reason,
-      createdAt: d.createdAt,
-    })),
-  }));
+  const formatted = transactions.map((t) => {
+    const totalRefunded = (t.refunds || [])
+      .filter((r) => ['PROCESSED', 'PROCESSING', 'SUBMITTED_TO_PSP', 'COMPLETED', 'PENDING'].includes(r.status))
+      .reduce((sum, r) => sum + Number(r.amount), 0);
+    const gross = Number(t.grossAmount);
+    const netRetained = Math.max(0, gross - totalRefunded);
+
+    return {
+      id: t.id,
+      appointmentId: t.appointmentId,
+      hospitalId: t.hospitalId,
+      hospitalName: t.hospitalName,
+      doctorId: t.doctorId,
+      doctorName: t.doctorName,
+      doctorSpecialty: t.doctorSpecialty,
+      patientId: t.patientId,
+      patientName: t.patientName,
+      patientEmail: t.patientEmail,
+      consultationType: t.consultationType,
+      grossAmount: gross,
+      hospitalNetAmount: Number(t.hospitalNetAmount),
+      netAmount: Number(t.hospitalNetAmount),
+      commissionAmount: Number(t.commissionAmount),
+      platformCommission: Number(t.commissionAmount),
+      stripeFeeAmount: Number(t.stripeFeeAmount),
+      stripeProcessingFee: Number(t.stripeFeeAmount),
+      totalRefunded,
+      netRetained,
+      currency: t.currency.toUpperCase(),
+      status: t.status === 'SUCCESS' ? 'PAID' : t.status,
+      paymentMethodType: t.paymentMethodType,
+      paymentFlow: t.paymentFlow || (t.stripeCheckoutSessionId ? 'CHECKOUT_URL' : 'PAYMENT_INTENT'),
+      cardBrand: t.cardBrand,
+      cardLast4: t.cardLast4,
+      receiptUrl: t.receiptUrl,
+      stripePaymentIntentId: t.stripePaymentIntentId,
+      stripeCheckoutSessionId: t.stripeCheckoutSessionId,
+      stripeConnectedAccountId: t.stripeConnectedAccountId,
+      stripeTransferId: t.stripeTransferId,
+      transferStatus: t.transferStatus,
+      transferredAt: t.transferredAt,
+      commissionInvoice: t.commissionInvoice,
+      paidAt: t.paidAt,
+      createdAt: t.createdAt,
+      refunds: t.refunds.map((r) => ({
+        id: r.id,
+        amount: Number(r.amount),
+        reason: r.reason,
+        reasonCategory: r.reasonCategory,
+        status: r.status,
+        receiptUrl: r.receiptUrl,
+        createdAt: r.createdAt,
+      })),
+      disputes: t.disputes.map((d) => ({
+        id: d.id,
+        amount: Number(d.amount),
+        status: d.status,
+        reason: d.reason,
+        createdAt: d.createdAt,
+      })),
+    };
+  });
 
   return res.status(200).json({
     success: true,
@@ -179,21 +191,24 @@ async function getAdminTransactionById(req, res) {
     });
   }
 
+  // Actively verify and sync any unfinalized refunds directly with Stripe
+  const syncedTransaction = await syncRefundsForTransaction(transaction);
+
   return res.status(200).json({
     success: true,
     data: {
-      ...transaction,
-      status: transaction.status === 'SUCCESS' ? 'PAID' : transaction.status,
-      paymentFlow: transaction.paymentFlow || (transaction.stripeCheckoutSessionId ? 'CHECKOUT_URL' : 'PAYMENT_INTENT'),
-      grossAmount: Number(transaction.grossAmount),
-      hospitalNetAmount: Number(transaction.hospitalNetAmount),
-      netAmount: Number(transaction.hospitalNetAmount),
-      commissionAmount: Number(transaction.commissionAmount),
-      platformCommission: Number(transaction.commissionAmount),
-      stripeFeeAmount: Number(transaction.stripeFeeAmount),
-      stripeProcessingFee: Number(transaction.stripeFeeAmount),
-      refunds: transaction.refunds.map((r) => ({ ...r, amount: Number(r.amount) })),
-      disputes: transaction.disputes.map((d) => ({ ...d, amount: Number(d.amount) })),
+      ...syncedTransaction,
+      status: syncedTransaction.status === 'SUCCESS' ? 'PAID' : syncedTransaction.status,
+      paymentFlow: syncedTransaction.paymentFlow || (syncedTransaction.stripeCheckoutSessionId ? 'CHECKOUT_URL' : 'PAYMENT_INTENT'),
+      grossAmount: Number(syncedTransaction.grossAmount),
+      hospitalNetAmount: Number(syncedTransaction.hospitalNetAmount),
+      netAmount: Number(syncedTransaction.hospitalNetAmount),
+      commissionAmount: Number(syncedTransaction.commissionAmount),
+      platformCommission: Number(syncedTransaction.commissionAmount),
+      stripeFeeAmount: Number(syncedTransaction.stripeFeeAmount),
+      stripeProcessingFee: Number(syncedTransaction.stripeFeeAmount),
+      refunds: syncedTransaction.refunds.map((r) => ({ ...r, amount: Number(r.amount) })),
+      disputes: syncedTransaction.disputes.map((d) => ({ ...d, amount: Number(d.amount) })),
     },
   });
 }
@@ -237,7 +252,7 @@ async function getAdminStats(req, res) {
     }),
     prisma.refund.aggregate({
       where: {
-        status: 'PROCESSED',
+        status: { in: ['PROCESSED', 'PROCESSING', 'SUBMITTED_TO_PSP', 'COMPLETED', 'PENDING'] },
         ...(startDate || endDate ? { createdAt: where.createdAt } : {}),
       },
       _sum: { amount: true },
@@ -275,18 +290,22 @@ async function getAdminStats(req, res) {
 
   const totalVolume = Number(volumeAgg._sum.grossAmount || 0);
   const platformCommission = Number(volumeAgg._sum.commissionAmount || 0);
-  const hospitalNet = Number(volumeAgg._sum.hospitalNetAmount || 0);
+  const rawHospitalNet = Number(volumeAgg._sum.hospitalNetAmount || 0);
   const stripeFees = Number(volumeAgg._sum.stripeFeeAmount || 0);
   const paidCount = volumeAgg._count || 0;
   const refundedAmount = Number(refundAgg._sum.amount || 0);
   const refundedCount = refundAgg._count || 0;
   const totalTransactions = paidCount + refundedCount;
+  const hospitalNet = Math.max(0, rawHospitalNet - refundedAmount);
+  const retainedVolume = Math.max(0, totalVolume - refundedAmount);
 
   return res.status(200).json({
     success: true,
     data: {
       // Frontend expected standard keys
       totalVolume,
+      retainedVolume,
+      totalRefundsAmount: refundedAmount,
       platformNetCommission: platformCommission,
       totalHospitalNet: hospitalNet,
       totalStripeFee: stripeFees,
@@ -365,7 +384,16 @@ async function listAdminRefunds(req, res) {
     prisma.refund.count({ where }),
   ]);
 
-  const formatted = refunds.map((r) => ({
+  const syncedRefunds = await Promise.all(
+    refunds.map(async (r) => {
+      if (['PROCESSING', 'SUBMITTED_TO_PSP', 'PENDING'].includes(r.status)) {
+        return verifyAndSyncRefund(r, r.transaction?.stripeConnectedAccountId);
+      }
+      return r;
+    })
+  );
+
+  const formatted = syncedRefunds.map((r) => ({
     id: r.id,
     transactionId: r.transactionId,
     appointmentId: r.transaction?.appointmentId,

@@ -45,39 +45,60 @@ async function reconcileStuckCheckouts() {
 }
 
 /**
- * Refunds can legitimately take longer than a checkout session (especially
- * for non-card methods), so this uses a longer cutoff than the checkout
- * reconciliation above. Same principle: ask Stripe directly rather than
- * assuming a missing webhook means a missing refund.
+ * Verifies any pending or processing refunds against Stripe.
+ * Queries Stripe directly to confirm whether the refund has succeeded or failed,
+ * ensuring database state stays completely in sync even if webhooks are delayed or offline.
  */
 async function reconcileStuckRefunds() {
-  const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000); // 24h
   const stuck = await prisma.refund.findMany({
-    where: { status: 'PENDING', createdAt: { lt: cutoff } },
+    where: { status: { in: ['PENDING', 'PROCESSING', 'SUBMITTED_TO_PSP'] } },
     include: { transaction: true },
+    take: 50,
+    orderBy: { createdAt: 'desc' },
   });
+
+  let reconciledCount = 0;
 
   for (const refund of stuck) {
     if (!refund.stripeRefundId) continue;
     try {
+      const retrieveOpts = refund.transaction?.stripeConnectedAccountId
+        ? { stripeAccount: refund.transaction.stripeConnectedAccountId }
+        : {};
+      // Pass empty params object as 2nd arg and options as 3rd arg per Stripe Node SDK
       const stripeRefund = await stripe.refunds.retrieve(
         refund.stripeRefundId,
-        { stripeAccount: refund.transaction.stripeConnectedAccountId }
+        {},
+        retrieveOpts
       );
       if (stripeRefund.status === 'succeeded') {
-        await prisma.refund.update({ where: { id: refund.id }, data: { status: 'PROCESSED', processedAt: new Date() } });
-        console.log(`[reconcile] Refund ${refund.id} confirmed as PROCESSED`);
+        await prisma.refund.update({
+          where: { id: refund.id },
+          data: {
+            status: 'PROCESSED',
+            processedAt: new Date((stripeRefund.created ? stripeRefund.created * 1000 : Date.now())),
+            receiptUrl: stripeRefund.receipt_number || refund.receiptUrl || null,
+          },
+        });
+        reconciledCount++;
+        console.log(`[reconcile] Refund ${refund.id} verified with Stripe as PROCESSED`);
       } else if (stripeRefund.status === 'failed') {
-        await prisma.refund.update({ where: { id: refund.id }, data: { status: 'FAILED' } });
-        console.error(`[reconcile] Refund ${refund.id} FAILED on Stripe's side — needs manual handling.`);
+        await prisma.refund.update({
+          where: { id: refund.id },
+          data: {
+            status: 'FAILED',
+            failureReason: stripeRefund.failure_reason || 'Declined by card issuer',
+          },
+        });
+        reconciledCount++;
+        console.error(`[reconcile] Refund ${refund.id} marked FAILED based on Stripe verification.`);
       }
-      // status 'pending' on Stripe's side: leave as-is, check again next run.
     } catch (err) {
-      console.error(`[reconcile] Failed to reconcile refund ${refund.id}:`, err?.response?.data || err.message);
+      console.error(`[reconcile] Failed to reconcile refund ${refund.id}:`, err?.message);
     }
   }
 
-  return { checked: stuck.length };
+  return { checked: stuck.length, reconciledCount };
 }
 
 module.exports = { reconcileStuckCheckouts, reconcileStuckRefunds };

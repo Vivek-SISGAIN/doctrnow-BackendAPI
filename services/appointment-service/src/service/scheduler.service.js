@@ -58,7 +58,8 @@ class SchedulerService {
   async fetchAppointmentContext(appointment) {
     const fallbackPatientName = `Patient ${String(appointment.patientId || "").slice(0, 8)}`;
     const fallbackDoctorName = `Doctor ${String(appointment.doctorId || "").slice(0, 8)}`;
-    const baseUrl = process.env.BASE_URL;
+    const baseUrl = process.env.BASE_URL || "http://localhost:8080/api/v1/";
+    const profileUrl = (process.env.PROFILE_SERVICE_URL || "http://localhost:5000").replace(/\/+$/, "");
 
     const context = {
       patient: null,
@@ -68,37 +69,53 @@ class SchedulerService {
       appointmentTime: this.formatAppointmentTime(appointment),
     };
 
-    if (!baseUrl) return context;
-
     const gatewayBase = baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`;
     const headers = {
       "Content-Type": "application/json",
       ...(process.env.INTERNAL_SERVICE_SECRET
-        ? { "x-internal-service-key": process.env.INTERNAL_SERVICE_SECRET }
+        ? {
+            "x-internal-service-key": process.env.INTERNAL_SERVICE_SECRET,
+            "x-internal-secret": process.env.INTERNAL_SERVICE_SECRET,
+            "x-internal-sig": process.env.INTERNAL_SERVICE_SECRET,
+          }
         : {}),
       ...(process.env.INTERNAL_SECRET ? { "x-internal-secret": process.env.INTERNAL_SECRET } : {}),
     };
 
-    try {
-      const [doctorRes, patientRes] = await Promise.all([
-        axios.post(
-          `${gatewayBase}profiles/doctors/bulk`,
-          { ids: [appointment.doctorId].filter(Boolean) },
-          { headers, timeout: 3000 }
-        ),
-        axios.post(
-          `${gatewayBase}profiles/patients/bulk`,
-          { ids: [appointment.patientId].filter(Boolean) },
-          { headers, timeout: 3000 }
-        ),
-      ]);
+    const fetchEndpoints = [
+      {
+        doctorUrl: `${profileUrl}/api/doctors/bulk`,
+        patientUrl: `${profileUrl}/api/patients/bulk`,
+      },
+      {
+        doctorUrl: `${gatewayBase}profiles/doctors/bulk`,
+        patientUrl: `${gatewayBase}profiles/patients/bulk`,
+      },
+    ];
 
-      context.doctor = doctorRes.data?.data?.[appointment.doctorId] || null;
-      context.patient = patientRes.data?.data?.[appointment.patientId] || null;
-      context.doctorName = this.formatPersonName(context.doctor, fallbackDoctorName);
-      context.patientName = this.formatPersonName(context.patient, fallbackPatientName);
-    } catch (error) {
-      console.warn("[SchedulerService] Failed to enrich appointment notification context:", error.message);
+    for (const ep of fetchEndpoints) {
+      try {
+        const [doctorRes, patientRes] = await Promise.all([
+          axios.post(
+            ep.doctorUrl,
+            { ids: [appointment.doctorId].filter(Boolean) },
+            { headers, timeout: 2500 }
+          ),
+          axios.post(
+            ep.patientUrl,
+            { ids: [appointment.patientId].filter(Boolean) },
+            { headers, timeout: 2500 }
+          ),
+        ]);
+
+        context.doctor = doctorRes.data?.data?.[appointment.doctorId] || null;
+        context.patient = patientRes.data?.data?.[appointment.patientId] || null;
+        context.doctorName = this.formatPersonName(context.doctor, fallbackDoctorName);
+        context.patientName = this.formatPersonName(context.patient, fallbackPatientName);
+        break;
+      } catch (error) {
+        // Continue to fallback endpoint
+      }
     }
 
     return context;
@@ -240,40 +257,47 @@ class SchedulerService {
     const cache = profileUserIdCache[normalizedRole];
     if (cache?.has(profileId)) return cache.get(profileId);
 
-    const baseUrl = process.env.BASE_URL;
-    if (!baseUrl) {
-      console.warn("[SchedulerService] BASE_URL is not configured; using profile id as notification user id");
-      return profileId;
+    const baseUrl = process.env.BASE_URL || "http://localhost:8080/api/v1/";
+    const profileUrl = (process.env.PROFILE_SERVICE_URL || "http://localhost:5000").replace(/\/+$/, "");
+    const subPath = normalizedRole === "DOCTOR" ? "doctors" : "patients";
+
+    const candidateUrls = [
+      `${profileUrl}/api/${subPath}/${encodeURIComponent(profileId)}`,
+      `${baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`}profiles/${subPath}/${encodeURIComponent(profileId)}`,
+    ];
+
+    const headers = {
+      ...(process.env.INTERNAL_SERVICE_SECRET
+        ? {
+            "x-internal-service-key": process.env.INTERNAL_SERVICE_SECRET,
+            "x-internal-secret": process.env.INTERNAL_SERVICE_SECRET,
+            "x-internal-sig": process.env.INTERNAL_SERVICE_SECRET,
+          }
+        : {}),
+      ...(process.env.INTERNAL_SECRET
+        ? { "x-internal-secret": process.env.INTERNAL_SECRET }
+        : {}),
+    };
+
+    for (const url of candidateUrls) {
+      try {
+        const response = await axios.get(url, { headers, timeout: 2500 });
+        const profile = response.data?.data ?? response.data;
+        const userId = profile?.userId || profileId;
+        cache?.set(profileId, userId);
+        return userId;
+      } catch (error) {
+        // Continue to fallback candidate
+      }
     }
 
-    const path = normalizedRole === "DOCTOR" ? "profiles/doctors" : "profiles/patients";
-    const url = `${baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`}${path}/${encodeURIComponent(profileId)}`;
-
-    try {
-      const response = await axios.get(url, {
-        headers: {
-          ...(process.env.INTERNAL_SERVICE_SECRET
-            ? { "x-internal-service-key": process.env.INTERNAL_SERVICE_SECRET }
-            : {}),
-          ...(process.env.INTERNAL_SECRET
-            ? { "x-internal-secret": process.env.INTERNAL_SECRET }
-            : {}),
-        },
-        timeout: 3000,
-      });
-      const profile = response.data?.data ?? response.data;
-      const userId = profile?.userId || profileId;
-      cache?.set(profileId, userId);
-      return userId;
-    } catch (error) {
-      console.error(`[SchedulerService] Failed to resolve ${normalizedRole} user id for ${profileId}:`, error.message);
-      return profileId;
-    }
+    return profileId;
   }
 
   /**
    * Send an immediate in-app notification via HTTP to the notification service.
-   * This is the single, stable path for all notification dispatch — no RabbitMQ required.
+   * This is the single, stable path for all notification dispatch — supports direct
+   * notification-service port (3008) and API gateway port (8080) seamlessly.
    */
   async sendImmediateNotification(userId, title, body, payload = {}) {
     const targetRole = payload.targetRole || payload.role;
@@ -281,8 +305,13 @@ class SchedulerService {
       ? await this.resolveAuthUserId(userId, targetRole)
       : userId;
 
-    const baseUrl = process.env.BASE_URL || "http://localhost:8080/api/v1/";
-    const url = `${baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`}notifications/single`;
+    const notifServiceUrl = (process.env.NOTIFICATION_SERVICE_URL || "http://localhost:3008").replace(/\/+$/, "");
+    const gatewayBaseUrl = (process.env.BASE_URL || "http://localhost:8080/api/v1").replace(/\/+$/, "");
+
+    const candidateUrls = [
+      `${notifServiceUrl}/api/notifications/single`,
+      `${gatewayBaseUrl}/notifications/single`,
+    ];
 
     const data = {
       userId: resolvedUserId,
@@ -292,19 +321,41 @@ class SchedulerService {
       payload,
     };
 
-    try {
-      await axios.post(url, data, {
-        headers: {
-          "Content-Type": "application/json",
-          ...(process.env.INTERNAL_SERVICE_SECRET
-            ? { "x-internal-service-key": process.env.INTERNAL_SERVICE_SECRET }
-            : {}),
-        },
-        timeout: 5000,
-      });
-      console.log(`[SchedulerService] Sent notification to ${resolvedUserId}: ${title}`);
-    } catch (err) {
-      console.error(`[SchedulerService] Failed to send notification to ${resolvedUserId}:`, err.message);
+    const headers = {
+      "Content-Type": "application/json",
+      ...(process.env.INTERNAL_SERVICE_SECRET
+        ? {
+            "x-internal-service-key": process.env.INTERNAL_SERVICE_SECRET,
+            "x-internal-secret": process.env.INTERNAL_SERVICE_SECRET,
+            "x-internal-sig": process.env.INTERNAL_SERVICE_SECRET,
+          }
+        : {}),
+    };
+
+    let sent = false;
+    for (const url of candidateUrls) {
+      try {
+        await axios.post(url, data, { headers, timeout: 4000 });
+        console.log(`[SchedulerService] Sent notification to ${resolvedUserId} via ${url}: ${title}`);
+        sent = true;
+        break;
+      } catch (err) {
+        // Try fallback candidate
+      }
+    }
+
+    if (!sent) {
+      console.warn(`[SchedulerService] Could not deliver notification to ${resolvedUserId} (${title}) via any endpoint.`);
+    }
+
+    // Also send to profileId if resolvedUserId is different from original userId to guarantee delivery
+    if (sent && resolvedUserId !== userId) {
+      for (const url of candidateUrls) {
+        try {
+          await axios.post(url, { ...data, userId }, { headers, timeout: 2000 });
+          break;
+        } catch (_) {}
+      }
     }
   }
 

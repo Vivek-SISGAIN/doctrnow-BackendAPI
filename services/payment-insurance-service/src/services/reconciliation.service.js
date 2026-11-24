@@ -4,7 +4,7 @@ const stripe = require('../config/stripeClient');
 const prisma = require('../config/prismaClient');
 const axios = require('axios');
 
-const APPOINTMENT_URL = process.env.APPOINTMENT_SERVICE_URL;
+const APPOINTMENT_URL = (process.env.APPOINTMENT_SERVICE_URL || 'http://localhost:3003').replace(/\/+$/, '');
 const INTERNAL_SECRET = process.env.INTERNAL_SERVICE_SECRET;
 
 function internalHeaders() {
@@ -363,7 +363,69 @@ async function scanAndReconcileStuckTransactions(minutesCutoff = 2) {
   return { checked: stuck.length, reconciledCount };
 }
 
+/**
+ * Verifies a single refund against Stripe and updates database if finalized.
+ */
+async function verifyAndSyncRefund(refund, connectedAccountId) {
+  if (!refund || !refund.stripeRefundId) return refund;
+
+  if (['PROCESSED', 'COMPLETED', 'FAILED'].includes(refund.status)) {
+    return refund;
+  }
+
+  try {
+    const accountId = connectedAccountId || refund.transaction?.stripeConnectedAccountId;
+    const retrieveOpts = accountId ? { stripeAccount: accountId } : {};
+    const stripeRefund = await stripe.refunds.retrieve(refund.stripeRefundId, {}, retrieveOpts);
+
+    if (stripeRefund.status === 'succeeded') {
+      const updated = await prisma.refund.update({
+        where: { id: refund.id },
+        data: {
+          status: 'PROCESSED',
+          processedAt: new Date(stripeRefund.created ? stripeRefund.created * 1000 : Date.now()),
+          receiptUrl: stripeRefund.receipt_number || refund.receiptUrl || null,
+        },
+      });
+      return updated;
+    } else if (stripeRefund.status === 'failed') {
+      const updated = await prisma.refund.update({
+        where: { id: refund.id },
+        data: {
+          status: 'FAILED',
+          failureReason: stripeRefund.failure_reason || 'Declined by card issuer',
+        },
+      });
+      return updated;
+    }
+  } catch (err) {
+    console.warn(`[verifyAndSyncRefund] Could not verify refund ${refund.id} with Stripe:`, err.message);
+  }
+
+  return refund;
+}
+
+/**
+ * Checks all unfinalized refunds on a transaction against Stripe and updates them.
+ */
+async function syncRefundsForTransaction(transaction) {
+  if (!transaction || !transaction.refunds || transaction.refunds.length === 0) return transaction;
+
+  const updatedRefunds = await Promise.all(
+    transaction.refunds.map(async (r) => {
+      if (['PROCESSING', 'SUBMITTED_TO_PSP', 'PENDING'].includes(r.status)) {
+        return verifyAndSyncRefund(r, transaction.stripeConnectedAccountId);
+      }
+      return r;
+    })
+  );
+
+  return { ...transaction, refunds: updatedRefunds };
+}
+
 module.exports = {
   reconcileCheckoutSession,
   scanAndReconcileStuckTransactions,
+  verifyAndSyncRefund,
+  syncRefundsForTransaction,
 };

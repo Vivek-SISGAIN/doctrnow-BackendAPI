@@ -642,7 +642,7 @@ async function handleChargeRefunded(charge) {
   }
 
   const pendingRefund = await prisma.refund.findFirst({
-    where: { transactionId: transaction.id, status: 'PENDING' },
+    where: { transactionId: transaction.id, status: { in: ['SUBMITTED_TO_PSP', 'PROCESSING', 'PENDING', 'APPROVED'] } },
     orderBy: { createdAt: 'desc' },
   });
 
@@ -668,10 +668,10 @@ async function handleChargeRefunded(charge) {
   if (pendingRefund) {
     await prisma.refund.update({
       where: { id: pendingRefund.id },
-      data: { status: 'PROCESSED', processedAt: new Date() },
+      data: { status: 'COMPLETED', processedAt: new Date() },
     });
   } else {
-    console.error(`[webhook] charge.refunded for transaction ${transaction.id} but no PENDING Refund row found — refund may have been created outside this service.`);
+    console.error(`[webhook] charge.refunded for transaction ${transaction.id} but no active Refund row found.`);
   }
 
   const fullyRefunded = charge.amount_refunded >= charge.amount;

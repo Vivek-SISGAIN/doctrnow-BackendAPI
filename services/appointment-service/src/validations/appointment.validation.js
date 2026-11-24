@@ -24,9 +24,9 @@ const createAppointmentSchema = Joi.object({
     .messages({
       'any.only': 'Consultation type must be VIDEO, AUDIO, or CHAT'
     }),
-  paymentStatus: Joi.string().valid('PENDING', 'PAID', 'FAILED', 'REFUNDED').optional()
+  paymentStatus: Joi.string().valid('PENDING', 'PAID', 'FAILED', 'REFUNDED', 'PARTIALLY_REFUNDED').optional()
     .messages({
-      'any.only': 'Payment status must be PENDING, PAID, FAILED, or REFUNDED'
+      'any.only': 'Payment status must be PENDING, PAID, FAILED, REFUNDED, or PARTIALLY_REFUNDED'
     }),
   reason: Joi.string().max(500).optional()
     .messages({
@@ -40,6 +40,7 @@ const createAppointmentSchema = Joi.object({
     .messages({
       'string.guid': 'Family member ID must be a valid UUID'
     }),
+  policySnapshot: Joi.object().optional(),
   status: Joi.string().valid('PENDING', 'CONFIRMED', 'COMPLETED', 'CANCELLED', 'NO_SHOW').optional()
     .messages({
       'any.only': 'Status must be PENDING, CONFIRMED, COMPLETED, CANCELLED, or NO_SHOW'
@@ -51,9 +52,9 @@ const updateAppointmentSchema = Joi.object({
     .messages({
       'any.only': 'Status must be PENDING, CONFIRMED, COMPLETED, CANCELLED, or NO_SHOW'
     }),
-  paymentStatus: Joi.string().valid('PENDING', 'PAID', 'FAILED', 'REFUNDED').optional()
+  paymentStatus: Joi.string().valid('PENDING', 'PAID', 'FAILED', 'REFUNDED', 'PARTIALLY_REFUNDED').optional()
     .messages({
-      'any.only': 'Payment status must be PENDING, PAID, FAILED, or REFUNDED'
+      'any.only': 'Payment status must be PENDING, PAID, FAILED, REFUNDED, or PARTIALLY_REFUNDED'
     }),
   consultationType: Joi.string().valid('VIDEO', 'AUDIO', 'CHAT').optional()
     .messages({

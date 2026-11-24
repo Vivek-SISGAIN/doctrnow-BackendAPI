@@ -258,6 +258,7 @@ class AppointmentService {
           reason: data.reason,
           notes: data.notes,
           familyMemberId: data.familyMemberId,
+          policySnapshot: data.policySnapshot || null,
         },
         include: {
           slot: true,
@@ -276,43 +277,88 @@ class AppointmentService {
       return newAppointment;
     });
 
-    // Only schedule reminders and send booking notifications if the appointment is ALREADY confirmed or paid.
-    // For pending appointments (e.g. awaiting Stripe checkout payment), notifications must ONLY fire
+    // Only schedule reminders and send booking notifications if the appointment is confirmed/paid or a completed booking (e.g. Pay Later).
+    // For pending card checkouts (awaiting Stripe checkout payment), notifications must ONLY fire
     // once payment succeeds and the appointment is transitioned to CONFIRMED.
-    if (appointment.status === "CONFIRMED" || appointment.paymentStatus === "PAID") {
-      scheduleAppointmentReminders(appointment).catch((err) => {
-        console.error("[AppointmentService] Failed to schedule BullMQ reminders:", err.message);
-      });
+    const isUnpaidCardCheckout =
+      appointment.status === "PENDING" &&
+      appointment.paymentStatus === "PENDING" &&
+      (data.paymentMethod === "card" || appointment.paymentMethod === "card");
 
-      schedulerService.fetchAppointmentContext(appointment).then((context) => {
-        schedulerService.notifyAppointmentParty(
-          appointment,
-          "PATIENT",
-          "Appointment Booked",
-          `Your appointment with Dr. ${context.doctorName} is booked for ${context.appointmentTime}.`,
-          {
-            type: "APPOINTMENT_BOOKED",
-            doctorName: context.doctorName,
-            patientName: context.patientName,
-          }
-        );
-        schedulerService.notifyAppointmentParty(
-          appointment,
-          "DOCTOR",
-          "New Appointment Booked",
-          `${context.patientName} booked an appointment for ${context.appointmentTime}.`,
-          {
-            type: "APPOINTMENT_BOOKED",
-            doctorName: context.doctorName,
-            patientName: context.patientName,
-          }
-        );
-      }).catch((err) => {
-        console.error("[AppointmentService] Failed to send booking notifications:", err.message);
-      });
+    if (!isUnpaidCardCheckout) {
+      this.dispatchBookingConfirmedNotifications(appointment).catch(() => {});
     }
 
     return appointment;
+  }
+
+  /**
+   * Dispatch booking confirmation notifications and schedule BullMQ + Redis reminders.
+   * Safe and idempotent: can be invoked whenever an appointment is confirmed/paid or booked via Pay Later.
+   */
+  async dispatchBookingConfirmedNotifications(appointment) {
+    if (!appointment) return;
+
+    // 1. Schedule BullMQ reminders
+    scheduleAppointmentReminders(appointment).catch((err) => {
+      console.error("[AppointmentService] Failed to schedule BullMQ reminders:", err.message);
+    });
+
+    // 2. Schedule Redis consultation events
+    schedulerService.scheduleAppointmentEvents(appointment).catch((err) => {
+      console.error("[AppointmentService] Failed to schedule events:", err.message);
+    });
+
+    // 3. Fetch context and dispatch in-app notifications
+    schedulerService.fetchAppointmentContext(appointment).then((context) => {
+      // Patient: Appointment Booked
+      schedulerService.notifyAppointmentParty(
+        appointment,
+        "PATIENT",
+        "Appointment Booked",
+        `Your appointment with Dr. ${context.doctorName} is booked for ${context.appointmentTime}.`,
+        {
+          type: "APPOINTMENT_BOOKED",
+          status: appointment.status,
+          paymentStatus: appointment.paymentStatus,
+          doctorName: context.doctorName,
+          patientName: context.patientName,
+        }
+      );
+
+      // Doctor: New Appointment Booked
+      schedulerService.notifyAppointmentParty(
+        appointment,
+        "DOCTOR",
+        "New Appointment Booked",
+        `${context.patientName} booked an appointment for ${context.appointmentTime}.`,
+        {
+          type: "APPOINTMENT_BOOKED",
+          status: appointment.status,
+          paymentStatus: appointment.paymentStatus,
+          doctorName: context.doctorName,
+          patientName: context.patientName,
+        }
+      );
+
+      // If already paid, also send Payment Received
+      if (appointment.paymentStatus === "PAID") {
+        schedulerService.notifyAppointmentParty(
+          appointment,
+          "PATIENT",
+          "Payment Received",
+          `Payment is complete for your appointment with Dr. ${context.doctorName} at ${context.appointmentTime}.`,
+          {
+            type: "PAYMENT_DONE",
+            status: appointment.status,
+            doctorName: context.doctorName,
+            patientName: context.patientName,
+          }
+        );
+      }
+    }).catch((err) => {
+      console.error("[AppointmentService] Failed to dispatch booking notifications:", err.message);
+    });
   }
 
   /**
@@ -340,89 +386,156 @@ class AppointmentService {
       },
     });
 
-    if (data.status === "CONFIRMED" && appointment.status !== "CONFIRMED") {
-      scheduleAppointmentReminders(updated).catch(() => {});
-      schedulerService.fetchAppointmentContext(updated).then((context) => {
-        schedulerService.notifyAppointmentParty(
-          updated,
-          "PATIENT",
-          "Appointment Booked",
-          `Your appointment with Dr. ${context.doctorName} is booked for ${context.appointmentTime}.`,
-          {
-            type: "APPOINTMENT_BOOKED",
-            status: "CONFIRMED",
-            doctorName: context.doctorName,
-            patientName: context.patientName,
-          }
-        );
-        schedulerService.notifyAppointmentParty(
-          updated,
-          "DOCTOR",
-          "New Appointment Booked",
-          `${context.patientName} booked an appointment for ${context.appointmentTime}.`,
-          {
-            type: "APPOINTMENT_BOOKED",
-            status: "CONFIRMED",
-            doctorName: context.doctorName,
-            patientName: context.patientName,
-          }
-        );
-      }).catch(() => {});
-    }
+    const isNewlyConfirmed = data.status === "CONFIRMED" && appointment.status !== "CONFIRMED";
+    const isNewlyPaid = data.paymentStatus === "PAID" && appointment.paymentStatus !== "PAID";
 
-    if (data.paymentStatus === "PAID" && appointment.paymentStatus !== "PAID") {
-      schedulerService.fetchAppointmentContext(updated).then((context) => {
-        schedulerService.notifyAppointmentParty(
-          updated,
-          "PATIENT",
-          "Payment Received",
-          `Payment is complete for your appointment with Dr. ${context.doctorName} at ${context.appointmentTime}.`,
-          {
-            type: "PAYMENT_DONE",
-            status: updated.status,
-            doctorName: context.doctorName,
-            patientName: context.patientName,
-          }
-        );
-      }).catch((err) => {
-        console.error("[AppointmentService] Failed to send payment notification:", err.message);
-      });
+    if (isNewlyConfirmed || isNewlyPaid) {
+      this.dispatchBookingConfirmedNotifications(updated).catch(() => {});
     }
 
     return updated;
   }
 
   /**
-   * Cancel appointment
+   * Preview cancellation refund & deduction outcome before confirming (FOS Section 7.3 & 11)
    */
-  async cancel(id, reason, actorRole = "PATIENT") {
+  async previewCancellation(id, actorRole = "PATIENT") {
     const appointment = await this.findById(id);
     if (!appointment) {
-      throw new Error("Appointment not found");
+      throw ApiError.notFound("Appointment not found");
+    }
+
+    const PAYMENT_URL = process.env.PAYMENT_INSURANCE_SERVICE_URL || "http://localhost:3006";
+    try {
+      const res = await axios.get(`${PAYMENT_URL}/api/payments/stripe/refunds/preview`, {
+        params: { appointmentId: id, actorRole },
+        headers: {
+          "x-internal-secret": process.env.INTERNAL_SERVICE_SECRET || "",
+        },
+        timeout: 4000,
+      });
+      return res.data?.data || res.data;
+    } catch (err) {
+      console.warn("[AppointmentService] Failed to fetch refund preview from payment service:", err.message);
+      // Fallback local calculation
+      const slotStart = dayjs(appointment.slot?.startTime);
+      const hoursUntil = slotStart.diff(dayjs(), "hour", true);
+      const policy = appointment.policySnapshot || {
+        freeCancellationHours: 4,
+        lateCancellationFeePercent: 50,
+        nearTimeNoShowHours: 1,
+      };
+
+      if (actorRole === "DOCTOR") {
+        return {
+          eligible: true,
+          reasonCategory: "PROVIDER_CANCEL",
+          deductionAmount: 0,
+          refundableAmount: null,
+          refundPercent: 100,
+          summaryMessage: "Provider cancellation: 100% full refund.",
+        };
+      }
+
+      if (hoursUntil >= policy.freeCancellationHours) {
+        return {
+          eligible: true,
+          reasonCategory: "PATIENT_CANCEL_FREE_WINDOW",
+          deductionAmount: 0,
+          refundableAmount: null,
+          refundPercent: 100,
+          summaryMessage: "Free cancellation window: 100% full refund.",
+        };
+      } else if (hoursUntil >= policy.nearTimeNoShowHours) {
+        return {
+          eligible: true,
+          reasonCategory: "PATIENT_LATE_CANCEL",
+          deductionAmount: null,
+          refundableAmount: null,
+          refundPercent: 100 - policy.lateCancellationFeePercent,
+          summaryMessage: `Late cancellation: ${policy.lateCancellationFeePercent}% deduction applies.`,
+        };
+      } else {
+        return {
+          eligible: false,
+          reasonCategory: "PATIENT_NO_SHOW",
+          deductionAmount: null,
+          refundableAmount: 0,
+          refundPercent: 0,
+          summaryMessage: "Near-time cancellation (< 1 hour) is treated under no-show rule as non-refundable.",
+        };
+      }
+    }
+  }
+
+  /**
+   * Cancel appointment with FOS Refund & Reversal Lifecycle
+   */
+  async cancel(id, reason, actorRole = "PATIENT", userId = null) {
+    const appointment = await this.findById(id);
+    if (!appointment) {
+      throw ApiError.notFound("Appointment not found");
     }
 
     if (appointment.status === "CANCELLED") {
-      throw new Error("Appointment is already cancelled");
+      throw ApiError.badRequest("Appointment is already cancelled");
     }
 
     if (appointment.status === "COMPLETED") {
-      throw new Error("Cannot cancel a completed appointment");
+      throw ApiError.badRequest("Cannot cancel a completed appointment");
     }
 
-    // 5-minute rule: Cannot cancel within 5 minutes of start time
-    const startTime = dayjs(appointment.slot.startTime);
-    if (startTime.diff(dayjs(), "minute") < 5) {
-      throw ApiError.badRequest(
-        "Cannot cancel within 5 minutes of the appointment start time."
+    const normalizedActorRole = String(actorRole || "").toUpperCase();
+
+    // 1. Call Payment-Insurance-Service to process cancellation refund & ledger reversal
+    let refundOutcome = null;
+    const PAYMENT_URL = process.env.PAYMENT_INSURANCE_SERVICE_URL || "http://localhost:3006";
+    try {
+      const pRes = await axios.post(
+        `${PAYMENT_URL}/api/payments/stripe/internal/process-cancellation`,
+        {
+          appointmentId: id,
+          cancelledBy: normalizedActorRole,
+          cancellationReason: reason,
+          slotStartTime: appointment.slot?.startTime,
+        },
+        {
+          headers: {
+            "x-internal-secret": process.env.INTERNAL_SERVICE_SECRET || "",
+            "x-user-id": userId || "SYSTEM",
+            "x-user-role": normalizedActorRole,
+          },
+          timeout: 6000,
+        }
       );
+      refundOutcome = pRes.data;
+    } catch (err) {
+      console.warn("[AppointmentService] Note on cancellation refund execution:", err?.response?.data || err.message);
     }
+
+    // Determine new payment status based on refund outcome
+    let newPaymentStatus = appointment.paymentStatus;
+    if (refundOutcome?.processed && refundOutcome?.refundableAmount > 0) {
+      newPaymentStatus = refundOutcome.transactionStatus || (refundOutcome.refundPercent === 100 ? "REFUNDED" : "PARTIALLY_REFUNDED");
+    }
+
+    const cancellationReasonCode = refundOutcome?.reasonCategory || (normalizedActorRole === "DOCTOR" ? "PROVIDER_CANCEL" : "PATIENT_CANCEL_FREE_WINDOW");
+    const cancellationDeduction = refundOutcome?.deductionAmount != null ? refundOutcome.deductionAmount : 0;
+    const refundedAmount = refundOutcome?.refundableAmount != null ? refundOutcome.refundableAmount : 0;
 
     const result = await prisma.$transaction(async (tx) => {
-      // Update appointment status
+      // Update appointment status with cancellation audit fields
       const updatedAppointment = await tx.appointment.update({
         where: { id },
         data: {
           status: "CANCELLED",
+          paymentStatus: newPaymentStatus,
+          cancellationReason: reason || null,
+          cancellationReasonCode,
+          cancellationDeduction,
+          refundedAmount,
+          cancelledAt: new Date(),
+          cancelledBy: normalizedActorRole,
           notes: reason
             ? `${appointment.notes || ""}\nCancellation reason: ${reason}`.trim()
             : appointment.notes,
@@ -446,18 +559,28 @@ class AppointmentService {
       console.error("[AppointmentService] Failed to cancel BullMQ reminders:", err.message);
     });
 
+    // Notify parties with refund disclosure details
     schedulerService.fetchAppointmentContext(result).then((context) => {
-      const normalizedActorRole = String(actorRole || "").toUpperCase();
       const targetRole = normalizedActorRole === "DOCTOR" ? "PATIENT" : "DOCTOR";
-      const body = targetRole === "DOCTOR"
-        ? `${context.patientName} cancelled the appointment scheduled for ${context.appointmentTime}.`
-        : `Dr. ${context.doctorName} cancelled your appointment scheduled for ${context.appointmentTime}.`;
+      let body;
+      if (targetRole === "DOCTOR") {
+        body = `${context.patientName} cancelled the appointment scheduled for ${context.appointmentTime}.`;
+      } else {
+        if (refundedAmount > 0) {
+          body = `Dr. ${context.doctorName} cancelled your appointment scheduled for ${context.appointmentTime}. A 100% full refund of AED ${Number(refundedAmount).toFixed(2)} has been initiated to your card.`;
+        } else {
+          body = `Dr. ${context.doctorName} cancelled your appointment scheduled for ${context.appointmentTime}.`;
+        }
+      }
 
       schedulerService.notifyAppointmentParty(result, targetRole, "Appointment Cancelled", body, {
         status: "CANCELLED",
         type: "APPOINTMENT_CANCELLED",
-        cancelledBy: normalizedActorRole || "PATIENT",
+        cancelledBy: normalizedActorRole,
         reason,
+        reasonCategory: cancellationReasonCode,
+        refundedAmount,
+        deductionAmount: cancellationDeduction,
         doctorName: context.doctorName,
         patientName: context.patientName,
       });
@@ -465,7 +588,10 @@ class AppointmentService {
       console.error("[AppointmentService] Failed to send cancellation notification:", err.message);
     });
 
-    return result;
+    return {
+      ...result,
+      refundOutcome,
+    };
   }
 
   /**
@@ -600,45 +726,14 @@ class AppointmentService {
       where: { id },
       data: {
         status: "CONFIRMED",
+        paymentStatus: appointment.paymentStatus === "PENDING" ? "PAID" : appointment.paymentStatus,
       },
       include: {
         slot: true,
       },
     });
 
-    // Schedule reminders
-    schedulerService.scheduleAppointmentEvents(updatedAppointment).catch((err) => {
-      console.error("[AppointmentService] Failed to schedule events:", err.message);
-    });
-
-    schedulerService.fetchAppointmentContext(updatedAppointment).then((context) => {
-      schedulerService.notifyAppointmentParty(
-        updatedAppointment,
-        "PATIENT",
-        "Payment Received",
-        `Payment is complete for your appointment with Dr. ${context.doctorName} at ${context.appointmentTime}.`,
-        {
-          type: "PAYMENT_DONE",
-          status: "CONFIRMED",
-          doctorName: context.doctorName,
-          patientName: context.patientName,
-        }
-      );
-      schedulerService.notifyAppointmentParty(
-        updatedAppointment,
-        "DOCTOR",
-        "Appointment Confirmed",
-        `${context.patientName}'s appointment is confirmed for ${context.appointmentTime}.`,
-        {
-          type: "APPOINTMENT_CONFIRMED",
-          status: "CONFIRMED",
-          doctorName: context.doctorName,
-          patientName: context.patientName,
-        }
-      );
-    }).catch((err) => {
-      console.error("[AppointmentService] Failed to send confirmation notifications:", err.message);
-    });
+    this.dispatchBookingConfirmedNotifications(updatedAppointment).catch(() => {});
 
     return updatedAppointment;
   }
@@ -1150,60 +1245,7 @@ class AppointmentService {
         include: { slot: true },
       });
 
-      // Schedule BullMQ reminder jobs now that booking is confirmed and paid
-      scheduleAppointmentReminders(updated).catch((err) => {
-        console.error("[AppointmentService] Failed to schedule BullMQ reminders:", err.message);
-      });
-
-      schedulerService.scheduleAppointmentEvents(updated).catch((err) => {
-        console.error("[AppointmentService] Failed to schedule events:", err.message);
-      });
-
-      schedulerService.fetchAppointmentContext(updated).then((context) => {
-        // 1. Notify Patient that appointment is confirmed and booked
-        schedulerService.notifyAppointmentParty(
-          updated,
-          "PATIENT",
-          "Appointment Booked",
-          `Your appointment with Dr. ${context.doctorName} is booked for ${context.appointmentTime}.`,
-          {
-            type: "APPOINTMENT_BOOKED",
-            status: "CONFIRMED",
-            doctorName: context.doctorName,
-            patientName: context.patientName,
-          }
-        );
-
-        // 2. Notify Doctor that a new appointment is booked
-        schedulerService.notifyAppointmentParty(
-          updated,
-          "DOCTOR",
-          "New Appointment Booked",
-          `${context.patientName} booked an appointment for ${context.appointmentTime}.`,
-          {
-            type: "APPOINTMENT_BOOKED",
-            status: "CONFIRMED",
-            doctorName: context.doctorName,
-            patientName: context.patientName,
-          }
-        );
-
-        // 3. Notify Patient that payment was received
-        schedulerService.notifyAppointmentParty(
-          updated,
-          "PATIENT",
-          "Payment Received",
-          `Payment is complete for your appointment with Dr. ${context.doctorName} at ${context.appointmentTime}.`,
-          {
-            type: "PAYMENT_DONE",
-            status: "CONFIRMED",
-            doctorName: context.doctorName,
-            patientName: context.patientName,
-          }
-        );
-      }).catch((err) => {
-        console.error("[AppointmentService] Failed to send booking/payment notifications:", err.message);
-      });
+      this.dispatchBookingConfirmedNotifications(updated).catch(() => {});
 
       return updated;
     }

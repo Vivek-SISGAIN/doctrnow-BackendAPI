@@ -122,6 +122,14 @@ model Hospital {
   // payoutCadence mirrors the interval set on the Stripe connected account.
   payoutCadence            PayoutCadence?         @map("payout_cadence")
   commissionInvoiceCycle   CommissionInvoiceCycle @default(MONTHLY)     @map("commission_invoice_cycle")
+
+  // ─── Refund & Cancellation Policy Configuration (Bucket 2) ──────────────────
+  cancellationCutoffHours  Int                    @default(4)           @map("cancellation_cutoff_hours")
+  lateCancellationFeePercent Int                  @default(50)          @map("late_cancellation_fee_percent")
+  nearTimeNoShowHours      Int                    @default(1)           @map("near_time_no_show_hours")
+  patientGraceMinutes      Int                    @default(10)          @map("patient_grace_minutes")
+  doctorGraceMinutes       Int                    @default(10)          @map("doctor_grace_minutes")
+  refundPolicyVersion      String                 @default("1.0.0-DEFAULT") @map("refund_policy_version")
   // NOTE: The Finance model's bankName/accountNumber/iban/swiftCode/accountHolderName
   // fields below are LEGACY — they pre-date Stripe Connect and are deprecated for
   // any hospital onboarded through Stripe. Do not populate them for new hospitals.

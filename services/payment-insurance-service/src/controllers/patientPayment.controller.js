@@ -99,33 +99,45 @@ async function listPatientTransactions(req, res) {
   ]);
 
   // Clean presentation for patient (hide internal platform commission & hospital net amounts)
-  const formatted = transactions.map((t) => ({
-    id: t.id,
-    appointmentId: t.appointmentId,
-    doctorName: t.doctorName,
-    doctorSpecialty: t.doctorSpecialty,
-    hospitalName: t.hospitalName,
-    consultationType: t.consultationType,
-    amount: Number(t.grossAmount),
-    currency: t.currency.toUpperCase(),
-    paymentFlow: t.paymentFlow || (t.stripeCheckoutSessionId ? 'CHECKOUT_URL' : 'PAYMENT_INTENT'),
-    status: t.status === 'SUCCESS' ? 'PAID' : t.status,
-    paymentMethodType: t.paymentMethodType,
-    cardBrand: t.cardBrand,
-    cardLast4: t.cardLast4,
-    receiptUrl: t.receiptUrl,
-    paidAt: t.paidAt,
-    createdAt: t.createdAt,
-    refunds: t.refunds.map((r) => ({
-      id: r.id,
-      amount: Number(r.amount),
-      reason: r.reason,
-      status: r.status,
-      receiptUrl: r.receiptUrl,
-      processedAt: r.processedAt,
-      createdAt: r.createdAt,
-    })),
-  }));
+  const formatted = transactions.map((t) => {
+    const totalRefunded = (t.refunds || [])
+      .filter((r) => ['PROCESSED', 'PROCESSING', 'SUBMITTED_TO_PSP', 'COMPLETED', 'PENDING'].includes(r.status))
+      .reduce((sum, r) => sum + Number(r.amount), 0);
+    const gross = Number(t.grossAmount);
+    const netPaid = Math.max(0, gross - totalRefunded);
+
+    return {
+      id: t.id,
+      appointmentId: t.appointmentId,
+      doctorName: t.doctorName,
+      doctorSpecialty: t.doctorSpecialty,
+      hospitalName: t.hospitalName,
+      consultationType: t.consultationType,
+      amount: gross,
+      grossAmount: gross,
+      totalRefunded,
+      netPaid,
+      currency: t.currency.toUpperCase(),
+      paymentFlow: t.paymentFlow || (t.stripeCheckoutSessionId ? 'CHECKOUT_URL' : 'PAYMENT_INTENT'),
+      status: t.status === 'SUCCESS' ? 'PAID' : t.status,
+      paymentMethodType: t.paymentMethodType,
+      cardBrand: t.cardBrand,
+      cardLast4: t.cardLast4,
+      receiptUrl: t.receiptUrl,
+      paidAt: t.paidAt,
+      createdAt: t.createdAt,
+      refunds: (t.refunds || []).map((r) => ({
+        id: r.id,
+        amount: Number(r.amount),
+        reason: r.reason,
+        reasonCategory: r.reasonCategory,
+        status: r.status,
+        receiptUrl: r.receiptUrl,
+        processedAt: r.processedAt,
+        createdAt: r.createdAt,
+      })),
+    };
+  });
 
   return res.status(200).json({
     success: true,

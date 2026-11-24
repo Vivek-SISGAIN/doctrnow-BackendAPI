@@ -10,7 +10,13 @@ const {
   handleConnectWebhook,
 } = require('../controllers/stripeConnect.controller');
 const { createCheckoutSession, createPaymentIntent } = require('../controllers/checkout.controller');
-const { issueRefund } = require('../controllers/refund.controller');
+const {
+  issueRefund,
+  previewCancellationRefund,
+  handleAppointmentCancellationRefund,
+  listRefunds: listRefundsFos,
+  decideRefund,
+} = require('../controllers/refund.controller');
 const {
   getHospitalLedger,
   getHospitalsCommissionLedger,
@@ -155,6 +161,11 @@ router.post('/payment-intents', express.json(), asyncHandler(createPaymentIntent
  * Requires x-user-role: SUPER_ADMIN
  */
 router.post('/refunds', express.json(), asyncHandler(issueRefund));
+
+// ─── FOS Refund Lifecycle & Decision Endpoints ─────────────────────────────
+router.get('/refunds/preview', express.json(), asyncHandler(previewCancellationRefund));
+router.post('/internal/process-cancellation', express.json(), asyncHandler(handleAppointmentCancellationRefund));
+router.patch('/refunds/:id/decision', express.json(), asyncHandler(decideRefund));
 
 router.get('/hospitals/:hospitalId/ledger', express.json(), asyncHandler(getHospitalLedger));
 router.get('/hospitals/:hospitalId/invoices', express.json(), asyncHandler(getHospitalInvoices));

@@ -22,12 +22,12 @@ cron.schedule('*/2 * * * *', async () => {
   } catch (err) {
     console.error('[cron:reconcile] Stuck transactions scan failed:', err.message);
   }
-});
 
-// Run stuck refunds reconciliation every hour
-cron.schedule('0 * * * *', async () => {
   try {
-    await reconcileStuckRefunds();
+    const refundRes = await reconcileStuckRefunds();
+    if (refundRes.reconciledCount > 0) {
+      console.log(`[cron:reconcile] Reconciled ${refundRes.reconciledCount} refunds with Stripe successfully.`);
+    }
   } catch (err) {
     console.error('[cron:reconcile] Stuck refunds scan failed:', err.message);
   }
